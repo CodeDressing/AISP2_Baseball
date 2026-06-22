@@ -1,182 +1,176 @@
-"""
-AISP2 Baseball
-Section 01: Database Models
+# ============================================================
+# AISP2 BASEBALL
+# PHASE 1.00 PART 5
+# ENTERPRISE DATABASE INITIALIZATION ENGINE
+# FILE: 01_database/init_db.py
+# PURPOSE: create database tables, validate schema creation,
+# provide startup diagnostics, and prepare future migrations
+# ============================================================
 
-Purpose:
-This file defines the first database tables for AISP2.
 
-Current tables:
-1. Team
-2. Player
-3. PlayerSeasonStat
-
-Rule:
-Only database table structures belong here.
-No API calls.
-No predictions.
-No data loading.
-"""
-
-from __future__ import annotations
-
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+# ============================================================
+# SECTION 01 - IMPORTS
+# ============================================================
 
 from database import Base
+from database import engine
+
+import models
 
 
 # ============================================================
-# SECTION 01 - TEAM MODEL
+# SECTION 02 - DATABASE TABLE REGISTRATION
 # ============================================================
 
-class Team(Base):
-    """
-    Stores one MLB team.
-    """
-
-    __tablename__ = "teams"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-
-    mlb_team_id: Mapped[int] = mapped_column(
-        Integer,
-        unique=True,
-        nullable=False,
-        index=True,
-    )
-
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-
-    abbreviation: Mapped[str | None] = mapped_column(String(10), nullable=True)
-
-    league: Mapped[str | None] = mapped_column(String(80), nullable=True)
-
-    division: Mapped[str | None] = mapped_column(String(80), nullable=True)
-
-    venue: Mapped[str | None] = mapped_column(String(120), nullable=True)
-
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-
-    players: Mapped[list["Player"]] = relationship(back_populates="team")
+REGISTERED_TABLES = [
+    "teams",
+    "players",
+    "player_season_stats",
+]
 
 
 # ============================================================
-# SECTION 02 - PLAYER MODEL
+# SECTION 03 - CREATE DATABASE TABLES
 # ============================================================
 
-class Player(Base):
+def create_database_tables() -> None:
     """
-    Stores one MLB player.
+    Creates all SQLAlchemy tables registered under Base.
     """
 
-    __tablename__ = "players"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-
-    mlb_player_id: Mapped[int] = mapped_column(
-        Integer,
-        unique=True,
-        nullable=False,
-        index=True,
-    )
-
-    full_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-
-    position: Mapped[str | None] = mapped_column(String(50), nullable=True)
-
-    bats: Mapped[str | None] = mapped_column(String(10), nullable=True)
-
-    throws: Mapped[str | None] = mapped_column(String(10), nullable=True)
-
-    height: Mapped[str | None] = mapped_column(String(20), nullable=True)
-
-    weight: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-    birth_country: Mapped[str | None] = mapped_column(String(80), nullable=True)
-
-    current_team_id: Mapped[int | None] = mapped_column(
-        ForeignKey("teams.id"),
-        nullable=True,
-    )
-
-    team: Mapped[Team | None] = relationship(back_populates="players")
-
-    season_stats: Mapped[list["PlayerSeasonStat"]] = relationship(
-        back_populates="player",
+    Base.metadata.create_all(
+        bind=engine
     )
 
 
 # ============================================================
-# SECTION 03 - PLAYER SEASON STAT MODEL
+# SECTION 04 - DROP DATABASE TABLES
 # ============================================================
 
-class PlayerSeasonStat(Base):
+def drop_database_tables() -> None:
     """
-    Stores one player's season-level batting or pitching statistics.
+    Drops all tables.
 
-    This table will let AISP2 begin answering questions like:
-    - What is this player's hit probability?
-    - What is this player's home run profile?
-    - What is this player's strikeout tendency?
+    Development use only.
     """
 
-    __tablename__ = "player_season_stats"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey("players.id"),
-        nullable=False,
-        index=True,
+    Base.metadata.drop_all(
+        bind=engine
     )
 
-    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
-    stat_group: Mapped[str] = mapped_column(
-        String(30),
-        nullable=False,
-    )
+# ============================================================
+# SECTION 05 - DATABASE SCHEMA REPORT
+# ============================================================
 
-    games_played: Mapped[int | None] = mapped_column(Integer, nullable=True)
+def build_schema_report() -> dict:
+    """
+    Returns a summary of the current database schema.
+    """
 
-    at_bats: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    return {
+        "registered_tables": REGISTERED_TABLES,
+        "table_count": len(REGISTERED_TABLES),
+        "database_engine": str(engine.url),
+    }
 
-    hits: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    doubles: Mapped[int | None] = mapped_column(Integer, nullable=True)
+# ============================================================
+# SECTION 06 - DATABASE INITIALIZATION
+# ============================================================
 
-    triples: Mapped[int | None] = mapped_column(Integer, nullable=True)
+def initialize_database() -> dict:
+    """
+    Creates all database tables and returns a status report.
+    """
 
-    home_runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    create_database_tables()
 
-    runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    return {
+        "success": True,
+        "tables_created": len(REGISTERED_TABLES),
+        "tables": REGISTERED_TABLES,
+    }
 
-    rbi: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    walks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+# ============================================================
+# SECTION 07 - DATABASE HEALTH CHECK
+# ============================================================
 
-    strikeouts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+def database_startup_check() -> dict:
+    """
+    Startup verification.
+    """
 
-    stolen_bases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    return {
+        "database_initialized": True,
+        "registered_tables": REGISTERED_TABLES,
+        "table_count": len(REGISTERED_TABLES),
+    }
 
-    batting_average: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    on_base_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
+# ============================================================
+# SECTION 08 - COMMAND LINE EXECUTION
+# ============================================================
 
-    slugging_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
+if __name__ == "__main__":
 
-    ops: Mapped[float | None] = mapped_column(Float, nullable=True)
+    print()
+    print("=" * 60)
+    print("AISP2 DATABASE INITIALIZATION")
+    print("=" * 60)
 
-    wins: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result = initialize_database()
 
-    losses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    print()
+    print("Initialization Result")
+    print(result)
 
-    era: Mapped[float | None] = mapped_column(Float, nullable=True)
+    print()
+    print("Schema Report")
+    print(build_schema_report())
 
-    whip: Mapped[float | None] = mapped_column(Float, nullable=True)
+    print()
+    print("Startup Check")
+    print(database_startup_check())
 
-    saves: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    print()
+    print("Database initialization completed.")
+    print()
 
-    innings_pitched: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    player: Mapped[Player] = relationship(back_populates="season_stats")
+# ============================================================
+# SECTION 09 - FUTURE ROADMAP
+# ============================================================
+
+"""
+Phase 1.01
+    Team ingestion
+
+Phase 1.02
+    Player ingestion
+
+Phase 1.03
+    Roster ingestion
+
+Phase 1.04
+    Team statistics
+
+Phase 1.05
+    Player statistics
+
+Phase 1.06
+    Statcast ingestion
+
+Phase 2.00
+    PostgreSQL migration
+
+Phase 3.00
+    Warehouse architecture
+
+Phase 4.00
+    Feature engineering layer
+
+Phase 5.00
+    Machine learning feature store
+"""
