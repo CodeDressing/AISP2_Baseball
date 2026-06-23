@@ -1,12 +1,11 @@
 # ============================================================
 # AISP2 BASEBALL
-# PHASE 1.00 PART 8
-# ENTERPRISE VISUAL COMMAND CENTER + DEMO PREDICTION WORKBENCH
+# PHASE 1.00 PART 9
+# MINIMAL AI CHATBOT HOMEPAGE
 # FILE: main.py
-# PURPOSE: primary FastAPI startup, visual homepage,
-# project visibility, roadmap tracking, demo prediction UI,
-# probability-card display, health monitoring, and deployment
-# verification for AISP2 Baseball
+# PURPOSE: FastAPI startup, sleek chatbot-first homepage,
+# lightweight baseball AI assistant demo, hidden tool routes,
+# health checks, and project visibility endpoints
 # ============================================================
 
 
@@ -18,6 +17,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 
 # ============================================================
@@ -26,47 +26,18 @@ from fastapi.responses import HTMLResponse
 
 PROJECT_NAME = "AISP2 Baseball"
 PROJECT_VERSION = "1.0.0"
-PROJECT_PHASE = "1.00 Foundation"
+PROJECT_PHASE = "1.00 Chat Interface Foundation"
 SERVICE_NAME = "aisp2-baseball"
 PRIMARY_SPORT = "MLB"
 
 GITHUB_REPOSITORY = "https://github.com/CodeDressing/AISP2_Baseball"
 RENDER_SERVICE = "https://aisp2-baseball.onrender.com"
 
-
-# ============================================================
-# SECTION 03 - PROJECT STATUS CONSTANTS
-# ============================================================
-
-COMPLETED_FOUNDATION_ITEMS = [
-    "Local PyCharm project created",
-    "Python virtual environment created",
-    "GitHub repository connected",
-    "Render deployment connected",
-    "FastAPI entrypoint deployed",
-    "Visual homepage created",
-    "Project ledger established",
-    "Database connection layer created",
-    "Database models created",
-    "MLB Stats API client started",
-    "Demo Prediction Workbench added",
-]
-
-CURRENT_OBJECTIVE = (
-    "Make AISP2 visually demonstrate the final baseball intelligence "
-    "experience before deeper ingestion and model training."
-)
-
-NEXT_TARGET = (
-    "Verify MLB Stats API client, then build team ingestion so real "
-    "MLB teams can replace demo dropdown data."
-)
-
 DEVELOPMENT_RULE = "One file or one directory at a time."
 
 
 # ============================================================
-# SECTION 04 - DEMO DATA
+# SECTION 03 - DEMO DATA
 # ============================================================
 
 DEMO_TEAMS = {
@@ -206,6 +177,14 @@ DEMO_PLAYER_PROFILES = {
 
 
 # ============================================================
+# SECTION 04 - REQUEST MODELS
+# ============================================================
+
+class ChatRequest(BaseModel):
+    message: str
+
+
+# ============================================================
 # SECTION 05 - APPLICATION INITIALIZATION
 # ============================================================
 
@@ -214,406 +193,13 @@ app = FastAPI(
     version=PROJECT_VERSION,
     description=(
         "AI Sports Intelligence Platform 2 - "
-        "Enterprise Baseball Analytics and Prediction Platform"
+        "Baseball analytics, probability, prediction, and AI assistant platform."
     ),
 )
 
 
 # ============================================================
-# SECTION 06 - SHARED HTML STYLE SYSTEM
-# ============================================================
-
-def shared_css() -> str:
-    return """
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            min-height: 100vh;
-            background:
-                radial-gradient(circle at top left, rgba(37, 99, 235, 0.35), transparent 30%),
-                radial-gradient(circle at top right, rgba(14, 165, 233, 0.22), transparent 28%),
-                linear-gradient(180deg, #020617 0%, #0f172a 48%, #111827 100%);
-            color: #f8fafc;
-            font-family: Inter, Arial, sans-serif;
-            padding: 32px;
-        }
-
-        .shell {
-            max-width: 1320px;
-            margin: 0 auto;
-        }
-
-        .topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 28px;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .brand {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .kicker {
-            color: #38bdf8;
-            font-size: 13px;
-            font-weight: 900;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-        }
-
-        .brand h1 {
-            font-size: 42px;
-            letter-spacing: -1.2px;
-            font-weight: 950;
-        }
-
-        .status-pill {
-            background: rgba(22, 163, 74, 0.18);
-            border: 1px solid rgba(34, 197, 94, 0.45);
-            color: #86efac;
-            padding: 10px 16px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 900;
-            text-transform: uppercase;
-        }
-
-        .hero {
-            background:
-                linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.80)),
-                radial-gradient(circle at top right, rgba(56, 189, 248, 0.28), transparent 34%);
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            border-radius: 30px;
-            padding: 34px;
-            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.36);
-            margin-bottom: 24px;
-        }
-
-        .hero h2 {
-            font-size: 30px;
-            margin-bottom: 12px;
-        }
-
-        .hero p {
-            color: #cbd5e1;
-            line-height: 1.7;
-            font-size: 16px;
-            max-width: 1000px;
-        }
-
-        .pill-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 22px;
-        }
-
-        .pill {
-            background: rgba(15, 23, 42, 0.82);
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            padding: 8px 13px;
-            border-radius: 999px;
-            color: #e2e8f0;
-            font-size: 13px;
-            font-weight: 800;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 18px;
-            margin-bottom: 24px;
-        }
-
-        .two-col {
-            display: grid;
-            grid-template-columns: 1.05fr 0.95fr;
-            gap: 20px;
-            margin-bottom: 24px;
-        }
-
-        .three-col {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 18px;
-            margin-bottom: 24px;
-        }
-
-        .card {
-            background: rgba(15, 23, 42, 0.76);
-            border: 1px solid rgba(148, 163, 184, 0.20);
-            border-radius: 22px;
-            padding: 22px;
-            box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25);
-        }
-
-        .metric-label {
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-size: 12px;
-            font-weight: 900;
-            margin-bottom: 8px;
-        }
-
-        .metric-value {
-            font-size: 30px;
-            font-weight: 950;
-            color: #ffffff;
-        }
-
-        .metric-note {
-            margin-top: 8px;
-            color: #94a3b8;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .section-title {
-            color: #ffffff;
-            font-size: 22px;
-            font-weight: 950;
-            margin-bottom: 14px;
-        }
-
-        ul {
-            padding-left: 22px;
-            color: #cbd5e1;
-            line-height: 1.9;
-        }
-
-        .timeline {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .step {
-            border-left: 3px solid #38bdf8;
-            padding: 12px 14px;
-            background: rgba(2, 6, 23, 0.32);
-            border-radius: 12px;
-        }
-
-        .step strong {
-            display: block;
-            color: #ffffff;
-            margin-bottom: 4px;
-        }
-
-        .step span {
-            color: #94a3b8;
-            font-size: 14px;
-        }
-
-        .links {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 14px;
-            margin-bottom: 24px;
-        }
-
-        a.button, button.button {
-            display: block;
-            width: 100%;
-            text-decoration: none;
-            text-align: center;
-            padding: 14px 16px;
-            border-radius: 16px;
-            color: #f8fafc;
-            font-weight: 900;
-            background: rgba(37, 99, 235, 0.22);
-            border: 1px solid rgba(96, 165, 250, 0.38);
-            cursor: pointer;
-        }
-
-        a.button:hover, button.button:hover {
-            background: rgba(37, 99, 235, 0.36);
-        }
-
-        .footer {
-            color: #64748b;
-            text-align: center;
-            font-size: 13px;
-            padding: 22px 0 8px;
-        }
-
-        .warning {
-            background: rgba(120, 53, 15, 0.46);
-            border: 1px solid rgba(245, 158, 11, 0.44);
-            color: #fde68a;
-            padding: 14px 18px;
-            border-radius: 16px;
-            margin-bottom: 22px;
-            line-height: 1.6;
-            font-size: 14px;
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 18px;
-        }
-
-        label {
-            display: block;
-            color: #94a3b8;
-            font-size: 12px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 8px;
-        }
-
-        select {
-            width: 100%;
-            background: rgba(2, 6, 23, 0.76);
-            color: #f8fafc;
-            border: 1px solid rgba(148, 163, 184, 0.32);
-            border-radius: 14px;
-            padding: 13px 14px;
-            font-size: 15px;
-            outline: none;
-        }
-
-        .prediction-card {
-            background:
-                linear-gradient(145deg, rgba(8, 47, 73, 0.92), rgba(15, 23, 42, 0.92)),
-                radial-gradient(circle at top right, rgba(34, 197, 94, 0.18), transparent 30%);
-            border: 1px solid rgba(56, 189, 248, 0.30);
-            border-radius: 28px;
-            padding: 28px;
-            box-shadow: 0 26px 80px rgba(14, 165, 233, 0.16);
-        }
-
-        .prediction-title {
-            font-size: 28px;
-            font-weight: 950;
-            margin-bottom: 8px;
-        }
-
-        .prediction-subtitle {
-            color: #cbd5e1;
-            line-height: 1.6;
-            margin-bottom: 22px;
-        }
-
-        .probability {
-            font-size: 72px;
-            font-weight: 1000;
-            letter-spacing: -2px;
-            color: #86efac;
-            line-height: 1;
-        }
-
-        .confidence {
-            font-size: 38px;
-            font-weight: 950;
-            color: #38bdf8;
-        }
-
-        .bar-shell {
-            width: 100%;
-            height: 14px;
-            background: rgba(2, 6, 23, 0.72);
-            border-radius: 999px;
-            overflow: hidden;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            margin-top: 10px;
-        }
-
-        .bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #22c55e, #38bdf8);
-            border-radius: 999px;
-        }
-
-        .stat-list {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-top: 18px;
-        }
-
-        .stat-chip {
-            background: rgba(15, 23, 42, 0.70);
-            border: 1px solid rgba(148, 163, 184, 0.20);
-            border-radius: 16px;
-            padding: 14px;
-        }
-
-        .stat-chip span {
-            display: block;
-            color: #94a3b8;
-            font-size: 12px;
-            font-weight: 900;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-
-        .stat-chip strong {
-            color: #ffffff;
-            font-size: 16px;
-        }
-
-        .small-note {
-            color: #94a3b8;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        @media (max-width: 1000px) {
-            .grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .two-col, .three-col, .form-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .links {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 640px) {
-            body {
-                padding: 18px;
-            }
-
-            .brand h1 {
-                font-size: 30px;
-            }
-
-            .grid {
-                grid-template-columns: 1fr;
-            }
-
-            .links {
-                grid-template-columns: 1fr;
-            }
-
-            .probability {
-                font-size: 56px;
-            }
-        }
-    </style>
-    """
-
-
-# ============================================================
-# SECTION 07 - DEMO PREDICTION HELPERS
+# SECTION 06 - SHARED HELPERS
 # ============================================================
 
 def get_available_players(team_name: str) -> list[str]:
@@ -683,11 +269,9 @@ def build_demo_probability(
     else:
         probability = base_probability
 
-    confidence = profile["confidence"]
-
     return {
         "probability": probability,
-        "confidence": confidence,
+        "confidence": profile["confidence"],
         "profile": profile,
     }
 
@@ -700,7 +284,7 @@ def build_option_tags(
 
     for option in options:
         selected = "selected" if option == selected_value else ""
-        html += f"<option value=\"{option}\" {selected}>{option}</option>"
+        html += f'<option value="{option}" {selected}>{option}</option>'
 
     return html
 
@@ -712,184 +296,728 @@ def build_outcome_option_tags(
 
     for key, label in DEMO_OUTCOMES.items():
         selected = "selected" if key == selected_value else ""
-        html += f"<option value=\"{key}\" {selected}>{label}</option>"
+        html += f'<option value="{key}" {selected}>{label}</option>'
 
     return html
 
 
+def build_chat_reply(message: str) -> dict:
+    cleaned_message = message.lower().strip()
+
+    if not cleaned_message:
+        return {
+            "reply": "Ask me about a team, player, matchup, home run probability, hit probability, or baseball trend.",
+            "intent": "empty",
+        }
+
+    if "judge" in cleaned_message or "home run" in cleaned_message or "hr" in cleaned_message:
+        return {
+            "reply": (
+                "For demo mode, Aaron Judge projects as a high-power outcome candidate. "
+                "A future real model would compare recent barrel rate, exit velocity, launch angle, "
+                "pitcher matchup, ballpark, weather, and lineup context before estimating home run probability."
+            ),
+            "intent": "home_run_probability",
+        }
+
+    if "ohtani" in cleaned_message:
+        return {
+            "reply": (
+                "Shohei Ohtani is treated as an elite power and contact profile in this demo. "
+                "In the full system, AISP2 will evaluate Statcast trends, recent form, handedness splits, "
+                "pitcher profile, and park factors."
+            ),
+            "intent": "player_analysis",
+        }
+
+    if "soto" in cleaned_message:
+        return {
+            "reply": (
+                "Juan Soto profiles as an elite plate-discipline hitter. "
+                "AISP2 will eventually analyze walk rate, OBP, pitch selection, contact quality, "
+                "and matchup context for hit, walk, RBI, and total-base predictions."
+            ),
+            "intent": "player_analysis",
+        }
+
+    if "yankees" in cleaned_message:
+        return {
+            "reply": (
+                "The Yankees are available in demo mode. "
+                "Once database-backed team routes are connected, this chat will pull live team data, "
+                "rosters, player stats, and matchup context."
+            ),
+            "intent": "team_analysis",
+        }
+
+    if "dodgers" in cleaned_message:
+        return {
+            "reply": (
+                "The Dodgers are available in demo mode with Ohtani, Betts, and Freeman. "
+                "Future versions will connect real rosters, schedules, splits, and projections."
+            ),
+            "intent": "team_analysis",
+        }
+
+    if "probability" in cleaned_message or "prediction" in cleaned_message or "predict" in cleaned_message:
+        return {
+            "reply": (
+                "AISP2 is being designed around probability cards: estimated probability, confidence, "
+                "supporting stats, and a plain-English explanation. The current version is demo-only; "
+                "the next major backend step is connecting real teams, players, rosters, and stats."
+            ),
+            "intent": "prediction_explanation",
+        }
+
+    if "team" in cleaned_message or "players" in cleaned_message or "roster" in cleaned_message:
+        return {
+            "reply": (
+                "The platform foundation now supports teams, players, rosters, and season-stat models. "
+                "The clean product flow will be: select team, select player, choose outcome, then view a readable probability card."
+            ),
+            "intent": "platform_status",
+        }
+
+    return {
+        "reply": (
+            "I can help with baseball intelligence questions like: "
+            "home run probability, hit probability, team comparisons, player trends, matchup analysis, "
+            "and future model explanations. Right now I am running in sleek demo mode while the real data pipeline is being connected."
+        ),
+        "intent": "general",
+    }
+
+
 # ============================================================
-# SECTION 08 - ROOT VISUAL COMMAND CENTER
+# SECTION 07 - HOMEPAGE CSS
+# ============================================================
+
+def homepage_css() -> str:
+    return """
+    <style>
+        :root {
+            --bg-main: #05070b;
+            --bg-panel: rgba(12, 18, 31, 0.72);
+            --bg-panel-strong: rgba(12, 18, 31, 0.92);
+            --border-soft: rgba(255, 255, 255, 0.08);
+            --border-bright: rgba(148, 163, 184, 0.22);
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
+            --text-soft: #94a3b8;
+            --blue: #38bdf8;
+            --blue-strong: #2563eb;
+            --green: #22c55e;
+            --gold: #d6b46d;
+            --shadow-xl: 0 40px 120px rgba(0, 0, 0, 0.58);
+            --radius-xl: 34px;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --font-main: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text-main);
+            font-family: var(--font-main);
+            background:
+                radial-gradient(circle at 18% 10%, rgba(56, 189, 248, 0.18), transparent 30%),
+                radial-gradient(circle at 82% 18%, rgba(34, 197, 94, 0.10), transparent 26%),
+                radial-gradient(circle at 50% 100%, rgba(37, 99, 235, 0.16), transparent 36%),
+                linear-gradient(135deg, #020617 0%, #05070b 44%, #0b1120 100%);
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 64px 64px;
+            mask-image: radial-gradient(circle at center, black, transparent 72%);
+            z-index: -1;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            height: 72px;
+            padding: 0 clamp(18px, 4vw, 56px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(22px);
+            background: rgba(2, 6, 23, 0.56);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .brand-mark {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background:
+                linear-gradient(135deg, rgba(56, 189, 248, 0.24), rgba(34, 197, 94, 0.14));
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow: 0 18px 46px rgba(56, 189, 248, 0.12);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-links a {
+            color: var(--text-soft);
+            font-size: 13px;
+            font-weight: 800;
+            padding: 10px 12px;
+            border-radius: 999px;
+            transition: 0.2s ease;
+        }
+
+        .nav-links a:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .hero {
+            flex: 1;
+            width: min(1120px, calc(100% - 32px));
+            margin: 0 auto;
+            padding:
+                clamp(48px, 8vw, 96px)
+                0
+                clamp(32px, 6vw, 72px);
+            display: grid;
+            place-items: center;
+        }
+
+        .center-stack {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 9px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.045);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 0 7px rgba(34, 197, 94, 0.12);
+        }
+
+        h1 {
+            max-width: 920px;
+            margin: 0;
+            font-size: clamp(3.4rem, 9vw, 7.8rem);
+            line-height: 0.88;
+            letter-spacing: -0.09em;
+            font-weight: 1000;
+            background:
+                linear-gradient(135deg, #ffffff 0%, #dbeafe 42%, #7dd3fc 72%, #86efac 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .subtitle {
+            width: min(780px, 100%);
+            margin: 28px auto 34px;
+            color: var(--text-muted);
+            font-size: clamp(1.05rem, 2.3vw, 1.42rem);
+            line-height: 1.75;
+        }
+
+        .chat-panel {
+            width: min(920px, 100%);
+            border-radius: var(--radius-xl);
+            background:
+                linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(8, 13, 24, 0.92));
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow: var(--shadow-xl);
+            overflow: hidden;
+            text-align: left;
+        }
+
+        .chat-header {
+            min-height: 64px;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .chat-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .assistant-avatar {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.30), rgba(34, 197, 94, 0.16));
+            border: 1px solid rgba(255, 255, 255, 0.10);
+        }
+
+        .chat-title strong {
+            display: block;
+            font-size: 15px;
+        }
+
+        .chat-title span {
+            display: block;
+            margin-top: 2px;
+            color: var(--text-soft);
+            font-size: 12px;
+        }
+
+        .mode-pill {
+            padding: 8px 11px;
+            border-radius: 999px;
+            background: rgba(34, 197, 94, 0.10);
+            border: 1px solid rgba(34, 197, 94, 0.22);
+            color: #bbf7d0;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .messages {
+            height: clamp(260px, 42vh, 420px);
+            padding: 22px;
+            overflow-y: auto;
+        }
+
+        .message {
+            max-width: 82%;
+            margin-bottom: 14px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            line-height: 1.62;
+            font-size: 14px;
+        }
+
+        .bot {
+            margin-right: auto;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            color: var(--text-muted);
+        }
+
+        .user {
+            margin-left: auto;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(14, 165, 233, 0.78));
+            color: white;
+        }
+
+        .suggestions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 0 22px 20px;
+        }
+
+        .suggestion {
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            background: rgba(255, 255, 255, 0.045);
+            color: var(--text-muted);
+            border-radius: 999px;
+            padding: 10px 13px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .suggestion:hover {
+            color: white;
+            transform: translateY(-1px);
+            border-color: rgba(56, 189, 248, 0.28);
+            background: rgba(56, 189, 248, 0.10);
+        }
+
+        .input-area {
+            display: flex;
+            gap: 12px;
+            padding: 18px;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            background: rgba(2, 6, 23, 0.54);
+        }
+
+        .input-area input {
+            flex: 1;
+            min-height: 54px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 999px;
+            outline: none;
+            background: rgba(255, 255, 255, 0.055);
+            color: white;
+            padding: 0 18px;
+            font-size: 15px;
+        }
+
+        .input-area input::placeholder {
+            color: #64748b;
+        }
+
+        .send-button {
+            min-width: 112px;
+            min-height: 54px;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            color: #020617;
+            font-size: 14px;
+            font-weight: 950;
+            background: linear-gradient(135deg, #7dd3fc, #86efac);
+            box-shadow: 0 18px 42px rgba(56, 189, 248, 0.16);
+            transition: 0.2s ease;
+        }
+
+        .send-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 22px 52px rgba(56, 189, 248, 0.22);
+        }
+
+        .quiet-row {
+            width: min(920px, 100%);
+            margin-top: 18px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .quiet-link {
+            color: var(--text-soft);
+            font-size: 12px;
+            font-weight: 800;
+            padding: 9px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid rgba(255, 255, 255, 0.055);
+        }
+
+        .quiet-link:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.065);
+        }
+
+        .disclaimer {
+            width: min(820px, 100%);
+            margin: 20px auto 0;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.6;
+            text-align: center;
+        }
+
+        @media (max-width: 760px) {
+            .topbar {
+                height: auto;
+                padding: 16px 18px;
+                align-items: flex-start;
+                gap: 12px;
+                flex-direction: column;
+            }
+
+            .nav-links {
+                width: 100%;
+                overflow-x: auto;
+                padding-bottom: 2px;
+            }
+
+            .hero {
+                width: min(100% - 24px, 1120px);
+                padding-top: 40px;
+            }
+
+            .chat-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .message {
+                max-width: 94%;
+            }
+
+            .input-area {
+                flex-direction: column;
+            }
+
+            .send-button {
+                width: 100%;
+            }
+        }
+    </style>
+    """
+
+
+# ============================================================
+# SECTION 08 - MINIMAL CHATBOT HOMEPAGE
 # ============================================================
 
 @app.get("/", response_class=HTMLResponse)
 def root() -> str:
-    completed_items_html = ""
-
-    for item in COMPLETED_FOUNDATION_ITEMS:
-        completed_items_html += f"<li>{item}</li>"
-
     return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{PROJECT_NAME} Command Center</title>
+    <title>{PROJECT_NAME} | Baseball Intelligence Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {shared_css()}
+    {homepage_css()}
 </head>
 
 <body>
-    <main class="shell">
+    <div class="app-shell">
 
-        <div class="topbar">
-            <div class="brand">
-                <div class="kicker">AI Sports Intelligence Platform</div>
-                <h1>{PROJECT_NAME}</h1>
-            </div>
+        <header class="topbar">
+            <a class="brand-mark" href="/">
+                <span class="brand-icon">⚾</span>
+                <span>AISP2</span>
+            </a>
 
-            <div class="status-pill">Online</div>
-        </div>
+            <nav class="nav-links" aria-label="Primary navigation">
+                <a href="/tools/prediction">Predictions</a>
+                <a href="/project/status">Status</a>
+                <a href="/project/data-sources">Sources</a>
+                <a href="/project/ml-roadmap">Models</a>
+                <a href="/docs">API</a>
+            </nav>
+        </header>
 
-        <section class="hero">
-            <h2>Enterprise Baseball Intelligence Command Center</h2>
-            <p>
-                AISP2 Baseball is being built as a long-term baseball analytics,
-                probability, machine learning, simulation, and prediction platform.
-                This page now includes the first visible version of the future
-                baseball prediction experience.
-            </p>
+        <main class="hero">
+            <section class="center-stack">
 
-            <div class="pill-row">
-                <span class="pill">GitHub Connected</span>
-                <span class="pill">Render Connected</span>
-                <span class="pill">FastAPI Live</span>
-                <span class="pill">Database Layer Started</span>
-                <span class="pill">MLB Data Source Layer Started</span>
-                <span class="pill">Prediction Demo Added</span>
-            </div>
-        </section>
-
-        <div class="warning">
-            AISP2 is an experimental sports analytics and machine learning platform.
-            Demo probabilities are illustrative only until real ingestion and model
-            training are connected.
-        </div>
-
-        <section class="grid">
-            <div class="card">
-                <div class="metric-label">Project Phase</div>
-                <div class="metric-value">{PROJECT_PHASE}</div>
-                <div class="metric-note">Foundation and visibility layer.</div>
-            </div>
-
-            <div class="card">
-                <div class="metric-label">Deployment</div>
-                <div class="metric-value">Live</div>
-                <div class="metric-note">Running on Render.</div>
-            </div>
-
-            <div class="card">
-                <div class="metric-label">Primary Sport</div>
-                <div class="metric-value">{PRIMARY_SPORT}</div>
-                <div class="metric-note">Major League Baseball first.</div>
-            </div>
-
-            <div class="card">
-                <div class="metric-label">Visible Product</div>
-                <div class="metric-value">Demo</div>
-                <div class="metric-note">Prediction Workbench is now available.</div>
-            </div>
-        </section>
-
-        <section class="two-col">
-            <div class="card">
-                <div class="section-title">What Has Been Completed</div>
-                <ul>
-                    {completed_items_html}
-                </ul>
-            </div>
-
-            <div class="card">
-                <div class="section-title">Build Timeline</div>
-
-                <div class="timeline">
-                    <div class="step">
-                        <strong>Phase 1.00 - Foundation</strong>
-                        <span>Project, GitHub, Render, FastAPI, visual command center.</span>
-                    </div>
-
-                    <div class="step">
-                        <strong>Phase 2.00 - MLB Data Sources</strong>
-                        <span>Connect official MLB Stats API and prepare ingestion.</span>
-                    </div>
-
-                    <div class="step">
-                        <strong>Phase 3.00 - Ingestion</strong>
-                        <span>Load teams, players, rosters, schedules, and stats.</span>
-                    </div>
-
-                    <div class="step">
-                        <strong>Phase 4.00 - Probability Engine</strong>
-                        <span>Replace demo cards with real prediction models.</span>
-                    </div>
+                <div class="eyebrow">
+                    <span class="pulse"></span>
+                    Baseball Intelligence Engine
                 </div>
-            </div>
-        </section>
 
-        <section class="two-col">
-            <div class="prediction-card">
-                <div class="metric-label">First Visible Product Feature</div>
-                <div class="prediction-title">Demo Prediction Workbench</div>
-                <p class="prediction-subtitle">
-                    Select a team, player, and outcome to see the future AISP2
-                    probability-card experience. This is the visual target that
-                    future ingestion, statistics, and machine learning will power.
-                </p>
-                <a class="button" href="/demo/prediction">Open Prediction Workbench</a>
-            </div>
+                <h1>AISP2</h1>
 
-            <div class="card">
-                <div class="section-title">Next Real Backend Target</div>
-                <p style="color:#cbd5e1; line-height:1.7;">
-                    {NEXT_TARGET}
+                <p class="subtitle">
+                    Ask about players, teams, matchups, probabilities, props,
+                    Statcast trends, projections, and future model explanations.
                 </p>
 
-                <br>
+                <section class="chat-panel" aria-label="AISP2 chat assistant">
 
-                <div class="section-title">Development Rule</div>
-                <p style="color:#94a3b8; line-height:1.7;">
-                    {DEVELOPMENT_RULE}
+                    <div class="chat-header">
+                        <div class="chat-title">
+                            <div class="assistant-avatar">AI</div>
+                            <div>
+                                <strong>AISP2 Analyst</strong>
+                                <span>Minimal demo mode · real data pipeline coming online</span>
+                            </div>
+                        </div>
+
+                        <div class="mode-pill">Online</div>
+                    </div>
+
+                    <div class="messages" id="messages">
+                        <div class="message bot">
+                            Welcome to AISP2. Ask me about a player, team, matchup,
+                            home run probability, hit probability, roster trend, or future projection.
+                        </div>
+                    </div>
+
+                    <div class="suggestions">
+                        <button class="suggestion" data-prompt="What is Aaron Judge's home run outlook?">
+                            Judge HR outlook
+                        </button>
+
+                        <button class="suggestion" data-prompt="Compare Shohei Ohtani and Juan Soto.">
+                            Ohtani vs Soto
+                        </button>
+
+                        <button class="suggestion" data-prompt="How will AISP2 calculate win probability?">
+                            Win probability
+                        </button>
+
+                        <button class="suggestion" data-prompt="Show me how player prop predictions will work.">
+                            Prop predictions
+                        </button>
+                    </div>
+
+                    <form class="input-area" id="chat-form">
+                        <input
+                            id="chat-input"
+                            type="text"
+                            placeholder="Ask AISP2 anything about baseball..."
+                            autocomplete="off"
+                            maxlength="900"
+                        >
+
+                        <button class="send-button" type="submit">
+                            Ask
+                        </button>
+                    </form>
+
+                </section>
+
+                <div class="quiet-row">
+                    <a class="quiet-link" href="/tools/prediction">Open prediction demo</a>
+                    <a class="quiet-link" href="/project/roadmap">View roadmap</a>
+                    <a class="quiet-link" href="/project/files">File inventory</a>
+                    <a class="quiet-link" href="/health">Health</a>
+                </div>
+
+                <p class="disclaimer">
+                    Demo assistant only. AISP2 is an experimental sports analytics platform.
+                    It is not gambling advice, financial advice, or a guarantee of outcomes.
                 </p>
-            </div>
-        </section>
 
-        <section class="links">
-            <a class="button" href="/demo/prediction">Prediction Demo</a>
-            <a class="button" href="/project/status">Project Status</a>
-            <a class="button" href="/project/roadmap">Roadmap</a>
-            <a class="button" href="/project/data-sources">Data Sources</a>
-            <a class="button" href="/project/ml-roadmap">ML Roadmap</a>
-            <a class="button" href="/project/probability-output-design">Prediction Design</a>
-            <a class="button" href="/project/files">File Inventory</a>
-            <a class="button" href="/docs">API Docs</a>
-        </section>
+            </section>
+        </main>
 
-        <div class="footer">
-            {PROJECT_NAME} · {PROJECT_PHASE} · Version {PROJECT_VERSION} · Built by Ryan with Alfred
-        </div>
+    </div>
 
-    </main>
+    <script>
+        const form = document.getElementById("chat-form");
+        const input = document.getElementById("chat-input");
+        const messages = document.getElementById("messages");
+        const suggestions = document.querySelectorAll(".suggestion");
+
+        function appendMessage(text, type) {{
+            const node = document.createElement("div");
+            node.className = "message " + type;
+            node.innerText = text;
+            messages.appendChild(node);
+            messages.scrollTop = messages.scrollHeight;
+            return node;
+        }}
+
+        async function sendMessage(text) {{
+            const cleanText = text.trim();
+
+            if (!cleanText) {{
+                return;
+            }}
+
+            appendMessage(cleanText, "user");
+            input.value = "";
+
+            const loadingNode = appendMessage("Thinking...", "bot");
+
+            try {{
+                const response = await fetch("/api/chat", {{
+                    method: "POST",
+                    headers: {{
+                        "Content-Type": "application/json"
+                    }},
+                    body: JSON.stringify({{
+                        message: cleanText
+                    }})
+                }});
+
+                const payload = await response.json();
+
+                loadingNode.innerText = payload.reply || "I am ready for your next baseball question.";
+
+            }} catch (error) {{
+                loadingNode.innerText = "AISP2 is having trouble responding right now. The interface is online, but the assistant backend needs attention.";
+            }}
+        }}
+
+        form.addEventListener("submit", function(event) {{
+            event.preventDefault();
+            sendMessage(input.value);
+        }});
+
+        suggestions.forEach(function(button) {{
+            button.addEventListener("click", function() {{
+                sendMessage(button.dataset.prompt);
+            }});
+        }});
+
+        setTimeout(function() {{
+            input.focus();
+        }}, 300);
+    </script>
 </body>
 </html>
 """
 
 
 # ============================================================
-# SECTION 09 - DEMO PREDICTION WORKBENCH
+# SECTION 09 - CHAT API ENDPOINT
 # ============================================================
 
-@app.get("/demo/prediction", response_class=HTMLResponse)
-def demo_prediction(
+@app.post("/api/chat")
+def chat_api(request: ChatRequest) -> dict:
+    return build_chat_reply(
+        request.message,
+    )
+
+
+# ============================================================
+# SECTION 10 - PREDICTION TOOL PAGE
+# ============================================================
+
+@app.get("/tools/prediction", response_class=HTMLResponse)
+def prediction_tool(
     team: str | None = None,
     player: str | None = None,
     outcome: str | None = None,
@@ -902,6 +1030,7 @@ def demo_prediction(
 
     team_data = DEMO_TEAMS[selected_team]
     available_players = get_available_players(selected_team)
+
     prediction = build_demo_probability(
         player_name=selected_player,
         outcome_key=selected_outcome,
@@ -910,6 +1039,7 @@ def demo_prediction(
     probability = prediction["probability"]
     confidence = prediction["confidence"]
     profile = prediction["profile"]
+    outcome_label = DEMO_OUTCOMES[selected_outcome]
 
     team_options = build_option_tags(
         options=list(DEMO_TEAMS.keys()),
@@ -925,59 +1055,150 @@ def demo_prediction(
         selected_value=selected_outcome,
     )
 
-    outcome_label = DEMO_OUTCOMES[selected_outcome]
-
     return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AISP2 Prediction Workbench</title>
+    <title>AISP2 Prediction Demo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {shared_css()}
+    {homepage_css()}
+    <style>
+        .tool-wrap {{
+            width: min(1100px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 54px 0;
+        }}
+
+        .tool-card {{
+            padding: 26px;
+            border-radius: 28px;
+            background: rgba(15, 23, 42, 0.76);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            box-shadow: var(--shadow-xl);
+        }}
+
+        .tool-title {{
+            font-size: clamp(2rem, 5vw, 4rem);
+            letter-spacing: -0.07em;
+            margin: 0 0 12px;
+        }}
+
+        .tool-subtitle {{
+            color: var(--text-muted);
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }}
+
+        .form-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 16px;
+        }}
+
+        label {{
+            display: block;
+            color: var(--text-soft);
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            margin-bottom: 8px;
+        }}
+
+        select {{
+            width: 100%;
+            min-height: 52px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            background: rgba(2, 6, 23, 0.72);
+            color: white;
+            padding: 0 14px;
+            font-size: 15px;
+        }}
+
+        .result {{
+            margin-top: 22px;
+            padding: 26px;
+            border-radius: 26px;
+            background:
+                linear-gradient(145deg, rgba(8, 47, 73, 0.88), rgba(15, 23, 42, 0.92));
+            border: 1px solid rgba(56, 189, 248, 0.24);
+        }}
+
+        .big-number {{
+            font-size: clamp(4rem, 10vw, 7rem);
+            line-height: 0.9;
+            font-weight: 1000;
+            letter-spacing: -0.08em;
+            color: #86efac;
+        }}
+
+        .result-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-top: 22px;
+        }}
+
+        .mini {{
+            padding: 16px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }}
+
+        .mini span {{
+            display: block;
+            color: var(--text-soft);
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 7px;
+        }}
+
+        .mini strong {{
+            color: white;
+        }}
+
+        @media (max-width: 760px) {{
+            .form-grid, .result-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+    </style>
 </head>
 
 <body>
-    <main class="shell">
+    <header class="topbar">
+        <a class="brand-mark" href="/">
+            <span class="brand-icon">⚾</span>
+            <span>AISP2</span>
+        </a>
 
-        <div class="topbar">
-            <div class="brand">
-                <div class="kicker">AISP2 Demo Product Experience</div>
-                <h1>Prediction Workbench</h1>
-            </div>
+        <nav class="nav-links">
+            <a href="/">Chat</a>
+            <a href="/project/status">Status</a>
+            <a href="/docs">API</a>
+        </nav>
+    </header>
 
-            <div class="status-pill">Demo Mode</div>
-        </div>
-
-        <section class="hero">
-            <h2>Select Team · Select Player · Select Outcome</h2>
-            <p>
-                This page is the first visual version of the future AISP2
-                prediction interface. The data is currently demo-only, but the
-                layout, user flow, and probability-card design represent the
-                experience we are building toward with real MLB ingestion,
-                feature engineering, and machine learning.
+    <main class="tool-wrap">
+        <section class="tool-card">
+            <p class="eyebrow">
+                <span class="pulse"></span>
+                Demo Prediction Tool
             </p>
 
-            <div class="pill-row">
-                <span class="pill">Human-Friendly UI</span>
-                <span class="pill">Probability Card</span>
-                <span class="pill">Confidence Score</span>
-                <span class="pill">Supporting Stats</span>
-                <span class="pill">Plain-English Explanation</span>
-            </div>
-        </section>
+            <h1 class="tool-title">Prediction Workbench</h1>
 
-        <div class="warning">
-            Demo mode: These probabilities are illustrative placeholders.
-            They are not real predictions and should not be used for betting,
-            wagering, financial, or professional decisions.
-        </div>
+            <p class="tool-subtitle">
+                A clean hidden tool page for early probability-card testing.
+                The homepage stays minimal and chat-first.
+            </p>
 
-        <section class="card">
-            <div class="section-title">Prediction Controls</div>
-
-            <form method="get" action="/demo/prediction">
+            <form method="get" action="/tools/prediction">
                 <div class="form-grid">
                     <div>
                         <label>Team</label>
@@ -1001,118 +1222,53 @@ def demo_prediction(
                     </div>
                 </div>
 
-                <button class="button" type="submit">
+                <button class="send-button" type="submit">
                     Run Demo Prediction
                 </button>
             </form>
 
-            <p class="small-note" style="margin-top:14px;">
-                Note: In this early demo, changing teams and clicking Run updates
-                the player list for that selected team.
-            </p>
-        </section>
-
-        <br>
-
-        <section class="two-col">
-            <div class="prediction-card">
-                <div class="metric-label">AISP2 Demo Probability Card</div>
-                <div class="prediction-title">{selected_player}</div>
-                <p class="prediction-subtitle">
+            <section class="result">
+                <p class="eyebrow">
                     {selected_team} · {team_data["abbreviation"]} · {outcome_label}
                 </p>
 
-                <div class="three-col">
-                    <div>
-                        <div class="metric-label">Estimated Probability</div>
-                        <div class="probability">{probability}%</div>
-                        <div class="bar-shell">
-                            <div class="bar-fill" style="width:{probability}%;"></div>
-                        </div>
-                    </div>
+                <h2 style="margin:0 0 18px; font-size:2rem;">
+                    {selected_player}
+                </h2>
 
-                    <div>
-                        <div class="metric-label">Confidence</div>
-                        <div class="confidence">{confidence}%</div>
-                        <div class="bar-shell">
-                            <div class="bar-fill" style="width:{confidence}%;"></div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div class="metric-label">Model</div>
-                        <div class="metric-value">Demo</div>
-                        <div class="metric-note">Future: AISP Baseline Probability Engine.</div>
-                    </div>
+                <div class="big-number">
+                    {probability}%
                 </div>
 
-                <div class="stat-list">
-                    <div class="stat-chip">
+                <p style="color:var(--text-muted); line-height:1.8; margin-top:18px;">
+                    Demo probability with {confidence}% confidence.
+                    Future versions will use live data, Statcast trends, matchup context,
+                    park factors, and machine learning models.
+                </p>
+
+                <div class="result-grid">
+                    <div class="mini">
                         <span>Player Style</span>
                         <strong>{profile["style"]}</strong>
                     </div>
 
-                    <div class="stat-chip">
+                    <div class="mini">
                         <span>Recent Form</span>
                         <strong>{profile["recent_form"]}</strong>
                     </div>
 
-                    <div class="stat-chip">
+                    <div class="mini">
                         <span>Primary Metric</span>
                         <strong>{profile["primary_metric"]}</strong>
                     </div>
 
-                    <div class="stat-chip">
+                    <div class="mini">
                         <span>Ballpark</span>
                         <strong>{team_data["ballpark"]}</strong>
                     </div>
                 </div>
-            </div>
-
-            <div class="card">
-                <div class="section-title">Plain-English Explanation</div>
-                <p style="color:#cbd5e1; line-height:1.8;">
-                    AISP2 currently projects <strong>{selected_player}</strong>
-                    for <strong>{outcome_label}</strong> using demo values based on
-                    player archetype, recent form, team context, and a simplified
-                    probability profile.
-                </p>
-
-                <br>
-
-                <p style="color:#cbd5e1; line-height:1.8;">
-                    In the real version, this card will be powered by MLB Stats API,
-                    Baseball Savant / Statcast, FanGraphs, rolling trends,
-                    matchup context, park factors, and supervised learning models.
-                </p>
-
-                <br>
-
-                <div class="section-title">Future Data Sources</div>
-                <ul>
-                    <li>MLB Stats API</li>
-                    <li>Baseball Savant / Statcast</li>
-                    <li>FanGraphs</li>
-                    <li>Baseball Reference</li>
-                    <li>Retrosheet</li>
-                    <li>Lahman Database</li>
-                </ul>
-            </div>
+            </section>
         </section>
-
-        <section class="links">
-            <a class="button" href="/">Command Center</a>
-            <a class="button" href="/api/demo/prediction?team={selected_team}&player={selected_player}&outcome={selected_outcome}">
-                JSON Prediction
-            </a>
-            <a class="button" href="/project/probability-output-design">Prediction Design</a>
-            <a class="button" href="/project/next-action">Next Action</a>
-        </section>
-
-        <div class="footer">
-            AISP2 Demo Prediction Workbench · Visual Target for Future Real Model Output
-        </div>
-
     </main>
 </body>
 </html>
@@ -1120,7 +1276,7 @@ def demo_prediction(
 
 
 # ============================================================
-# SECTION 10 - DEMO PREDICTION JSON ENDPOINT
+# SECTION 11 - DEMO PREDICTION JSON ENDPOINT
 # ============================================================
 
 @app.get("/api/demo/prediction")
@@ -1179,7 +1335,7 @@ def demo_prediction_json(
 
 
 # ============================================================
-# SECTION 11 - ROOT JSON ENDPOINT
+# SECTION 12 - SYSTEM ENDPOINTS
 # ============================================================
 
 @app.get("/api/root")
@@ -1193,13 +1349,10 @@ def root_json() -> dict:
         "sport": PRIMARY_SPORT,
         "github": GITHUB_REPOSITORY,
         "render": RENDER_SERVICE,
-        "next_best_endpoint": "/demo/prediction",
+        "homepage": "minimal chatbot-first interface",
+        "next_best_endpoint": "/",
     }
 
-
-# ============================================================
-# SECTION 12 - HEALTH ENDPOINT
-# ============================================================
 
 @app.get("/health")
 def health() -> dict:
@@ -1210,10 +1363,6 @@ def health() -> dict:
         "phase": PROJECT_PHASE,
     }
 
-
-# ============================================================
-# SECTION 13 - SYSTEM INFORMATION
-# ============================================================
 
 @app.get("/system/info")
 def system_info() -> dict:
@@ -1232,7 +1381,7 @@ def system_info() -> dict:
 
 
 # ============================================================
-# SECTION 14 - PROJECT STATUS ENDPOINT
+# SECTION 13 - PROJECT ENDPOINTS
 # ============================================================
 
 @app.get("/project/status")
@@ -1241,6 +1390,7 @@ def project_status() -> dict:
         "project": PROJECT_NAME,
         "status": "ACTIVE DEVELOPMENT",
         "phase": PROJECT_PHASE,
+        "homepage": "minimal chatbot-first interface",
         "deployment": {
             "render": "CONNECTED",
             "url": RENDER_SERVICE,
@@ -1252,238 +1402,119 @@ def project_status() -> dict:
             "branch": "main",
         },
         "foundation": {
-            "local_project": "CREATED",
-            "python_environment": "CREATED",
-            "github_repository": "CREATED",
-            "render_web_service": "CREATED",
             "fastapi_entrypoint": "LIVE",
             "database_layer": "CREATED",
             "project_ledger": "CREATED",
-            "visual_homepage": "CREATED",
-            "demo_prediction_workbench": "CREATED",
+            "mlb_stats_api_client": "CREATED",
+            "team_ingestion": "CREATED",
+            "minimal_chat_homepage": "CREATED",
         },
-        "current_focus": "Visible product experience and MLB data source verification",
-        "next_target": "Team ingestion from MLB Stats API",
+        "current_focus": "Chat-first homepage and clean AI product experience",
+        "next_target": "Real data-backed team and player tools",
         "development_rule": DEVELOPMENT_RULE,
     }
 
 
-# ============================================================
-# SECTION 15 - PROJECT ROADMAP ENDPOINT
-# ============================================================
-
 @app.get("/project/roadmap")
 def project_roadmap() -> dict:
     return {
+        "current_file": "main.py",
+        "current_focus": "Minimal chatbot-first homepage",
         "completed": [
             "GitHub repository",
             "Render deployment",
-            "Visual homepage",
-            "Demo Prediction Workbench",
-            "requirements.txt",
-            "PROJECT_LEDGER.md",
-            "01_database/database.py",
-            "01_database/models.py",
-            "02_data_sources/mlb_stats_api.py",
+            "Database layer",
+            "Models",
+            "MLB Stats API client",
+            "Team ingestion engine",
+            "Minimal chatbot homepage",
+            "Prediction demo tool",
         ],
-        "current_phase": {
-            "name": "Phase 1.00 Foundation + Product Visibility",
-            "objective": "Create a visible and deployable foundation for AISP2 Baseball",
-            "status": "active",
-        },
-        "next_phase": {
-            "name": "Phase 3.00 Ingestion",
-            "objective": "Move official MLB data into the AISP2 database",
-            "first_file": "03_ingestion/team_ingestion.py",
-        },
-        "future_phases": [
-            "Team ingestion",
-            "Roster ingestion",
-            "Player ingestion",
-            "Player season stat ingestion",
-            "Statcast integration",
-            "Feature engineering",
-            "Probability engine",
-            "Machine learning models",
-            "Monte Carlo simulation",
-            "Human-friendly dashboard",
+        "next_files": [
+            "static/aisp2.css",
+            "static/aisp2.js",
+            "ai_assistant_outline.md",
+            "ai_chat_engine.py",
+            "team_explorer.py",
+            "player_explorer.py",
+            "probability_engine.py",
         ],
     }
 
-
-# ============================================================
-# SECTION 16 - PROJECT VISION ENDPOINT
-# ============================================================
 
 @app.get("/project/vision")
 def project_vision() -> dict:
     return {
         "vision": "Build the best baseball intelligence platform possible.",
-        "mission": (
-            "Combine authoritative baseball data, advanced statistics, "
-            "machine learning, probability modeling, simulation, and "
-            "plain-English explanations into one enterprise-grade platform."
-        ),
+        "product_direction": "Chat-first baseball AI assistant with hidden advanced tools.",
         "core_user_workflow": [
-            "Select team",
-            "Select opponent",
-            "Select player",
-            "Select outcome",
-            "Run probability engine",
-            "View probability",
-            "View confidence",
-            "View supporting stats",
-            "Read plain-English explanation",
-        ],
-        "example_outputs": [
-            "Aaron Judge home run probability",
-            "Juan Soto hit probability",
-            "Yankees win probability",
-            "Pitcher strikeout probability",
-            "Player over/under total bases probability",
+            "Open AISP2",
+            "Ask a baseball question",
+            "Get readable analysis",
+            "Open deeper tools only when needed",
+            "Select teams and players later",
+            "View probabilities and explanations",
         ],
     }
 
-
-# ============================================================
-# SECTION 17 - DATA SOURCE ROADMAP ENDPOINT
-# ============================================================
 
 @app.get("/project/data-sources")
 def project_data_sources() -> dict:
     return {
-        "primary_goal": "Use the best available sources for teams, players, rosters, stats, Statcast, and historical baseball data.",
+        "primary_goal": "Use the best available baseball data sources.",
         "tier_1_sources": [
-            {
-                "name": "MLB Stats API",
-                "status": "active_foundation",
-                "purpose": "Official teams, rosters, players, schedules, standings, stats, and games",
-            },
-            {
-                "name": "Baseball Savant / Statcast",
-                "status": "planned",
-                "purpose": "Pitch-level tracking, batted-ball data, expected stats, launch angle, exit velocity",
-            },
+            "MLB Stats API",
+            "Baseball Savant / Statcast",
         ],
         "tier_2_sources": [
-            {
-                "name": "FanGraphs",
-                "status": "planned",
-                "purpose": "Advanced batting, pitching, WAR, leaderboards, projections, and plate discipline metrics",
-            },
-            {
-                "name": "Baseball Reference",
-                "status": "planned",
-                "purpose": "Historical player, team, game, and season statistics",
-            },
+            "FanGraphs",
+            "Baseball Reference",
         ],
         "historical_sources": [
-            {
-                "name": "Retrosheet",
-                "status": "planned",
-                "purpose": "Historical play-by-play and game event archives",
-            },
-            {
-                "name": "Lahman Database",
-                "status": "planned",
-                "purpose": "Historical baseball database for long-term model training",
-            },
+            "Retrosheet",
+            "Lahman Database",
         ],
     }
 
 
-# ============================================================
-# SECTION 18 - MACHINE LEARNING ROADMAP ENDPOINT
-# ============================================================
-
 @app.get("/project/ml-roadmap")
 def project_machine_learning_roadmap() -> dict:
     return {
-        "course_concepts_to_apply": [
-            "Supervised Machine Learning",
-            "Advanced Learning Algorithms",
-            "Unsupervised Learning",
-            "Recommender Systems",
-            "Reinforcement Learning",
-        ],
         "supervised_learning_targets": [
             "Hit probability",
             "Home run probability",
             "Strikeout probability",
             "Walk probability",
             "RBI probability",
-            "Run scored probability",
             "Game winner probability",
         ],
-        "baseline_models": [
+        "future_models": [
             "Logistic Regression",
             "Random Forest",
             "Gradient Boosting",
             "XGBoost",
             "LightGBM",
-        ],
-        "advanced_models": [
-            "Ensemble models",
-            "Bayesian models",
-            "Time-series models",
             "Neural networks",
-        ],
-        "unsupervised_learning_targets": [
-            "Similar player clustering",
-            "Pitcher archetypes",
-            "Hitter archetypes",
-            "Team style clustering",
-        ],
-        "recommender_system_targets": [
-            "Similar players",
-            "Comparable hitters",
-            "Comparable pitchers",
-            "Comparable team profiles",
-        ],
-        "reinforcement_learning_targets": [
-            "Lineup optimization",
-            "Bullpen management simulation",
-            "In-game decision strategy",
+            "Monte Carlo simulation",
         ],
     }
 
-
-# ============================================================
-# SECTION 19 - PROBABILITY OUTPUT DESIGN ENDPOINT
-# ============================================================
 
 @app.get("/project/probability-output-design")
 def probability_output_design() -> dict:
     return {
         "goal": "Every prediction should be readable, explainable, and useful.",
-        "current_demo_endpoint": "/demo/prediction",
+        "current_demo_endpoint": "/tools/prediction",
         "future_prediction_card": {
             "player": "Aaron Judge",
             "team": "New York Yankees",
             "outcome": "Hits a home run",
             "estimated_probability": "Example: 28%",
             "confidence": "Example: 74%",
-            "model": "AISP Baseline Probability Engine",
-            "data_sources_used": [
-                "MLB Stats API",
-                "Baseball Savant / Statcast",
-                "FanGraphs",
-            ],
-            "supporting_statistics": [
-                "Recent home run rate",
-                "Season OPS",
-                "Exit velocity trend",
-                "Launch angle trend",
-                "Opponent pitcher profile",
-                "Ballpark factor",
-            ],
+            "plain_english_explanation": "Readable model explanation goes here.",
         },
     }
 
-
-# ============================================================
-# SECTION 20 - FILE INVENTORY ENDPOINT
-# ============================================================
 
 @app.get("/project/files")
 def project_files() -> dict:
@@ -1501,82 +1532,75 @@ def project_files() -> dict:
         "02_data_sources": [
             "mlb_stats_api.py",
         ],
-        "next_directory": "03_ingestion",
-        "next_file": "03_ingestion/team_ingestion.py",
+        "03_ingestion": [
+            "team_ingestion.py",
+        ],
+        "next_files": [
+            "static/aisp2.css",
+            "static/aisp2.js",
+            "ai_assistant_outline.md",
+        ],
     }
 
-
-# ============================================================
-# SECTION 21 - NEXT ACTION ENDPOINT
-# ============================================================
 
 @app.get("/project/next-action")
 def project_next_action() -> dict:
     return {
         "current_rule": DEVELOPMENT_RULE,
-        "next_action": "Verify the demo prediction UI after Render deploy",
-        "after_that": "Verify MLB Stats API client locally",
-        "then": "Create 03_ingestion/team_ingestion.py",
-        "goal": "Load official MLB teams into the AISP2 database",
+        "next_action": "Deploy and review minimal chatbot homepage",
+        "after_that": "Move inline CSS and JS into static files",
+        "goal": "Keep homepage sleek while advanced tools live behind toolbar links",
     }
 
 
 # ============================================================
-# SECTION 22 - LOCAL STARTUP VALIDATION
+# SECTION 14 - LOCAL STARTUP VALIDATION
 # ============================================================
 
 if __name__ == "__main__":
     print("AISP2 Baseball loaded successfully.")
-    print("FastAPI visual command center initialized.")
-    print("Demo Prediction Workbench initialized.")
+    print("Minimal chatbot-first homepage initialized.")
     print(f"Project: {PROJECT_NAME}")
     print(f"Version: {PROJECT_VERSION}")
     print(f"Phase: {PROJECT_PHASE}")
 
 
 # ============================================================
-# SECTION 23 - FUTURE APPLICATION ROADMAP
+# SECTION 15 - FUTURE APPLICATION ROADMAP
 # ============================================================
 
 """
-Future API Expansion
+Future Application Roadmap
 
-Phase 2.00
-    Team routes
+Phase 1.01:
+    Extract homepage CSS into static/aisp2.css.
 
-Phase 2.01
-    Player routes
+Phase 1.02:
+    Extract homepage JavaScript into static/aisp2.js.
 
-Phase 2.02
-    Statistics routes
+Phase 1.03:
+    Create ai_assistant_outline.md.
 
-Phase 2.03
-    Roster routes
+Phase 1.04:
+    Create ai_chat_engine.py.
 
-Phase 3.00
-    Feature engineering routes
+Phase 2.00:
+    Add real team explorer.
 
-Phase 4.00
-    Probability engine routes
+Phase 3.00:
+    Add real player explorer.
 
-Phase 5.00
-    Machine learning routes
+Phase 4.00:
+    Add probability engine.
 
-Phase 6.00
-    Simulation routes
+Phase 5.00:
+    Add machine learning models.
 
-Phase 7.00
-    Dashboard integration
+Phase 6.00:
+    Add simulation engine.
 
-Future Human UI
-
-A future dashboard should convert these endpoints into:
-    - team selectors
-    - player selectors
-    - live data status panels
-    - database health visuals
-    - prediction result cards
-    - probability charts
-    - confidence explanations
-    - model comparison views
+Product Rule:
+    Homepage stays minimal.
+    Advanced tools stay behind toolbar links.
+    Chat becomes the primary interface.
 """
