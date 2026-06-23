@@ -1,0 +1,616 @@
+/* ============================================================
+   AISP2 BASEBALL
+   PHASE 1.00 PART 10
+   FILE: static/css/aisp2.css
+   PURPOSE: sleek minimal chatbot-first homepage design system
+   ============================================================ */
+
+
+/* ============================================================
+   SECTION 01 - DESIGN TOKENS
+   ============================================================ */
+
+:root {
+    --bg-main: #05070b;
+    --bg-deep: #020617;
+    --bg-panel: rgba(12, 18, 31, 0.72);
+    --bg-panel-strong: rgba(12, 18, 31, 0.92);
+
+    --text-main: #f8fafc;
+    --text-muted: #cbd5e1;
+    --text-soft: #94a3b8;
+
+    --blue: #38bdf8;
+    --blue-strong: #2563eb;
+    --green: #22c55e;
+    --gold: #d6b46d;
+
+    --border-soft: rgba(255, 255, 255, 0.08);
+    --border-bright: rgba(148, 163, 184, 0.22);
+
+    --shadow-xl: 0 40px 120px rgba(0, 0, 0, 0.58);
+
+    --radius-xl: 34px;
+    --radius-lg: 24px;
+    --radius-md: 16px;
+
+    --font-main:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+}
+
+
+/* ============================================================
+   SECTION 02 - GLOBAL RESET
+   ============================================================ */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--text-main);
+    font-family: var(--font-main);
+
+    background:
+        radial-gradient(circle at 18% 10%, rgba(56, 189, 248, 0.18), transparent 30%),
+        radial-gradient(circle at 82% 18%, rgba(34, 197, 94, 0.10), transparent 26%),
+        radial-gradient(circle at 50% 100%, rgba(37, 99, 235, 0.16), transparent 36%),
+        linear-gradient(135deg, #020617 0%, #05070b 44%, #0b1120 100%);
+
+    overflow-x: hidden;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+
+    background-size: 64px 64px;
+    mask-image: radial-gradient(circle at center, black, transparent 72%);
+    z-index: -1;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+button,
+input {
+    font-family: inherit;
+}
+
+
+/* ============================================================
+   SECTION 03 - APPLICATION SHELL
+   ============================================================ */
+
+.app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+
+/* ============================================================
+   SECTION 04 - TOP NAVIGATION BAR
+   ============================================================ */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+
+    height: 64px;
+    padding: 0 clamp(18px, 4vw, 56px);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    backdrop-filter: blur(22px);
+    background: rgba(2, 6, 23, 0.56);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.brand-mark {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    font-weight: 900;
+    letter-spacing: -0.04em;
+}
+
+.brand-icon {
+    width: 34px;
+    height: 34px;
+
+    display: grid;
+    place-items: center;
+
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(56, 189, 248, 0.24), rgba(34, 197, 94, 0.14));
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 18px 46px rgba(56, 189, 248, 0.12);
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-links a {
+    color: var(--text-soft);
+
+    font-size: 13px;
+    font-weight: 800;
+
+    padding: 10px 12px;
+    border-radius: 999px;
+
+    transition: 0.2s ease;
+}
+
+.nav-links a:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+
+/* ============================================================
+   SECTION 05 - HOMEPAGE HERO LAYOUT
+   ============================================================ */
+
+.hero {
+    flex: 1;
+
+    width: min(1040px, calc(100% - 32px));
+    margin: 0 auto;
+
+    padding:
+        clamp(22px, 4vw, 44px)
+        0
+        clamp(18px, 3vw, 32px);
+
+    display: grid;
+    place-items: center;
+}
+
+.center-stack {
+    width: 100%;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    text-align: center;
+}
+
+
+/* ============================================================
+   SECTION 06 - HERO TYPOGRAPHY
+   ============================================================ */
+
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    margin-bottom: 12px;
+    padding: 8px 13px;
+
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+
+    color: var(--text-muted);
+
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.pulse {
+    width: 8px;
+    height: 8px;
+
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 7px rgba(34, 197, 94, 0.12);
+}
+
+h1 {
+    max-width: 920px;
+    margin: 0;
+
+    font-size: clamp(2.8rem, 7vw, 5.8rem);
+    line-height: 0.9;
+    letter-spacing: -0.085em;
+    font-weight: 1000;
+
+    background:
+        linear-gradient(135deg, #ffffff 0%, #dbeafe 42%, #7dd3fc 72%, #86efac 100%);
+
+    -webkit-background-clip: text;
+    background-clip: text;
+
+    color: transparent;
+}
+
+.subtitle {
+    width: min(720px, 100%);
+    margin: 16px auto 22px;
+
+    color: var(--text-muted);
+
+    font-size: clamp(0.98rem, 1.8vw, 1.18rem);
+    line-height: 1.55;
+}
+
+
+/* ============================================================
+   SECTION 07 - CHAT PANEL
+   ============================================================ */
+
+.chat-panel {
+    width: min(920px, 100%);
+
+    border-radius: var(--radius-xl);
+    background:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(8, 13, 24, 0.92));
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: var(--shadow-xl);
+
+    overflow: hidden;
+    text-align: left;
+}
+
+.chat-header {
+    min-height: 60px;
+    padding: 16px 20px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.chat-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.assistant-avatar {
+    width: 36px;
+    height: 36px;
+
+    display: grid;
+    place-items: center;
+
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(56, 189, 248, 0.30), rgba(34, 197, 94, 0.16));
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
+
+    font-size: 12px;
+    font-weight: 950;
+}
+
+.chat-title strong {
+    display: block;
+    font-size: 15px;
+}
+
+.chat-title span {
+    display: block;
+    margin-top: 2px;
+
+    color: var(--text-soft);
+
+    font-size: 12px;
+}
+
+.mode-pill {
+    padding: 8px 11px;
+
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.10);
+    border: 1px solid rgba(34, 197, 94, 0.22);
+
+    color: #bbf7d0;
+
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+
+/* ============================================================
+   SECTION 08 - CHAT MESSAGES
+   ============================================================ */
+
+.messages {
+    height: clamp(190px, 30vh, 300px);
+
+    padding: 18px;
+
+    overflow-y: auto;
+}
+
+.message {
+    max-width: 82%;
+
+    margin-bottom: 14px;
+    padding: 14px 16px;
+
+    border-radius: 18px;
+
+    line-height: 1.62;
+    font-size: 14px;
+}
+
+.bot {
+    margin-right: auto;
+
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+
+    color: var(--text-muted);
+}
+
+.user {
+    margin-left: auto;
+
+    background:
+        linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(14, 165, 233, 0.78));
+
+    color: white;
+}
+
+
+/* ============================================================
+   SECTION 09 - SUGGESTED PROMPTS
+   ============================================================ */
+
+.suggestions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+
+    padding: 0 18px 16px;
+}
+
+.suggestion {
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.045);
+
+    color: var(--text-muted);
+
+    border-radius: 999px;
+    padding: 10px 13px;
+
+    font-size: 12px;
+    font-weight: 800;
+
+    cursor: pointer;
+
+    transition: 0.2s ease;
+}
+
+.suggestion:hover {
+    color: white;
+
+    transform: translateY(-1px);
+
+    border-color: rgba(56, 189, 248, 0.28);
+    background: rgba(56, 189, 248, 0.10);
+}
+
+
+/* ============================================================
+   SECTION 10 - CHAT INPUT AREA
+   ============================================================ */
+
+.input-area {
+    display: flex;
+    gap: 12px;
+
+    padding: 16px;
+
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(2, 6, 23, 0.54);
+}
+
+.input-area input {
+    flex: 1;
+
+    min-height: 52px;
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+
+    outline: none;
+
+    background: rgba(255, 255, 255, 0.055);
+    color: white;
+
+    padding: 0 18px;
+
+    font-size: 15px;
+}
+
+.input-area input::placeholder {
+    color: #64748b;
+}
+
+.send-button {
+    min-width: 112px;
+    min-height: 52px;
+
+    border: none;
+    border-radius: 999px;
+
+    cursor: pointer;
+
+    color: #020617;
+
+    font-size: 14px;
+    font-weight: 950;
+
+    background:
+        linear-gradient(135deg, #7dd3fc, #86efac);
+
+    box-shadow: 0 18px 42px rgba(56, 189, 248, 0.16);
+
+    transition: 0.2s ease;
+}
+
+.send-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 22px 52px rgba(56, 189, 248, 0.22);
+}
+
+
+/* ============================================================
+   SECTION 11 - QUIET TOOL LINKS
+   ============================================================ */
+
+.quiet-row {
+    width: min(920px, 100%);
+
+    margin-top: 16px;
+
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.quiet-link {
+    color: var(--text-soft);
+
+    font-size: 12px;
+    font-weight: 800;
+
+    padding: 9px 12px;
+
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.quiet-link:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.065);
+}
+
+.disclaimer {
+    width: min(820px, 100%);
+
+    margin: 16px auto 0;
+
+    color: #64748b;
+
+    font-size: 12px;
+    line-height: 1.6;
+    text-align: center;
+}
+
+
+/* ============================================================
+   SECTION 12 - RESPONSIVE DESIGN
+   ============================================================ */
+
+@media (max-width: 760px) {
+    .topbar {
+        height: auto;
+
+        padding: 16px 18px;
+
+        align-items: flex-start;
+        gap: 12px;
+        flex-direction: column;
+    }
+
+    .nav-links {
+        width: 100%;
+
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    .hero {
+        width: min(100% - 24px, 1120px);
+        padding-top: 26px;
+    }
+
+    .chat-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .message {
+        max-width: 94%;
+    }
+
+    .input-area {
+        flex-direction: column;
+    }
+
+    .send-button {
+        width: 100%;
+    }
+}
+
+
+/* ============================================================
+   SECTION 13 - FUTURE CSS ROADMAP
+   ============================================================ */
+
+/*
+Future CSS Files:
+
+static/css/aisp2.css
+    Global design system and homepage.
+
+static/css/chat.css
+    Dedicated chat component styling.
+
+static/css/prediction.css
+    Prediction workbench styling.
+
+static/css/dashboard.css
+    Future analytics dashboard styling.
+
+static/css/mobile.css
+    Future mobile-specific refinements.
+*/
