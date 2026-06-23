@@ -1,11 +1,11 @@
 # ============================================================
 # AISP2 BASEBALL
-# PHASE 1.00 PART 6
-# ENTERPRISE APPLICATION COMMAND CENTER
+# PHASE 1.00 PART 7
+# ENTERPRISE VISUAL COMMAND CENTER
 # FILE: main.py
-# PURPOSE: primary FastAPI startup, deployment verification,
+# PURPOSE: primary FastAPI startup, visual homepage,
 # project visibility, roadmap tracking, health monitoring,
-# and early command-center style status endpoints
+# data-source roadmap, ML roadmap, and deployment verification
 # ============================================================
 
 
@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 
 # ============================================================
@@ -33,7 +34,30 @@ RENDER_SERVICE = "https://aisp2-baseball.onrender.com"
 
 
 # ============================================================
-# SECTION 03 - APPLICATION INITIALIZATION
+# SECTION 03 - PROJECT STATUS CONSTANTS
+# ============================================================
+
+COMPLETED_FOUNDATION_ITEMS = [
+    "Local PyCharm project created",
+    "Python virtual environment created",
+    "GitHub repository connected",
+    "Render deployment connected",
+    "FastAPI entrypoint deployed",
+    "Project ledger established",
+    "Database connection layer created",
+    "Database models created",
+    "MLB Stats API client started",
+]
+
+CURRENT_OBJECTIVE = "Make AISP2 visibly track progress before deeper ingestion."
+
+NEXT_TARGET = "Complete MLB Stats API client verification, then build team ingestion."
+
+DEVELOPMENT_RULE = "One file or one directory at a time."
+
+
+# ============================================================
+# SECTION 04 - APPLICATION INITIALIZATION
 # ============================================================
 
 app = FastAPI(
@@ -47,20 +71,455 @@ app = FastAPI(
 
 
 # ============================================================
-# SECTION 04 - ROOT ENDPOINT
+# SECTION 05 - ROOT VISUAL COMMAND CENTER
 # ============================================================
 
-@app.get("/")
-def root() -> dict:
+@app.get("/", response_class=HTMLResponse)
+def root() -> str:
     """
-    Root endpoint.
+    Visual homepage.
 
-    Used to verify:
-        - local startup
-        - GitHub deployment
-        - Render deployment
-        - API availability
-        - current platform phase
+    This replaces the raw JSON root page with a human-friendly
+    project command center so progress is visible on every deploy.
+    """
+
+    completed_items_html = ""
+
+    for item in COMPLETED_FOUNDATION_ITEMS:
+        completed_items_html += f"<li>{item}</li>"
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{PROJECT_NAME} Command Center</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        * {{
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }}
+
+        body {{
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at top left, rgba(37, 99, 235, 0.35), transparent 30%),
+                radial-gradient(circle at top right, rgba(14, 165, 233, 0.22), transparent 28%),
+                linear-gradient(180deg, #020617 0%, #0f172a 48%, #111827 100%);
+            color: #f8fafc;
+            font-family: Inter, Arial, sans-serif;
+            padding: 32px;
+        }}
+
+        .shell {{
+            max-width: 1280px;
+            margin: 0 auto;
+        }}
+
+        .topbar {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }}
+
+        .brand {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }}
+
+        .kicker {{
+            color: #38bdf8;
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }}
+
+        .brand h1 {{
+            font-size: 42px;
+            letter-spacing: -1.2px;
+            font-weight: 950;
+        }}
+
+        .status-pill {{
+            background: rgba(22, 163, 74, 0.18);
+            border: 1px solid rgba(34, 197, 94, 0.45);
+            color: #86efac;
+            padding: 10px 16px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }}
+
+        .hero {{
+            background:
+                linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.80)),
+                radial-gradient(circle at top right, rgba(56, 189, 248, 0.28), transparent 34%);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 30px;
+            padding: 34px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.36);
+            margin-bottom: 24px;
+        }}
+
+        .hero h2 {{
+            font-size: 30px;
+            margin-bottom: 12px;
+        }}
+
+        .hero p {{
+            color: #cbd5e1;
+            line-height: 1.7;
+            font-size: 16px;
+            max-width: 960px;
+        }}
+
+        .pill-row {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 22px;
+        }}
+
+        .pill {{
+            background: rgba(15, 23, 42, 0.82);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 8px 13px;
+            border-radius: 999px;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-weight: 800;
+        }}
+
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 18px;
+            margin-bottom: 24px;
+        }}
+
+        .card {{
+            background: rgba(15, 23, 42, 0.76);
+            border: 1px solid rgba(148, 163, 184, 0.20);
+            border-radius: 22px;
+            padding: 22px;
+            box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25);
+        }}
+
+        .metric-label {{
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 12px;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }}
+
+        .metric-value {{
+            font-size: 30px;
+            font-weight: 950;
+            color: #ffffff;
+        }}
+
+        .metric-note {{
+            margin-top: 8px;
+            color: #94a3b8;
+            font-size: 13px;
+            line-height: 1.5;
+        }}
+
+        .two-col {{
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }}
+
+        .section-title {{
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 950;
+            margin-bottom: 14px;
+        }}
+
+        ul {{
+            padding-left: 22px;
+            color: #cbd5e1;
+            line-height: 1.9;
+        }}
+
+        .timeline {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+
+        .step {{
+            border-left: 3px solid #38bdf8;
+            padding: 12px 14px;
+            background: rgba(2, 6, 23, 0.32);
+            border-radius: 12px;
+        }}
+
+        .step strong {{
+            display: block;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }}
+
+        .step span {{
+            color: #94a3b8;
+            font-size: 14px;
+        }}
+
+        .links {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+        }}
+
+        a.button {{
+            display: block;
+            text-decoration: none;
+            text-align: center;
+            padding: 14px 16px;
+            border-radius: 16px;
+            color: #f8fafc;
+            font-weight: 900;
+            background: rgba(37, 99, 235, 0.22);
+            border: 1px solid rgba(96, 165, 250, 0.38);
+        }}
+
+        a.button:hover {{
+            background: rgba(37, 99, 235, 0.36);
+        }}
+
+        .footer {{
+            color: #64748b;
+            text-align: center;
+            font-size: 13px;
+            padding: 22px 0 8px;
+        }}
+
+        .warning {{
+            background: rgba(120, 53, 15, 0.46);
+            border: 1px solid rgba(245, 158, 11, 0.44);
+            color: #fde68a;
+            padding: 14px 18px;
+            border-radius: 16px;
+            margin-bottom: 22px;
+            line-height: 1.6;
+            font-size: 14px;
+        }}
+
+        @media (max-width: 1000px) {{
+            .grid {{
+                grid-template-columns: repeat(2, 1fr);
+            }}
+
+            .two-col {{
+                grid-template-columns: 1fr;
+            }}
+
+            .links {{
+                grid-template-columns: repeat(2, 1fr);
+            }}
+        }}
+
+        @media (max-width: 640px) {{
+            body {{
+                padding: 18px;
+            }}
+
+            .brand h1 {{
+                font-size: 30px;
+            }}
+
+            .grid {{
+                grid-template-columns: 1fr;
+            }}
+
+            .links {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+    </style>
+</head>
+
+<body>
+    <main class="shell">
+
+        <div class="topbar">
+            <div class="brand">
+                <div class="kicker">AI Sports Intelligence Platform</div>
+                <h1>{PROJECT_NAME}</h1>
+            </div>
+
+            <div class="status-pill">
+                Online
+            </div>
+        </div>
+
+        <section class="hero">
+            <h2>Enterprise Baseball Intelligence Command Center</h2>
+            <p>
+                AISP2 Baseball is being built as a long-term baseball analytics,
+                probability, machine learning, simulation, and prediction platform.
+                This homepage tracks visible progress as the system grows from
+                foundation infrastructure into real MLB data acquisition,
+                feature engineering, probability modeling, and advanced prediction tools.
+            </p>
+
+            <div class="pill-row">
+                <span class="pill">GitHub Connected</span>
+                <span class="pill">Render Connected</span>
+                <span class="pill">FastAPI Live</span>
+                <span class="pill">Database Layer Started</span>
+                <span class="pill">MLB Data Source Layer Started</span>
+            </div>
+        </section>
+
+        <div class="warning">
+            AISP2 is an experimental sports analytics and machine learning platform.
+            It is not financial advice, gambling advice, legal advice, or a guarantee
+            of sports outcomes.
+        </div>
+
+        <section class="grid">
+            <div class="card">
+                <div class="metric-label">Project Phase</div>
+                <div class="metric-value">{PROJECT_PHASE}</div>
+                <div class="metric-note">Foundation and visibility layer.</div>
+            </div>
+
+            <div class="card">
+                <div class="metric-label">Deployment</div>
+                <div class="metric-value">Live</div>
+                <div class="metric-note">Running on Render.</div>
+            </div>
+
+            <div class="card">
+                <div class="metric-label">Primary Sport</div>
+                <div class="metric-value">{PRIMARY_SPORT}</div>
+                <div class="metric-note">Major League Baseball first.</div>
+            </div>
+
+            <div class="card">
+                <div class="metric-label">Next Target</div>
+                <div class="metric-value">Teams</div>
+                <div class="metric-note">Load official MLB teams into database.</div>
+            </div>
+        </section>
+
+        <section class="two-col">
+            <div class="card">
+                <div class="section-title">What Has Been Completed</div>
+                <ul>
+                    {completed_items_html}
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Build Timeline</div>
+
+                <div class="timeline">
+                    <div class="step">
+                        <strong>Phase 1.00 - Foundation</strong>
+                        <span>Project, GitHub, Render, FastAPI, database foundation.</span>
+                    </div>
+
+                    <div class="step">
+                        <strong>Phase 2.00 - MLB Data Sources</strong>
+                        <span>Connect official MLB Stats API and prepare ingestion.</span>
+                    </div>
+
+                    <div class="step">
+                        <strong>Phase 3.00 - Ingestion</strong>
+                        <span>Load teams, players, rosters, schedules, and stats.</span>
+                    </div>
+
+                    <div class="step">
+                        <strong>Phase 4.00 - Probability Engine</strong>
+                        <span>Build readable prediction outputs and confidence scores.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="two-col">
+            <div class="card">
+                <div class="section-title">Current Objective</div>
+                <p style="color:#cbd5e1; line-height:1.7;">
+                    {CURRENT_OBJECTIVE}
+                </p>
+
+                <br>
+
+                <div class="section-title">Next Target</div>
+                <p style="color:#cbd5e1; line-height:1.7;">
+                    {NEXT_TARGET}
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Development Rule</div>
+                <p style="color:#cbd5e1; line-height:1.7;">
+                    {DEVELOPMENT_RULE}
+                </p>
+
+                <br>
+
+                <p style="color:#94a3b8; line-height:1.7;">
+                    Every file should be organized with enterprise headers,
+                    numbered sections, clear responsibility, verification,
+                    and future roadmap notes.
+                </p>
+            </div>
+        </section>
+
+        <section class="links">
+            <a class="button" href="/project/status">Project Status</a>
+            <a class="button" href="/project/roadmap">Roadmap</a>
+            <a class="button" href="/project/data-sources">Data Sources</a>
+            <a class="button" href="/project/ml-roadmap">ML Roadmap</a>
+            <a class="button" href="/project/probability-output-design">Prediction Design</a>
+            <a class="button" href="/project/files">File Inventory</a>
+            <a class="button" href="/project/next-action">Next Action</a>
+            <a class="button" href="/docs">API Docs</a>
+        </section>
+
+        <div class="footer">
+            {PROJECT_NAME} · {PROJECT_PHASE} · Version {PROJECT_VERSION} · Built by Ryan with Alfred
+        </div>
+
+    </main>
+</body>
+
+</html>
+"""
+
+
+# ============================================================
+# SECTION 06 - ROOT JSON ENDPOINT
+# ============================================================
+
+@app.get("/api/root")
+def root_json() -> dict:
+    """
+    JSON version of the root endpoint.
+
+    The homepage is now visual HTML, so this endpoint preserves
+    the original deployment-verification JSON response.
     """
 
     return {
@@ -77,7 +536,7 @@ def root() -> dict:
 
 
 # ============================================================
-# SECTION 05 - HEALTH ENDPOINT
+# SECTION 07 - HEALTH ENDPOINT
 # ============================================================
 
 @app.get("/health")
@@ -102,20 +561,13 @@ def health() -> dict:
 
 
 # ============================================================
-# SECTION 06 - SYSTEM INFORMATION
+# SECTION 08 - SYSTEM INFORMATION
 # ============================================================
 
 @app.get("/system/info")
 def system_info() -> dict:
     """
     Basic system metadata.
-
-    Useful for:
-        - diagnostics
-        - deployment validation
-        - future dashboards
-        - Render verification
-        - GitHub workflow checks
     """
 
     return {
@@ -133,16 +585,13 @@ def system_info() -> dict:
 
 
 # ============================================================
-# SECTION 07 - PROJECT STATUS ENDPOINT
+# SECTION 09 - PROJECT STATUS ENDPOINT
 # ============================================================
 
 @app.get("/project/status")
 def project_status() -> dict:
     """
     Human-readable project status endpoint.
-
-    This endpoint exists so every deployment visibly shows what
-    AISP2 has accomplished so far.
     """
 
     return {
@@ -167,23 +616,22 @@ def project_status() -> dict:
             "fastapi_entrypoint": "LIVE",
             "database_layer": "CREATED",
             "project_ledger": "CREATED",
+            "visual_homepage": "CREATED",
         },
-        "current_focus": "Database foundation and project visibility",
-        "next_target": "MLB Stats API data source layer",
-        "development_rule": "One file or one directory at a time",
+        "current_focus": "Project visibility, database foundation, and MLB data source verification",
+        "next_target": "Team ingestion from MLB Stats API",
+        "development_rule": DEVELOPMENT_RULE,
     }
 
 
 # ============================================================
-# SECTION 08 - PROJECT ROADMAP ENDPOINT
+# SECTION 10 - PROJECT ROADMAP ENDPOINT
 # ============================================================
 
 @app.get("/project/roadmap")
 def project_roadmap() -> dict:
     """
     Project roadmap endpoint.
-
-    Shows completed work, current work, and upcoming phases.
     """
 
     return {
@@ -201,7 +649,7 @@ def project_roadmap() -> dict:
             {
                 "item": "main.py",
                 "status": "complete",
-                "purpose": "FastAPI application entry point",
+                "purpose": "Visual command center and FastAPI application entry point",
             },
             {
                 "item": "requirements.txt",
@@ -228,16 +676,21 @@ def project_roadmap() -> dict:
                 "status": "in progress",
                 "purpose": "Database initialization engine",
             },
+            {
+                "item": "02_data_sources/mlb_stats_api.py",
+                "status": "in progress",
+                "purpose": "Official MLB Stats API client",
+            },
         ],
         "current_phase": {
             "name": "Phase 1.00 Foundation",
-            "objective": "Create a clean deployable foundation for AISP2 Baseball",
+            "objective": "Create a clean, visible, deployable foundation for AISP2 Baseball",
             "status": "active",
         },
         "next_phase": {
-            "name": "Phase 2.00 MLB Data Source Layer",
-            "objective": "Connect to authoritative baseball data sources",
-            "first_file": "02_data_sources/mlb_stats_api.py",
+            "name": "Phase 3.00 Ingestion",
+            "objective": "Move official MLB data into the AISP2 database",
+            "first_file": "03_ingestion/team_ingestion.py",
         },
         "future_phases": [
             "Team ingestion",
@@ -255,15 +708,13 @@ def project_roadmap() -> dict:
 
 
 # ============================================================
-# SECTION 09 - PROJECT VISION ENDPOINT
+# SECTION 11 - PROJECT VISION ENDPOINT
 # ============================================================
 
 @app.get("/project/vision")
 def project_vision() -> dict:
     """
     Project vision endpoint.
-
-    Defines what AISP2 Baseball is meant to become.
     """
 
     return {
@@ -299,15 +750,13 @@ def project_vision() -> dict:
 
 
 # ============================================================
-# SECTION 10 - DATA SOURCE ROADMAP ENDPOINT
+# SECTION 12 - DATA SOURCE ROADMAP ENDPOINT
 # ============================================================
 
 @app.get("/project/data-sources")
 def project_data_sources() -> dict:
     """
     Data source roadmap endpoint.
-
-    Tracks the best baseball data sources planned for AISP2.
     """
 
     return {
@@ -315,7 +764,7 @@ def project_data_sources() -> dict:
         "tier_1_sources": [
             {
                 "name": "MLB Stats API",
-                "status": "next",
+                "status": "active_foundation",
                 "purpose": "Official teams, rosters, players, schedules, standings, stats, and games",
             },
             {
@@ -361,15 +810,13 @@ def project_data_sources() -> dict:
 
 
 # ============================================================
-# SECTION 11 - MACHINE LEARNING ROADMAP ENDPOINT
+# SECTION 13 - MACHINE LEARNING ROADMAP ENDPOINT
 # ============================================================
 
 @app.get("/project/ml-roadmap")
 def project_machine_learning_roadmap() -> dict:
     """
     Machine learning roadmap endpoint.
-
-    Connects the project to Stanford / DeepLearning.AI concepts.
     """
 
     return {
@@ -423,7 +870,7 @@ def project_machine_learning_roadmap() -> dict:
 
 
 # ============================================================
-# SECTION 12 - PROBABILITY OUTPUT DESIGN ENDPOINT
+# SECTION 14 - PROBABILITY OUTPUT DESIGN ENDPOINT
 # ============================================================
 
 @app.get("/project/probability-output-design")
@@ -464,15 +911,13 @@ def probability_output_design() -> dict:
 
 
 # ============================================================
-# SECTION 13 - FILE INVENTORY ENDPOINT
+# SECTION 15 - FILE INVENTORY ENDPOINT
 # ============================================================
 
 @app.get("/project/files")
 def project_files() -> dict:
     """
     Tracks current known project files.
-
-    This endpoint makes progress visible while the system grows.
     """
 
     return {
@@ -486,13 +931,16 @@ def project_files() -> dict:
             "models.py",
             "init_db.py",
         ],
-        "next_directory": "02_data_sources",
-        "next_file": "02_data_sources/mlb_stats_api.py",
+        "02_data_sources": [
+            "mlb_stats_api.py",
+        ],
+        "next_directory": "03_ingestion",
+        "next_file": "03_ingestion/team_ingestion.py",
     }
 
 
 # ============================================================
-# SECTION 14 - NEXT ACTION ENDPOINT
+# SECTION 16 - NEXT ACTION ENDPOINT
 # ============================================================
 
 @app.get("/project/next-action")
@@ -502,28 +950,28 @@ def project_next_action() -> dict:
     """
 
     return {
-        "current_rule": "One file or one directory at a time",
-        "next_action": "Complete and verify 01_database/init_db.py",
-        "after_that": "Create 02_data_sources directory",
-        "first_baseball_data_file": "02_data_sources/mlb_stats_api.py",
-        "goal": "Begin pulling official MLB teams, rosters, players, and stats",
+        "current_rule": DEVELOPMENT_RULE,
+        "next_action": "Verify MLB Stats API client locally",
+        "after_that": "Create 03_ingestion directory",
+        "first_ingestion_file": "03_ingestion/team_ingestion.py",
+        "goal": "Load official MLB teams into the AISP2 database",
     }
 
 
 # ============================================================
-# SECTION 15 - LOCAL STARTUP VALIDATION
+# SECTION 17 - LOCAL STARTUP VALIDATION
 # ============================================================
 
 if __name__ == "__main__":
     print("AISP2 Baseball loaded successfully.")
-    print("FastAPI application initialized.")
+    print("FastAPI visual command center initialized.")
     print(f"Project: {PROJECT_NAME}")
     print(f"Version: {PROJECT_VERSION}")
     print(f"Phase: {PROJECT_PHASE}")
 
 
 # ============================================================
-# SECTION 16 - FUTURE APPLICATION ROADMAP
+# SECTION 18 - FUTURE APPLICATION ROADMAP
 # ============================================================
 
 """
