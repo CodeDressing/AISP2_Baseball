@@ -1,5 +1,15 @@
+# ============================================================
+# AISP2 BASEBALL
+# PHASE 2.00
+# ENTERPRISE PYTHON DEPENDENCIES
+# FILE: requirements.txt
+# PURPOSE: Render-ready package list for FastAPI, database,
+# MLB API access, environment settings, and future expansion
+# ============================================================
+
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 requests
 python-dotenv
+pydantic
