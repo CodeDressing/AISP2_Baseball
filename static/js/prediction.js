@@ -29,13 +29,15 @@ document.addEventListener(
 );
 
 
-function initializeAISP2Prediction() {
+async function initializeAISP2Prediction() {
 
     if (AISP2_PREDICTION_STATE.initialized) {
         return;
     }
 
     bindPredictionEvents();
+
+    await initializeLiveMLBSelectors();
 
     AISP2_PREDICTION_STATE.initialized = true;
 }
@@ -114,18 +116,20 @@ function handlePredictionSubmit(event) {
    SECTION 06 - TEAM CHANGE HANDLER
    ============================================================ */
 
-function handleTeamChange() {
+async function handleTeamChange() {
 
-    /*
-    Future use:
-        - Fetch players for selected team.
-        - Rebuild player dropdown.
-        - Refresh matchup context.
-    */
+    const teamSelector =
+        getTeamSelector();
+
+    if (teamSelector) {
+
+        await loadPlayersForSelectedTeam(
+            teamSelector.value
+        );
+    }
 
     clearPredictionResultNotice();
 }
-
 
 /* ============================================================
    SECTION 07 - RUN PREDICTION FLOW
@@ -780,4 +784,137 @@ function renderDemoPredictionEnhancements(payload) {
     );
 
     return demoPrediction;
+}
+
+/* ============================================================
+   SECTION 22 - LIVE MLB TEAM AND PLAYER LOADER
+   FILE: static/js/prediction.js
+   PURPOSE: load all MLB teams and active rosters from backend
+   ============================================================ */
+
+const AISP2_MLB_CACHE = {
+    teams: [],
+    teamMap: {},
+    loaded: false
+};
+
+
+async function initializeLiveMLBSelectors() {
+
+    try {
+
+        const teamsResponse =
+            await fetch("/api/mlb/teams");
+
+        const teamsData =
+            await teamsResponse.json();
+
+        if (!teamsData.teams) {
+            return;
+        }
+
+        AISP2_MLB_CACHE.teams =
+            teamsData.teams;
+
+        const teamSelector =
+            getTeamSelector();
+
+        if (!teamSelector) {
+            return;
+        }
+
+        teamSelector.innerHTML = "";
+
+        teamsData.teams.forEach(team => {
+
+            AISP2_MLB_CACHE.teamMap[
+                team.name
+            ] = team;
+
+            const option =
+                document.createElement("option");
+
+            option.value =
+                team.name;
+
+            option.textContent =
+                team.name;
+
+            teamSelector.appendChild(option);
+
+        });
+
+        AISP2_MLB_CACHE.loaded =
+            true;
+
+        if (teamsData.teams.length > 0) {
+
+            await loadPlayersForSelectedTeam(
+                teamsData.teams[0].name
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Failed loading MLB teams:",
+            error
+        );
+    }
+}
+
+
+async function loadPlayersForSelectedTeam(teamName) {
+
+    const team =
+        AISP2_MLB_CACHE.teamMap[teamName];
+
+    if (!team) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/mlb/teams/" +
+                team.id +
+                "/players"
+            );
+
+        const data =
+            await response.json();
+
+        const playerSelector =
+            getPlayerSelector();
+
+        if (!playerSelector) {
+            return;
+        }
+
+        playerSelector.innerHTML = "";
+
+        data.players.forEach(player => {
+
+            const option =
+                document.createElement("option");
+
+            option.value =
+                player.name;
+
+            option.textContent =
+                player.name;
+
+            playerSelector.appendChild(option);
+
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Failed loading players:",
+            error
+        );
+    }
 }
