@@ -9,19 +9,124 @@
 
 # ============================================================
 # SECTION 01 - IMPORTS
+# FILE: main.py
+# PURPOSE: safe application imports, numbered directory path
+# registration, FastAPI infrastructure, MLB API access,
+# semantic engine access, and intent detection access
 # ============================================================
 
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi import Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+
+# ============================================================
+# SECTION 01.01 - STANDARD LIBRARY IMPORTS
+# FILE: main.py
+# PURPOSE: core Python utilities and numbered folder support
+# ============================================================
+
+import sys
+from pathlib import Path
+from typing import Any
+
 import requests
 
 
+# ============================================================
+# SECTION 01.02 - PROJECT PATH REGISTRATION
+# FILE: main.py
+# PURPOSE: make numbered folders importable without using
+# invalid Python package names like from 04_ai import ...
+# ============================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+DATABASE_DIR = PROJECT_ROOT / "01_database"
+DATA_SOURCES_DIR = PROJECT_ROOT / "02_data_sources"
+INGESTION_DIR = PROJECT_ROOT / "03_ingestion"
+AI_DIR = PROJECT_ROOT / "04_ai"
+
+for project_path in [
+    PROJECT_ROOT,
+    DATABASE_DIR,
+    DATA_SOURCES_DIR,
+    INGESTION_DIR,
+    AI_DIR,
+]:
+    project_path_string = str(project_path)
+
+    if project_path_string not in sys.path:
+        sys.path.insert(0, project_path_string)
+
+
+# ============================================================
+# SECTION 01.03 - FASTAPI IMPORTS
+# FILE: main.py
+# PURPOSE: web app, request handling, templates, and static files
+# ============================================================
+
+from fastapi import FastAPI
+from fastapi import Request
+
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from pydantic import BaseModel
+
+
+# ============================================================
+# SECTION 01.04 - DATABASE IMPORTS
+# FILE: main.py
+# PURPOSE: safe core database access only
+# ============================================================
+
+from database import database_health_check
+from database import database_health_details
+
+
+# ============================================================
+# SECTION 01.05 - MLB DATA SOURCE IMPORTS
+# FILE: main.py
+# PURPOSE: safe MLB Stats API client access
+# ============================================================
+
+from mlb_stats_api import MLBStatsAPIClient
+from mlb_stats_api import DEFAULT_SEASON
+
+
+# ============================================================
+# SECTION 01.06 - SEMANTIC ENGINE IMPORTS
+# FILE: main.py
+# PURPOSE: connect chat routing to entity and outcome detection
+# ============================================================
+
+from semantic_engine import detect_team
+from semantic_engine import detect_player
+from semantic_engine import detect_outcome
+from semantic_engine import interpret_baseball_question
+
+
+# ============================================================
+# SECTION 01.07 - INTENT DETECTION IMPORTS
+# FILE: main.py
+# PURPOSE: connect chat routing to intent classification
+# ============================================================
+
+from intent_detection import INTENT_LIST_TEAMS
+from intent_detection import INTENT_LIST_PLAYERS
+from intent_detection import INTENT_TEAM_INFO
+from intent_detection import INTENT_PLAYER_INFO
+from intent_detection import INTENT_PLAYER_PROBABILITY
+from intent_detection import INTENT_COMPARE_PLAYERS
+from intent_detection import INTENT_COMPARE_TEAMS
+from intent_detection import INTENT_GENERAL_PROBABILITY
+from intent_detection import INTENT_MATCHUP_ANALYSIS
+from intent_detection import INTENT_STAT_REQUEST
+from intent_detection import INTENT_EXPLAIN_MODEL
+from intent_detection import INTENT_HELP
+from intent_detection import INTENT_GENERAL_BASEBALL
+
+from intent_detection import build_intent_report
 # ============================================================
 # SECTION 02 - APPLICATION METADATA
 # ============================================================
