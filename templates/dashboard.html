@@ -1,0 +1,441 @@
+<!-- ============================================================
+     AISP2 BASEBALL
+     FILE: templates/dashboard.html
+     PURPOSE: enterprise analytics dashboard template for project
+     health, database visibility, ingestion status, future model
+     monitoring, and baseball intelligence KPIs
+     ============================================================ -->
+
+
+<!-- ============================================================
+     SECTION 01 - DOCUMENT SETUP
+     ============================================================ -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <title>AISP2 Dashboard</title>
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/css/aisp2.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/css/dashboard.css"
+    >
+</head>
+
+
+<!-- ============================================================
+     SECTION 02 - PAGE BODY
+     ============================================================ -->
+
+<body>
+
+    <div class="app-shell">
+
+
+        <!-- ====================================================
+             SECTION 03 - TOP NAVIGATION
+             ==================================================== -->
+
+        <header class="topbar">
+
+            <a class="brand-mark" href="/">
+                <span class="brand-icon">⚾</span>
+                <span>AISP2</span>
+            </a>
+
+            <nav class="nav-links" aria-label="Dashboard navigation">
+                <a href="/">Chat</a>
+                <a href="/tools/prediction">Predictions</a>
+                <a href="/dashboard">Dashboard</a>
+                <a href="/project/status">Status</a>
+                <a href="/docs">API</a>
+            </nav>
+
+        </header>
+
+
+        <!-- ====================================================
+             SECTION 04 - DASHBOARD CONTAINER
+             ==================================================== -->
+
+        <main class="dashboard-container">
+
+
+            <!-- ================================================
+                 SECTION 05 - DASHBOARD HEADER
+                 ================================================ -->
+
+            <section class="dashboard-header">
+
+                <p class="eyebrow">
+                    <span class="pulse"></span>
+                    Baseball Intelligence Command Center
+                </p>
+
+                <h1 class="dashboard-title">
+                    AISP2 Dashboard
+                </h1>
+
+                <p class="dashboard-subtitle">
+                    Track project health, data ingestion progress, database readiness,
+                    future prediction systems, and machine learning pipeline status
+                    from one clean analytics command center.
+                </p>
+
+                <button
+                    class="send-button"
+                    type="button"
+                    data-dashboard-refresh
+                >
+                    Refresh
+                </button>
+
+                <span
+                    data-dashboard-loading
+                    style="display:none; margin-left:12px; color:#94a3b8;"
+                >
+                    Loading...
+                </span>
+
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 06 - STATUS ALERTS
+                 ================================================ -->
+
+            <section
+                class="alert-warning"
+                data-dashboard-error-panel
+                style="display:none; margin-bottom:20px;"
+            >
+                <strong>Dashboard Error:</strong>
+                <span data-dashboard-error>
+                    No error.
+                </span>
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 07 - KPI GRID
+                 ================================================ -->
+
+            <section class="kpi-grid">
+
+                <article class="kpi-card">
+                    <div class="kpi-label">System Health</div>
+                    <div class="kpi-value" data-dashboard-health>Pending</div>
+                    <div class="kpi-change-positive">
+                        Service:
+                        <span data-dashboard-service>aisp2-baseball</span>
+                    </div>
+                </article>
+
+                <article class="kpi-card">
+                    <div class="kpi-label">Teams Loaded</div>
+                    <div class="kpi-value" data-kpi-teams>0</div>
+                    <div class="kpi-change-positive">
+                        Target: 30 MLB teams
+                    </div>
+                </article>
+
+                <article class="kpi-card">
+                    <div class="kpi-label">Players Loaded</div>
+                    <div class="kpi-value" data-kpi-players>0</div>
+                    <div class="kpi-change-positive">
+                        Future roster ingestion
+                    </div>
+                </article>
+
+                <article class="kpi-card">
+                    <div class="kpi-label">Predictions Run</div>
+                    <div class="kpi-value" data-kpi-predictions>0</div>
+                    <div class="kpi-change-positive">
+                        Demo mode active
+                    </div>
+                </article>
+
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 08 - MAIN ANALYTICS GRID
+                 ================================================ -->
+
+            <section class="analytics-grid">
+
+
+                <!-- ============================================
+                     SECTION 08.01 - PROJECT STATUS PANEL
+                     ============================================ -->
+
+                <article class="analytics-panel">
+
+                    <h2 class="panel-title">
+                        Project Status
+                    </h2>
+
+                    <p class="panel-subtitle">
+                        Live status information pulled from AISP2 project endpoints.
+                    </p>
+
+                    <table class="team-table">
+                        <tbody>
+                            <tr>
+                                <th>Project</th>
+                                <td data-project-name>AISP2 Baseball</td>
+                            </tr>
+
+                            <tr>
+                                <th>Status</th>
+                                <td data-project-status>Pending</td>
+                            </tr>
+
+                            <tr>
+                                <th>Phase</th>
+                                <td data-dashboard-phase>Pending</td>
+                            </tr>
+
+                            <tr>
+                                <th>Current Focus</th>
+                                <td data-project-focus>Pending</td>
+                            </tr>
+
+                            <tr>
+                                <th>Next Target</th>
+                                <td data-project-next-target>Pending</td>
+                            </tr>
+
+                            <tr>
+                                <th>Last Updated</th>
+                                <td data-dashboard-last-updated>Pending</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </article>
+
+
+                <!-- ============================================
+                     SECTION 08.02 - INGESTION STATUS PANEL
+                     ============================================ -->
+
+                <aside class="analytics-panel">
+
+                    <h2 class="panel-title">
+                        Ingestion Pipeline
+                    </h2>
+
+                    <p class="panel-subtitle">
+                        Current and future data-loading stages.
+                    </p>
+
+                    <div class="player-grid">
+
+                        <div class="player-card">
+                            <div class="player-name">Team Ingestion</div>
+                            <div class="player-meta">
+                                Built · Waiting for live dashboard wiring
+                            </div>
+                        </div>
+
+                        <div class="player-card">
+                            <div class="player-name">Player Ingestion</div>
+                            <div class="player-meta">
+                                Planned
+                            </div>
+                        </div>
+
+                        <div class="player-card">
+                            <div class="player-name">Roster Ingestion</div>
+                            <div class="player-meta">
+                                Planned
+                            </div>
+                        </div>
+
+                        <div class="player-card">
+                            <div class="player-name">Statcast Ingestion</div>
+                            <div class="player-meta">
+                                Planned
+                            </div>
+                        </div>
+
+                    </div>
+
+                </aside>
+
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 09 - PROBABILITY SYSTEM PREVIEW
+                 ================================================ -->
+
+            <section
+                class="analytics-panel"
+                style="margin-top:20px;"
+            >
+
+                <h2 class="panel-title">
+                    Probability Engine Preview
+                </h2>
+
+                <p class="panel-subtitle">
+                    Future AISP2 predictions will combine official MLB data,
+                    player trends, Statcast metrics, matchup context, and machine
+                    learning confidence scores.
+                </p>
+
+                <div class="probability-grid">
+
+                    <article class="probability-card">
+                        <div class="probability-title">
+                            Hit Probability
+                        </div>
+
+                        <div class="probability-value">
+                            0%
+                        </div>
+
+                        <div class="probability-confidence">
+                            Model not connected yet
+                        </div>
+                    </article>
+
+                    <article class="probability-card">
+                        <div class="probability-title">
+                            Home Run Probability
+                        </div>
+
+                        <div class="probability-value">
+                            0%
+                        </div>
+
+                        <div class="probability-confidence">
+                            Demo endpoint active
+                        </div>
+                    </article>
+
+                    <article class="probability-card">
+                        <div class="probability-title">
+                            Win Probability
+                        </div>
+
+                        <div class="probability-value">
+                            0%
+                        </div>
+
+                        <div class="probability-confidence">
+                            Future game model
+                        </div>
+                    </article>
+
+                </div>
+
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 10 - FUTURE CHART AREA
+                 ================================================ -->
+
+            <section
+                class="analytics-panel"
+                style="margin-top:20px;"
+            >
+
+                <h2 class="panel-title">
+                    Analytics Charts
+                </h2>
+
+                <p class="panel-subtitle">
+                    Placeholder area for future Statcast trends, team strength,
+                    player rolling averages, prediction history, and model accuracy.
+                </p>
+
+                <div class="chart-panel">
+                    <div class="chart-placeholder">
+                        Future chart system will render here.
+                    </div>
+                </div>
+
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 11 - AI INSIGHT PANEL
+                 ================================================ -->
+
+            <section
+                class="analytics-panel"
+                style="margin-top:20px;"
+            >
+
+                <h2 class="panel-title">
+                    AI Analyst Notes
+                </h2>
+
+                <p class="panel-subtitle">
+                    AISP2 will eventually summarize what changed in the data,
+                    which teams are trending, which players are improving, and
+                    where prediction confidence is strongest.
+                </p>
+
+                <div class="insight-card">
+                    <div class="insight-title">
+                        Current Insight
+                    </div>
+
+                    <div class="insight-text">
+                        The platform is now structured for a chatbot-first homepage,
+                        separated frontend assets, dashboard styling, prediction UI
+                        styling, and future real database-backed analytics.
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <!-- ========================================================
+         SECTION 12 - SCRIPT LOADING
+         ======================================================== -->
+
+    <script src="/static/js/aisp2.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+
+</body>
+
+</html>
+
+
+<!-- ============================================================
+     SECTION 13 - FUTURE DASHBOARD TEMPLATE ROADMAP
+
+     13.01 Add real database team counts.
+     13.02 Add real player counts.
+     13.03 Add roster ingestion counts.
+     13.04 Add Statcast ingestion status.
+     13.05 Add model training status.
+     13.06 Add model accuracy cards.
+     13.07 Add live prediction history.
+     13.08 Add chart rendering.
+     13.09 Add team leaderboard.
+     13.10 Add player leaderboard.
+     ============================================================ -->
