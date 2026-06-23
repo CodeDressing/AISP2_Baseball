@@ -298,8 +298,12 @@
         <section class="prediction-result-grid">
 
 
-            <!-- ================================================
-                 SECTION 07.01 - HERO PROBABILITY CARD
+                 <!-- ================================================
+                 SECTION 07.01 - FLAGSHIP PREDICTION COMMAND CENTER
+                 FILE: templates/prediction_workbench.html
+                 PURPOSE: centerpiece prediction display for
+                 player intelligence, outcome probability,
+                 confidence analysis, and AI model output
                  ================================================ -->
 
             <article
@@ -309,7 +313,7 @@
 
                 <div class="prediction-eyebrow">
 
-                    AISP2 Prediction
+                    AISP2 Intelligence Engine
 
                 </div>
 
@@ -341,62 +345,174 @@
                     Confidence Pending
                 </div>
 
+                <div
+                    class="prediction-confidence"
+                    data-result-tier
+                    style="margin-top:10px;"
+                >
+                    Tier Pending
+                </div>
+
+                <div
+                    class="prediction-stat-grid"
+                    style="
+                        margin-top:30px;
+                        grid-template-columns:
+                        repeat(4,1fr);
+                    "
+                >
+
+                    <article class="prediction-stat-chip">
+
+                        <span>
+                            Risk Profile
+                        </span>
+
+                        <strong
+                            data-result-risk
+                        >
+                            Pending
+                        </strong>
+
+                    </article>
+
+                    <article class="prediction-stat-chip">
+
+                        <span>
+                            Outcome Profile
+                        </span>
+
+                        <strong
+                            data-result-profile
+                        >
+                            Pending
+                        </strong>
+
+                    </article>
+
+                    <article class="prediction-stat-chip">
+
+                        <span>
+                            Primary Metric
+                        </span>
+
+                        <strong
+                            data-result-supporting-metric
+                        >
+                            Pending
+                        </strong>
+
+                    </article>
+
+                    <article class="prediction-stat-chip">
+
+                        <span>
+                            Model
+                        </span>
+
+                        <strong
+                            data-result-model
+                        >
+                            AISP2 Demo Model
+                        </strong>
+
+                    </article>
+
+                </div>
+
+                <div
+                    class="prediction-explanation-text"
+                    style="
+                        margin-top:30px;
+                        padding-top:20px;
+                        border-top:
+                        1px solid rgba(255,255,255,.08);
+                    "
+                    data-result-ai-explanation
+                >
+
+                    Select a player and outcome to generate
+                    AISP2 baseball intelligence.
+
+                </div>
+
             </article>
 
-
-            <!-- ================================================
-                 SECTION 07.02 - AI EXPLANATION PANEL
+                       <!-- ================================================
+                 SECTION 07.02 - AI INTELLIGENCE PANEL
+                 FILE: templates/prediction_workbench.html
+                 PURPOSE: dynamic AI reasoning, risk analysis,
+                 confidence analysis, and supporting metrics
                  ================================================ -->
 
             <aside class="prediction-explanation-panel">
 
                 <h2 class="prediction-explanation-title">
-
-                    AI Explanation
-
+                    AI Prediction Intelligence
                 </h2>
 
-                <div class="prediction-explanation-text">
+                <div
+                    class="prediction-explanation-text"
+                    data-result-ai-explanation
+                >
+                    Select a player and outcome to generate
+                    AISP2 prediction intelligence.
+                </div>
 
-                    Future AISP2 models will explain why a
-                    prediction exists using player form,
-                    matchup data, Statcast trends,
-                    team context, park factors,
-                    and machine learning confidence.
+                <div
+                    class="prediction-stat-grid"
+                    style="margin-top:20px;"
+                >
+
+                    <article class="prediction-stat-chip">
+                        <span>Prediction Tier</span>
+
+                        <strong
+                            data-result-tier
+                        >
+                            Pending
+                        </strong>
+                    </article>
+
+                    <article class="prediction-stat-chip">
+                        <span>Risk Profile</span>
+
+                        <strong
+                            data-result-risk
+                        >
+                            Pending
+                        </strong>
+                    </article>
+
+                    <article class="prediction-stat-chip">
+                        <span>Outcome Profile</span>
+
+                        <strong
+                            data-result-profile
+                        >
+                            Pending
+                        </strong>
+                    </article>
+
+                    <article class="prediction-stat-chip">
+                        <span>Primary Metric</span>
+
+                        <strong
+                            data-result-supporting-metric
+                        >
+                            Pending
+                        </strong>
+                    </article>
 
                 </div>
 
-                <ul class="prediction-source-list">
-
-                    <li>
-                        MLB Data
-                    </li>
-
-                    <li>
-                        Team Context
-                    </li>
-
-                    <li>
-                        Matchup Factors
-                    </li>
-
-                    <li>
-                        Statcast Metrics
-                    </li>
-
-                    <li>
-                        Model Confidence
-                    </li>
-
-                </ul>
-
             </aside>
 
-        </section>
-
-
-        <!-- ====================================================
-             SECTION 08 - SUPPORTING METRICS
+               <!-- ====================================================
+             SECTION 08 - SUPPORTING INTELLIGENCE METRICS
+             FILE: templates/prediction_workbench.html
+             PURPOSE: supporting model metrics and prediction
+             context indicators
              ==================================================== -->
 
         <section
@@ -405,48 +521,46 @@
         >
 
             <article class="prediction-stat-chip">
-                <span>
-                    Exit Velocity
-                </span>
+                <span>Player Style</span>
 
-                <strong>
+                <strong
+                    data-result-style
+                >
                     Pending
                 </strong>
             </article>
 
             <article class="prediction-stat-chip">
-                <span>
-                    Barrel Rate
-                </span>
+                <span>Recent Form</span>
 
-                <strong>
+                <strong
+                    data-result-form
+                >
                     Pending
                 </strong>
             </article>
 
             <article class="prediction-stat-chip">
-                <span>
-                    Hard Hit Rate
-                </span>
+                <span>Primary Metric</span>
 
-                <strong>
+                <strong
+                    data-result-metric
+                >
                     Pending
                 </strong>
             </article>
 
             <article class="prediction-stat-chip">
-                <span>
-                    xSLG
-                </span>
+                <span>Model Used</span>
 
-                <strong>
-                    Pending
+                <strong
+                    data-result-model
+                >
+                    AISP2 Demo Model
                 </strong>
             </article>
 
         </section>
-
-
         <!-- ====================================================
              SECTION 09 - MATCHUP ANALYSIS
              ==================================================== -->
