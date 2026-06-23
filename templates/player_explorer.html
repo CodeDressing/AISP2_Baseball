@@ -843,11 +843,11 @@
 
 
             <!-- ================================================
-                 SECTION 12 - AI PLAYER ANALYST AND NEXT ACTIONS
+                 SECTION 12 - AI PLAYER ANALYST
                  FILE: templates/player_explorer.html
-                 PURPOSE: plain-English player interpretation,
-                 scouting notes, and next-action links for deeper
-                 prediction workflows
+                 PURPOSE: player-focused AI interpretation,
+                 recent form review, power profile, contact profile,
+                 and prediction readiness without navigation shortcuts
                  ================================================ -->
 
             <section
@@ -860,77 +860,83 @@
                 </h2>
 
                 <p class="panel-subtitle">
-                    This panel will eventually summarize the player’s
-                    current form, statistical profile, prediction strengths,
-                    prediction risks, matchup fit, and recommended next
-                    analysis step.
+                    AISP2 will translate raw player data into plain-English
+                    scouting, trend analysis, risk signals, and model-ready
+                    prediction context.
                 </p>
 
-                <div class="insight-card">
+                <div class="player-grid">
 
-                    <div class="insight-title">
-                        Current Player Insight
+                    <div class="player-card">
+                        <div class="player-name">
+                            Recent Form Analysis
+                        </div>
+
+                        <div class="player-meta">
+                            Future rolling windows will evaluate last 7 games,
+                            last 15 games, last 30 games, and season trend
+                            direction.
+                        </div>
                     </div>
 
-                    <div class="insight-text">
-                        Aaron Judge is being used as the demo profile for
-                        AISP2 player intelligence. The page is now structured
-                        to support identity, team context, position, player
-                        type, season stats, Statcast features, outcome models,
-                        and AI explanations once live player ingestion and
-                        player routes are connected.
+                    <div class="player-card">
+                        <div class="player-name">
+                            Power Profile
+                        </div>
+
+                        <div class="player-meta">
+                            Home run probability will use exit velocity,
+                            barrel rate, launch angle, pull rate, pitcher
+                            matchup, and ballpark context.
+                        </div>
+                    </div>
+
+                    <div class="player-card">
+                        <div class="player-name">
+                            Contact Profile
+                        </div>
+
+                        <div class="player-meta">
+                            Hit probability will use contact rate, strikeout
+                            rate, whiff rate, zone contact, handedness splits,
+                            and opposing pitcher tendencies.
+                        </div>
+                    </div>
+
+                    <div class="player-card">
+                        <div class="player-name">
+                            Prediction Readiness
+                        </div>
+
+                        <div class="player-meta">
+                            This player page is prepared for season stats,
+                            Statcast metrics, matchup context, AI summaries,
+                            and future probability outputs.
+                        </div>
                     </div>
 
                 </div>
 
                 <div
-                    class="player-grid"
+                    class="insight-card"
                     style="margin-top:20px;"
                 >
 
-                    <a
-                        class="player-card"
-                        href="/tools/prediction"
-                    >
-                        <div class="player-name">
-                            Open Prediction Workbench
-                        </div>
+                    <div class="insight-title">
+                        Current AI Summary
+                    </div>
 
-                        <div class="player-meta">
-                            Move from player profile to probability analysis.
-                        </div>
-                    </a>
-
-                    <a
-                        class="player-card"
-                        href="/dashboard"
-                    >
-                        <div class="player-name">
-                            Open Dashboard
-                        </div>
-
-                        <div class="player-meta">
-                            Review project health and data readiness.
-                        </div>
-                    </a>
-
-                    <a
-                        class="player-card"
-                        href="/project/data-sources"
-                    >
-                        <div class="player-name">
-                            View Data Sources
-                        </div>
-
-                        <div class="player-meta">
-                            Review planned MLB, Statcast, and historical data layers.
-                        </div>
-                    </a>
+                    <div class="insight-text">
+                        Aaron Judge is the current demo profile for the
+                        Player Explorer. The page now focuses fully on player
+                        intelligence: identity, role, team context, snapshot
+                        metrics, Statcast readiness, outcome modeling, and
+                        AI-generated scouting interpretation.
+                    </div>
 
                 </div>
 
             </section>
-
 
                         <!-- ========================================================
                  SECTION 13 - SCRIPT LOADING
