@@ -2,16 +2,15 @@
 # AISP2 BASEBALL
 # FILE: 04_ai/__init__.py
 # PURPOSE: package initializer for semantic analysis,
-# natural language understanding, intent detection,
-# probability interpretation, embeddings, and future
-# baseball intelligence systems
+# NLP, NLU, probability interpretation, embeddings,
+# reasoning systems, and future baseball intelligence
 # ============================================================
 
 
 # ============================================================
 # SECTION 01 - SEMANTIC ENGINE EXPORTS
 # FILE: 04_ai/__init__.py
-# PURPOSE: expose semantic interpretation functions
+# PURPOSE: expose semantic interpretation layer
 # ============================================================
 
 from .semantic_engine import normalize_text
@@ -27,20 +26,22 @@ from .semantic_engine import interpret_baseball_question
 
 
 # ============================================================
-# SECTION 02 - PACKAGE METADATA
+# SECTION 02 - AI PACKAGE METADATA
 # FILE: 04_ai/__init__.py
-# PURPOSE: AI package metadata
+# PURPOSE: AI subsystem metadata
 # ============================================================
+
+AI_PACKAGE_NAME = "AISP2 AI"
 
 AI_PACKAGE_VERSION = "1.0.0"
 
-PRIMARY_AI_ENGINE = "Semantic Engine"
+PRIMARY_ENGINE = "Semantic Engine"
 
 
 # ============================================================
-# SECTION 03 - FUTURE AI EXPORT ROADMAP
+# SECTION 03 - FUTURE AI MODULE EXPORTS
 # FILE: 04_ai/__init__.py
-# PURPOSE: future AI module expansion ledger
+# PURPOSE: future AI architecture ledger
 # ============================================================
 
 """
@@ -51,40 +52,46 @@ PRIMARY_AI_ENGINE = "Semantic Engine"
 03.05 embeddings.py
 03.06 semantic_search.py
 03.07 rag_engine.py
-03.08 conversation_memory.py
-03.09 model_reasoning.py
+03.08 memory_engine.py
+03.09 reasoning_engine.py
 03.10 explanation_generator.py
 """
 
 
 # ============================================================
-# SECTION 04 - LONG TERM AI ROADMAP
+# SECTION 04 - LONG TERM NLP ROADMAP
 # FILE: 04_ai/__init__.py
-# PURPOSE: AISP2 baseball intelligence evolution
+# PURPOSE: semantic evolution path
 # ============================================================
 
 """
-Level 1:
-    Rule-based semantic detection.
+Level 1
+Keyword Detection
 
-Level 2:
-    Fuzzy name matching.
+Level 2
+Entity Detection
 
-Level 3:
-    Baseball ontology.
+Level 3
+Intent Classification
 
-Level 4:
-    Embedding search.
+Level 4
+Probability Interpretation
 
-Level 5:
-    Vector database retrieval.
+Level 5
+Semantic Search
 
-Level 6:
-    Retrieval-Augmented Generation.
+Level 6
+Embeddings
 
-Level 7:
-    Multi-model baseball reasoning.
+Level 7
+Vector Database Retrieval
 
-Level 8:
-    Proprietary AISP2 prediction engine.
+Level 8
+RAG
+
+Level 9
+Reasoning Agents
+
+Level 10
+AISP2 Baseball Intelligence System
 """
