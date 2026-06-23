@@ -389,9 +389,9 @@ def build_chat_reply(message: str) -> dict:
 @app.get("/", response_class=HTMLResponse)
 def home_page(request: Request):
     return templates.TemplateResponse(
+        request,
         "home.html",
         {
-            "request": request,
             "project_name": PROJECT_NAME,
             "project_version": PROJECT_VERSION,
             "project_phase": PROJECT_PHASE,
@@ -402,9 +402,9 @@ def home_page(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request):
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {
-            "request": request,
             "project_name": PROJECT_NAME,
             "project_version": PROJECT_VERSION,
             "project_phase": PROJECT_PHASE,
@@ -415,9 +415,9 @@ def dashboard_page(request: Request):
 @app.get("/players", response_class=HTMLResponse)
 def player_explorer_page(request: Request):
     return templates.TemplateResponse(
+        request,
         "player_explorer.html",
         {
-            "request": request,
             "project_name": PROJECT_NAME,
             "project_version": PROJECT_VERSION,
             "project_phase": PROJECT_PHASE,
@@ -428,15 +428,14 @@ def player_explorer_page(request: Request):
 @app.get("/tools/prediction", response_class=HTMLResponse)
 def prediction_workbench_page(request: Request):
     return templates.TemplateResponse(
+        request,
         "prediction_workbench.html",
         {
-            "request": request,
             "project_name": PROJECT_NAME,
             "project_version": PROJECT_VERSION,
             "project_phase": PROJECT_PHASE,
         },
     )
-
 
 # ============================================================
 # SECTION 10 - CHAT API ENDPOINT
