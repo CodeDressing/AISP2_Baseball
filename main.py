@@ -1,11 +1,12 @@
 # ============================================================
 # AISP2 BASEBALL
-# PHASE 1.00 PART 7
-# ENTERPRISE VISUAL COMMAND CENTER
+# PHASE 1.00 PART 8
+# ENTERPRISE VISUAL COMMAND CENTER + DEMO PREDICTION WORKBENCH
 # FILE: main.py
 # PURPOSE: primary FastAPI startup, visual homepage,
-# project visibility, roadmap tracking, health monitoring,
-# data-source roadmap, ML roadmap, and deployment verification
+# project visibility, roadmap tracking, demo prediction UI,
+# probability-card display, health monitoring, and deployment
+# verification for AISP2 Baseball
 # ============================================================
 
 
@@ -43,21 +44,169 @@ COMPLETED_FOUNDATION_ITEMS = [
     "GitHub repository connected",
     "Render deployment connected",
     "FastAPI entrypoint deployed",
+    "Visual homepage created",
     "Project ledger established",
     "Database connection layer created",
     "Database models created",
     "MLB Stats API client started",
+    "Demo Prediction Workbench added",
 ]
 
-CURRENT_OBJECTIVE = "Make AISP2 visibly track progress before deeper ingestion."
+CURRENT_OBJECTIVE = (
+    "Make AISP2 visually demonstrate the final baseball intelligence "
+    "experience before deeper ingestion and model training."
+)
 
-NEXT_TARGET = "Complete MLB Stats API client verification, then build team ingestion."
+NEXT_TARGET = (
+    "Verify MLB Stats API client, then build team ingestion so real "
+    "MLB teams can replace demo dropdown data."
+)
 
 DEVELOPMENT_RULE = "One file or one directory at a time."
 
 
 # ============================================================
-# SECTION 04 - APPLICATION INITIALIZATION
+# SECTION 04 - DEMO DATA
+# ============================================================
+
+DEMO_TEAMS = {
+    "New York Yankees": {
+        "abbreviation": "NYY",
+        "league": "American League",
+        "division": "AL East",
+        "ballpark": "Yankee Stadium",
+        "players": [
+            "Aaron Judge",
+            "Giancarlo Stanton",
+            "Gerrit Cole",
+        ],
+    },
+    "Los Angeles Dodgers": {
+        "abbreviation": "LAD",
+        "league": "National League",
+        "division": "NL West",
+        "ballpark": "Dodger Stadium",
+        "players": [
+            "Shohei Ohtani",
+            "Mookie Betts",
+            "Freddie Freeman",
+        ],
+    },
+    "New York Mets": {
+        "abbreviation": "NYM",
+        "league": "National League",
+        "division": "NL East",
+        "ballpark": "Citi Field",
+        "players": [
+            "Juan Soto",
+            "Francisco Lindor",
+            "Pete Alonso",
+        ],
+    },
+    "Atlanta Braves": {
+        "abbreviation": "ATL",
+        "league": "National League",
+        "division": "NL East",
+        "ballpark": "Truist Park",
+        "players": [
+            "Ronald Acuna Jr.",
+            "Matt Olson",
+            "Austin Riley",
+        ],
+    },
+}
+
+DEMO_OUTCOMES = {
+    "home_run": "Hits a Home Run",
+    "hit": "Gets at least 1 Hit",
+    "rbi": "Records an RBI",
+    "total_bases": "Over 1.5 Total Bases",
+    "strikeout": "Pitcher Records 6+ Strikeouts",
+}
+
+DEMO_PLAYER_PROFILES = {
+    "Aaron Judge": {
+        "style": "Elite power hitter",
+        "recent_form": "Strong hard-hit profile",
+        "primary_metric": "Barrel rate",
+        "base_probability": 28,
+        "confidence": 74,
+    },
+    "Shohei Ohtani": {
+        "style": "Elite two-way offensive force",
+        "recent_form": "High-impact contact profile",
+        "primary_metric": "Exit velocity",
+        "base_probability": 31,
+        "confidence": 77,
+    },
+    "Juan Soto": {
+        "style": "Elite plate discipline hitter",
+        "recent_form": "Excellent on-base profile",
+        "primary_metric": "OBP and walk rate",
+        "base_probability": 66,
+        "confidence": 81,
+    },
+    "Mookie Betts": {
+        "style": "Contact and power blend",
+        "recent_form": "Stable all-around production",
+        "primary_metric": "OPS",
+        "base_probability": 61,
+        "confidence": 76,
+    },
+    "Freddie Freeman": {
+        "style": "High-contact run producer",
+        "recent_form": "Reliable hit profile",
+        "primary_metric": "AVG and hard contact",
+        "base_probability": 64,
+        "confidence": 79,
+    },
+    "Pete Alonso": {
+        "style": "Power-first slugger",
+        "recent_form": "Strong home run profile",
+        "primary_metric": "HR rate",
+        "base_probability": 24,
+        "confidence": 68,
+    },
+    "Ronald Acuna Jr.": {
+        "style": "Power-speed superstar",
+        "recent_form": "Dynamic offensive profile",
+        "primary_metric": "OPS and stolen-base threat",
+        "base_probability": 58,
+        "confidence": 73,
+    },
+    "Matt Olson": {
+        "style": "Left-handed power hitter",
+        "recent_form": "Strong pull-side power",
+        "primary_metric": "Hard-hit rate",
+        "base_probability": 25,
+        "confidence": 70,
+    },
+    "Austin Riley": {
+        "style": "Middle-order power bat",
+        "recent_form": "Strong contact authority",
+        "primary_metric": "SLG",
+        "base_probability": 23,
+        "confidence": 69,
+    },
+    "Giancarlo Stanton": {
+        "style": "Extreme power hitter",
+        "recent_form": "High variance, high upside",
+        "primary_metric": "Exit velocity",
+        "base_probability": 22,
+        "confidence": 62,
+    },
+    "Gerrit Cole": {
+        "style": "Ace starting pitcher",
+        "recent_form": "High strikeout profile",
+        "primary_metric": "K rate",
+        "base_probability": 57,
+        "confidence": 75,
+    },
+}
+
+
+# ============================================================
+# SECTION 05 - APPLICATION INITIALIZATION
 # ============================================================
 
 app = FastAPI(
@@ -71,40 +220,19 @@ app = FastAPI(
 
 
 # ============================================================
-# SECTION 05 - ROOT VISUAL COMMAND CENTER
+# SECTION 06 - SHARED HTML STYLE SYSTEM
 # ============================================================
 
-@app.get("/", response_class=HTMLResponse)
-def root() -> str:
-    """
-    Visual homepage.
-
-    This replaces the raw JSON root page with a human-friendly
-    project command center so progress is visible on every deploy.
-    """
-
-    completed_items_html = ""
-
-    for item in COMPLETED_FOUNDATION_ITEMS:
-        completed_items_html += f"<li>{item}</li>"
-
-    return f"""
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <title>{PROJECT_NAME} Command Center</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+def shared_css() -> str:
+    return """
     <style>
-        * {{
+        * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-        }}
+        }
 
-        body {{
+        body {
             min-height: 100vh;
             background:
                 radial-gradient(circle at top left, rgba(37, 99, 235, 0.35), transparent 30%),
@@ -113,43 +241,43 @@ def root() -> str:
             color: #f8fafc;
             font-family: Inter, Arial, sans-serif;
             padding: 32px;
-        }}
+        }
 
-        .shell {{
-            max-width: 1280px;
+        .shell {
+            max-width: 1320px;
             margin: 0 auto;
-        }}
+        }
 
-        .topbar {{
+        .topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 28px;
             gap: 16px;
             flex-wrap: wrap;
-        }}
+        }
 
-        .brand {{
+        .brand {
             display: flex;
             flex-direction: column;
             gap: 4px;
-        }}
+        }
 
-        .kicker {{
+        .kicker {
             color: #38bdf8;
             font-size: 13px;
             font-weight: 900;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-        }}
+        }
 
-        .brand h1 {{
+        .brand h1 {
             font-size: 42px;
             letter-spacing: -1.2px;
             font-weight: 950;
-        }}
+        }
 
-        .status-pill {{
+        .status-pill {
             background: rgba(22, 163, 74, 0.18);
             border: 1px solid rgba(34, 197, 94, 0.45);
             color: #86efac;
@@ -158,9 +286,9 @@ def root() -> str:
             font-size: 13px;
             font-weight: 900;
             text-transform: uppercase;
-        }}
+        }
 
-        .hero {{
+        .hero {
             background:
                 linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.80)),
                 radial-gradient(circle at top right, rgba(56, 189, 248, 0.28), transparent 34%);
@@ -169,28 +297,28 @@ def root() -> str:
             padding: 34px;
             box-shadow: 0 30px 90px rgba(0, 0, 0, 0.36);
             margin-bottom: 24px;
-        }}
+        }
 
-        .hero h2 {{
+        .hero h2 {
             font-size: 30px;
             margin-bottom: 12px;
-        }}
+        }
 
-        .hero p {{
+        .hero p {
             color: #cbd5e1;
             line-height: 1.7;
             font-size: 16px;
-            max-width: 960px;
-        }}
+            max-width: 1000px;
+        }
 
-        .pill-row {{
+        .pill-row {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             margin-top: 22px;
-        }}
+        }
 
-        .pill {{
+        .pill {
             background: rgba(15, 23, 42, 0.82);
             border: 1px solid rgba(148, 163, 184, 0.25);
             padding: 8px 13px;
@@ -198,98 +326,106 @@ def root() -> str:
             color: #e2e8f0;
             font-size: 13px;
             font-weight: 800;
-        }}
+        }
 
-        .grid {{
+        .grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 18px;
             margin-bottom: 24px;
-        }}
+        }
 
-        .card {{
+        .two-col {
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .three-col {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .card {
             background: rgba(15, 23, 42, 0.76);
             border: 1px solid rgba(148, 163, 184, 0.20);
             border-radius: 22px;
             padding: 22px;
             box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25);
-        }}
+        }
 
-        .metric-label {{
+        .metric-label {
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             font-size: 12px;
             font-weight: 900;
             margin-bottom: 8px;
-        }}
+        }
 
-        .metric-value {{
+        .metric-value {
             font-size: 30px;
             font-weight: 950;
             color: #ffffff;
-        }}
+        }
 
-        .metric-note {{
+        .metric-note {
             margin-top: 8px;
             color: #94a3b8;
             font-size: 13px;
             line-height: 1.5;
-        }}
+        }
 
-        .two-col {{
-            display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
-            gap: 20px;
-            margin-bottom: 24px;
-        }}
-
-        .section-title {{
+        .section-title {
             color: #ffffff;
             font-size: 22px;
             font-weight: 950;
             margin-bottom: 14px;
-        }}
+        }
 
-        ul {{
+        ul {
             padding-left: 22px;
             color: #cbd5e1;
             line-height: 1.9;
-        }}
+        }
 
-        .timeline {{
+        .timeline {
             display: flex;
             flex-direction: column;
             gap: 12px;
-        }}
+        }
 
-        .step {{
+        .step {
             border-left: 3px solid #38bdf8;
             padding: 12px 14px;
             background: rgba(2, 6, 23, 0.32);
             border-radius: 12px;
-        }}
+        }
 
-        .step strong {{
+        .step strong {
             display: block;
             color: #ffffff;
             margin-bottom: 4px;
-        }}
+        }
 
-        .step span {{
+        .step span {
             color: #94a3b8;
             font-size: 14px;
-        }}
+        }
 
-        .links {{
+        .links {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 14px;
             margin-bottom: 24px;
-        }}
+        }
 
-        a.button {{
+        a.button, button.button {
             display: block;
+            width: 100%;
             text-decoration: none;
             text-align: center;
             padding: 14px 16px;
@@ -298,20 +434,21 @@ def root() -> str:
             font-weight: 900;
             background: rgba(37, 99, 235, 0.22);
             border: 1px solid rgba(96, 165, 250, 0.38);
-        }}
+            cursor: pointer;
+        }
 
-        a.button:hover {{
+        a.button:hover, button.button:hover {
             background: rgba(37, 99, 235, 0.36);
-        }}
+        }
 
-        .footer {{
+        .footer {
             color: #64748b;
             text-align: center;
             font-size: 13px;
             padding: 22px 0 8px;
-        }}
+        }
 
-        .warning {{
+        .warning {
             background: rgba(120, 53, 15, 0.46);
             border: 1px solid rgba(245, 158, 11, 0.44);
             color: #fde68a;
@@ -320,40 +457,285 @@ def root() -> str:
             margin-bottom: 22px;
             line-height: 1.6;
             font-size: 14px;
-        }}
+        }
 
-        @media (max-width: 1000px) {{
-            .grid {{
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+        }
+
+        select {
+            width: 100%;
+            background: rgba(2, 6, 23, 0.76);
+            color: #f8fafc;
+            border: 1px solid rgba(148, 163, 184, 0.32);
+            border-radius: 14px;
+            padding: 13px 14px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .prediction-card {
+            background:
+                linear-gradient(145deg, rgba(8, 47, 73, 0.92), rgba(15, 23, 42, 0.92)),
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.18), transparent 30%);
+            border: 1px solid rgba(56, 189, 248, 0.30);
+            border-radius: 28px;
+            padding: 28px;
+            box-shadow: 0 26px 80px rgba(14, 165, 233, 0.16);
+        }
+
+        .prediction-title {
+            font-size: 28px;
+            font-weight: 950;
+            margin-bottom: 8px;
+        }
+
+        .prediction-subtitle {
+            color: #cbd5e1;
+            line-height: 1.6;
+            margin-bottom: 22px;
+        }
+
+        .probability {
+            font-size: 72px;
+            font-weight: 1000;
+            letter-spacing: -2px;
+            color: #86efac;
+            line-height: 1;
+        }
+
+        .confidence {
+            font-size: 38px;
+            font-weight: 950;
+            color: #38bdf8;
+        }
+
+        .bar-shell {
+            width: 100%;
+            height: 14px;
+            background: rgba(2, 6, 23, 0.72);
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            margin-top: 10px;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e, #38bdf8);
+            border-radius: 999px;
+        }
+
+        .stat-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .stat-chip {
+            background: rgba(15, 23, 42, 0.70);
+            border: 1px solid rgba(148, 163, 184, 0.20);
+            border-radius: 16px;
+            padding: 14px;
+        }
+
+        .stat-chip span {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .stat-chip strong {
+            color: #ffffff;
+            font-size: 16px;
+        }
+
+        .small-note {
+            color: #94a3b8;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 1000px) {
+            .grid {
                 grid-template-columns: repeat(2, 1fr);
-            }}
+            }
 
-            .two-col {{
+            .two-col, .three-col, .form-grid {
                 grid-template-columns: 1fr;
-            }}
+            }
 
-            .links {{
+            .links {
                 grid-template-columns: repeat(2, 1fr);
-            }}
-        }}
+            }
+        }
 
-        @media (max-width: 640px) {{
-            body {{
+        @media (max-width: 640px) {
+            body {
                 padding: 18px;
-            }}
+            }
 
-            .brand h1 {{
+            .brand h1 {
                 font-size: 30px;
-            }}
+            }
 
-            .grid {{
+            .grid {
                 grid-template-columns: 1fr;
-            }}
+            }
 
-            .links {{
+            .links {
                 grid-template-columns: 1fr;
-            }}
-        }}
+            }
+
+            .probability {
+                font-size: 56px;
+            }
+        }
     </style>
+    """
+
+
+# ============================================================
+# SECTION 07 - DEMO PREDICTION HELPERS
+# ============================================================
+
+def get_available_players(team_name: str) -> list[str]:
+    team = DEMO_TEAMS.get(team_name)
+
+    if not team:
+        first_team = next(iter(DEMO_TEAMS.values()))
+        return first_team["players"]
+
+    return team["players"]
+
+
+def normalize_demo_selection(
+    team_name: str | None,
+    player_name: str | None,
+    outcome_key: str | None,
+) -> tuple[str, str, str]:
+    selected_team = team_name or "New York Yankees"
+
+    if selected_team not in DEMO_TEAMS:
+        selected_team = "New York Yankees"
+
+    available_players = get_available_players(
+        selected_team
+    )
+
+    selected_player = player_name or available_players[0]
+
+    if selected_player not in available_players:
+        selected_player = available_players[0]
+
+    selected_outcome = outcome_key or "home_run"
+
+    if selected_outcome not in DEMO_OUTCOMES:
+        selected_outcome = "home_run"
+
+    return selected_team, selected_player, selected_outcome
+
+
+def build_demo_probability(
+    player_name: str,
+    outcome_key: str,
+) -> dict:
+    profile = DEMO_PLAYER_PROFILES.get(
+        player_name,
+        {
+            "style": "Balanced player profile",
+            "recent_form": "Stable recent form",
+            "primary_metric": "Season production",
+            "base_probability": 50,
+            "confidence": 65,
+        },
+    )
+
+    base_probability = profile["base_probability"]
+
+    if outcome_key == "home_run":
+        probability = base_probability
+    elif outcome_key == "hit":
+        probability = min(base_probability + 35, 78)
+    elif outcome_key == "rbi":
+        probability = min(base_probability + 18, 64)
+    elif outcome_key == "total_bases":
+        probability = min(base_probability + 23, 69)
+    elif outcome_key == "strikeout":
+        probability = base_probability
+    else:
+        probability = base_probability
+
+    confidence = profile["confidence"]
+
+    return {
+        "probability": probability,
+        "confidence": confidence,
+        "profile": profile,
+    }
+
+
+def build_option_tags(
+    options: list[str],
+    selected_value: str,
+) -> str:
+    html = ""
+
+    for option in options:
+        selected = "selected" if option == selected_value else ""
+        html += f"<option value=\"{option}\" {selected}>{option}</option>"
+
+    return html
+
+
+def build_outcome_option_tags(
+    selected_value: str,
+) -> str:
+    html = ""
+
+    for key, label in DEMO_OUTCOMES.items():
+        selected = "selected" if key == selected_value else ""
+        html += f"<option value=\"{key}\" {selected}>{label}</option>"
+
+    return html
+
+
+# ============================================================
+# SECTION 08 - ROOT VISUAL COMMAND CENTER
+# ============================================================
+
+@app.get("/", response_class=HTMLResponse)
+def root() -> str:
+    completed_items_html = ""
+
+    for item in COMPLETED_FOUNDATION_ITEMS:
+        completed_items_html += f"<li>{item}</li>"
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{PROJECT_NAME} Command Center</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {shared_css()}
 </head>
 
 <body>
@@ -365,9 +747,7 @@ def root() -> str:
                 <h1>{PROJECT_NAME}</h1>
             </div>
 
-            <div class="status-pill">
-                Online
-            </div>
+            <div class="status-pill">Online</div>
         </div>
 
         <section class="hero">
@@ -375,9 +755,8 @@ def root() -> str:
             <p>
                 AISP2 Baseball is being built as a long-term baseball analytics,
                 probability, machine learning, simulation, and prediction platform.
-                This homepage tracks visible progress as the system grows from
-                foundation infrastructure into real MLB data acquisition,
-                feature engineering, probability modeling, and advanced prediction tools.
+                This page now includes the first visible version of the future
+                baseball prediction experience.
             </p>
 
             <div class="pill-row">
@@ -386,13 +765,14 @@ def root() -> str:
                 <span class="pill">FastAPI Live</span>
                 <span class="pill">Database Layer Started</span>
                 <span class="pill">MLB Data Source Layer Started</span>
+                <span class="pill">Prediction Demo Added</span>
             </div>
         </section>
 
         <div class="warning">
             AISP2 is an experimental sports analytics and machine learning platform.
-            It is not financial advice, gambling advice, legal advice, or a guarantee
-            of sports outcomes.
+            Demo probabilities are illustrative only until real ingestion and model
+            training are connected.
         </div>
 
         <section class="grid">
@@ -415,9 +795,9 @@ def root() -> str:
             </div>
 
             <div class="card">
-                <div class="metric-label">Next Target</div>
-                <div class="metric-value">Teams</div>
-                <div class="metric-note">Load official MLB teams into database.</div>
+                <div class="metric-label">Visible Product</div>
+                <div class="metric-value">Demo</div>
+                <div class="metric-note">Prediction Workbench is now available.</div>
             </div>
         </section>
 
@@ -435,7 +815,7 @@ def root() -> str:
                 <div class="timeline">
                     <div class="step">
                         <strong>Phase 1.00 - Foundation</strong>
-                        <span>Project, GitHub, Render, FastAPI, database foundation.</span>
+                        <span>Project, GitHub, Render, FastAPI, visual command center.</span>
                     </div>
 
                     <div class="step">
@@ -450,51 +830,47 @@ def root() -> str:
 
                     <div class="step">
                         <strong>Phase 4.00 - Probability Engine</strong>
-                        <span>Build readable prediction outputs and confidence scores.</span>
+                        <span>Replace demo cards with real prediction models.</span>
                     </div>
                 </div>
             </div>
         </section>
 
         <section class="two-col">
-            <div class="card">
-                <div class="section-title">Current Objective</div>
-                <p style="color:#cbd5e1; line-height:1.7;">
-                    {CURRENT_OBJECTIVE}
+            <div class="prediction-card">
+                <div class="metric-label">First Visible Product Feature</div>
+                <div class="prediction-title">Demo Prediction Workbench</div>
+                <p class="prediction-subtitle">
+                    Select a team, player, and outcome to see the future AISP2
+                    probability-card experience. This is the visual target that
+                    future ingestion, statistics, and machine learning will power.
                 </p>
-
-                <br>
-
-                <div class="section-title">Next Target</div>
-                <p style="color:#cbd5e1; line-height:1.7;">
-                    {NEXT_TARGET}
-                </p>
+                <a class="button" href="/demo/prediction">Open Prediction Workbench</a>
             </div>
 
             <div class="card">
-                <div class="section-title">Development Rule</div>
+                <div class="section-title">Next Real Backend Target</div>
                 <p style="color:#cbd5e1; line-height:1.7;">
-                    {DEVELOPMENT_RULE}
+                    {NEXT_TARGET}
                 </p>
 
                 <br>
 
+                <div class="section-title">Development Rule</div>
                 <p style="color:#94a3b8; line-height:1.7;">
-                    Every file should be organized with enterprise headers,
-                    numbered sections, clear responsibility, verification,
-                    and future roadmap notes.
+                    {DEVELOPMENT_RULE}
                 </p>
             </div>
         </section>
 
         <section class="links">
+            <a class="button" href="/demo/prediction">Prediction Demo</a>
             <a class="button" href="/project/status">Project Status</a>
             <a class="button" href="/project/roadmap">Roadmap</a>
             <a class="button" href="/project/data-sources">Data Sources</a>
             <a class="button" href="/project/ml-roadmap">ML Roadmap</a>
             <a class="button" href="/project/probability-output-design">Prediction Design</a>
             <a class="button" href="/project/files">File Inventory</a>
-            <a class="button" href="/project/next-action">Next Action</a>
             <a class="button" href="/docs">API Docs</a>
         </section>
 
@@ -504,24 +880,310 @@ def root() -> str:
 
     </main>
 </body>
-
 </html>
 """
 
 
 # ============================================================
-# SECTION 06 - ROOT JSON ENDPOINT
+# SECTION 09 - DEMO PREDICTION WORKBENCH
+# ============================================================
+
+@app.get("/demo/prediction", response_class=HTMLResponse)
+def demo_prediction(
+    team: str | None = None,
+    player: str | None = None,
+    outcome: str | None = None,
+) -> str:
+    selected_team, selected_player, selected_outcome = normalize_demo_selection(
+        team_name=team,
+        player_name=player,
+        outcome_key=outcome,
+    )
+
+    team_data = DEMO_TEAMS[selected_team]
+    available_players = get_available_players(selected_team)
+    prediction = build_demo_probability(
+        player_name=selected_player,
+        outcome_key=selected_outcome,
+    )
+
+    probability = prediction["probability"]
+    confidence = prediction["confidence"]
+    profile = prediction["profile"]
+
+    team_options = build_option_tags(
+        options=list(DEMO_TEAMS.keys()),
+        selected_value=selected_team,
+    )
+
+    player_options = build_option_tags(
+        options=available_players,
+        selected_value=selected_player,
+    )
+
+    outcome_options = build_outcome_option_tags(
+        selected_value=selected_outcome,
+    )
+
+    outcome_label = DEMO_OUTCOMES[selected_outcome]
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AISP2 Prediction Workbench</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {shared_css()}
+</head>
+
+<body>
+    <main class="shell">
+
+        <div class="topbar">
+            <div class="brand">
+                <div class="kicker">AISP2 Demo Product Experience</div>
+                <h1>Prediction Workbench</h1>
+            </div>
+
+            <div class="status-pill">Demo Mode</div>
+        </div>
+
+        <section class="hero">
+            <h2>Select Team · Select Player · Select Outcome</h2>
+            <p>
+                This page is the first visual version of the future AISP2
+                prediction interface. The data is currently demo-only, but the
+                layout, user flow, and probability-card design represent the
+                experience we are building toward with real MLB ingestion,
+                feature engineering, and machine learning.
+            </p>
+
+            <div class="pill-row">
+                <span class="pill">Human-Friendly UI</span>
+                <span class="pill">Probability Card</span>
+                <span class="pill">Confidence Score</span>
+                <span class="pill">Supporting Stats</span>
+                <span class="pill">Plain-English Explanation</span>
+            </div>
+        </section>
+
+        <div class="warning">
+            Demo mode: These probabilities are illustrative placeholders.
+            They are not real predictions and should not be used for betting,
+            wagering, financial, or professional decisions.
+        </div>
+
+        <section class="card">
+            <div class="section-title">Prediction Controls</div>
+
+            <form method="get" action="/demo/prediction">
+                <div class="form-grid">
+                    <div>
+                        <label>Team</label>
+                        <select name="team">
+                            {team_options}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Player</label>
+                        <select name="player">
+                            {player_options}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Outcome</label>
+                        <select name="outcome">
+                            {outcome_options}
+                        </select>
+                    </div>
+                </div>
+
+                <button class="button" type="submit">
+                    Run Demo Prediction
+                </button>
+            </form>
+
+            <p class="small-note" style="margin-top:14px;">
+                Note: In this early demo, changing teams and clicking Run updates
+                the player list for that selected team.
+            </p>
+        </section>
+
+        <br>
+
+        <section class="two-col">
+            <div class="prediction-card">
+                <div class="metric-label">AISP2 Demo Probability Card</div>
+                <div class="prediction-title">{selected_player}</div>
+                <p class="prediction-subtitle">
+                    {selected_team} · {team_data["abbreviation"]} · {outcome_label}
+                </p>
+
+                <div class="three-col">
+                    <div>
+                        <div class="metric-label">Estimated Probability</div>
+                        <div class="probability">{probability}%</div>
+                        <div class="bar-shell">
+                            <div class="bar-fill" style="width:{probability}%;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="metric-label">Confidence</div>
+                        <div class="confidence">{confidence}%</div>
+                        <div class="bar-shell">
+                            <div class="bar-fill" style="width:{confidence}%;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="metric-label">Model</div>
+                        <div class="metric-value">Demo</div>
+                        <div class="metric-note">Future: AISP Baseline Probability Engine.</div>
+                    </div>
+                </div>
+
+                <div class="stat-list">
+                    <div class="stat-chip">
+                        <span>Player Style</span>
+                        <strong>{profile["style"]}</strong>
+                    </div>
+
+                    <div class="stat-chip">
+                        <span>Recent Form</span>
+                        <strong>{profile["recent_form"]}</strong>
+                    </div>
+
+                    <div class="stat-chip">
+                        <span>Primary Metric</span>
+                        <strong>{profile["primary_metric"]}</strong>
+                    </div>
+
+                    <div class="stat-chip">
+                        <span>Ballpark</span>
+                        <strong>{team_data["ballpark"]}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">Plain-English Explanation</div>
+                <p style="color:#cbd5e1; line-height:1.8;">
+                    AISP2 currently projects <strong>{selected_player}</strong>
+                    for <strong>{outcome_label}</strong> using demo values based on
+                    player archetype, recent form, team context, and a simplified
+                    probability profile.
+                </p>
+
+                <br>
+
+                <p style="color:#cbd5e1; line-height:1.8;">
+                    In the real version, this card will be powered by MLB Stats API,
+                    Baseball Savant / Statcast, FanGraphs, rolling trends,
+                    matchup context, park factors, and supervised learning models.
+                </p>
+
+                <br>
+
+                <div class="section-title">Future Data Sources</div>
+                <ul>
+                    <li>MLB Stats API</li>
+                    <li>Baseball Savant / Statcast</li>
+                    <li>FanGraphs</li>
+                    <li>Baseball Reference</li>
+                    <li>Retrosheet</li>
+                    <li>Lahman Database</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="links">
+            <a class="button" href="/">Command Center</a>
+            <a class="button" href="/api/demo/prediction?team={selected_team}&player={selected_player}&outcome={selected_outcome}">
+                JSON Prediction
+            </a>
+            <a class="button" href="/project/probability-output-design">Prediction Design</a>
+            <a class="button" href="/project/next-action">Next Action</a>
+        </section>
+
+        <div class="footer">
+            AISP2 Demo Prediction Workbench · Visual Target for Future Real Model Output
+        </div>
+
+    </main>
+</body>
+</html>
+"""
+
+
+# ============================================================
+# SECTION 10 - DEMO PREDICTION JSON ENDPOINT
+# ============================================================
+
+@app.get("/api/demo/prediction")
+def demo_prediction_json(
+    team: str | None = None,
+    player: str | None = None,
+    outcome: str | None = None,
+) -> dict:
+    selected_team, selected_player, selected_outcome = normalize_demo_selection(
+        team_name=team,
+        player_name=player,
+        outcome_key=outcome,
+    )
+
+    team_data = DEMO_TEAMS[selected_team]
+
+    prediction = build_demo_probability(
+        player_name=selected_player,
+        outcome_key=selected_outcome,
+    )
+
+    return {
+        "mode": "demo",
+        "disclaimer": "Illustrative demo only. Not a real betting or wagering prediction.",
+        "team": {
+            "name": selected_team,
+            "abbreviation": team_data["abbreviation"],
+            "league": team_data["league"],
+            "division": team_data["division"],
+            "ballpark": team_data["ballpark"],
+        },
+        "player": selected_player,
+        "outcome": {
+            "key": selected_outcome,
+            "label": DEMO_OUTCOMES[selected_outcome],
+        },
+        "prediction": {
+            "estimated_probability": prediction["probability"],
+            "confidence": prediction["confidence"],
+            "model": "AISP Demo Probability Card",
+        },
+        "supporting_context": {
+            "player_style": prediction["profile"]["style"],
+            "recent_form": prediction["profile"]["recent_form"],
+            "primary_metric": prediction["profile"]["primary_metric"],
+        },
+        "future_real_sources": [
+            "MLB Stats API",
+            "Baseball Savant / Statcast",
+            "FanGraphs",
+            "Baseball Reference",
+            "Retrosheet",
+            "Lahman Database",
+        ],
+    }
+
+
+# ============================================================
+# SECTION 11 - ROOT JSON ENDPOINT
 # ============================================================
 
 @app.get("/api/root")
 def root_json() -> dict:
-    """
-    JSON version of the root endpoint.
-
-    The homepage is now visual HTML, so this endpoint preserves
-    the original deployment-verification JSON response.
-    """
-
     return {
         "project": PROJECT_NAME,
         "phase": PROJECT_PHASE,
@@ -531,27 +1193,16 @@ def root_json() -> dict:
         "sport": PRIMARY_SPORT,
         "github": GITHUB_REPOSITORY,
         "render": RENDER_SERVICE,
-        "next_best_endpoint": "/project/status",
+        "next_best_endpoint": "/demo/prediction",
     }
 
 
 # ============================================================
-# SECTION 07 - HEALTH ENDPOINT
+# SECTION 12 - HEALTH ENDPOINT
 # ============================================================
 
 @app.get("/health")
 def health() -> dict:
-    """
-    Simple service health endpoint.
-
-    Future versions will include:
-        - database checks
-        - data source checks
-        - ingestion status
-        - prediction engine status
-        - model readiness status
-    """
-
     return {
         "status": "healthy",
         "service": SERVICE_NAME,
@@ -561,15 +1212,11 @@ def health() -> dict:
 
 
 # ============================================================
-# SECTION 08 - SYSTEM INFORMATION
+# SECTION 13 - SYSTEM INFORMATION
 # ============================================================
 
 @app.get("/system/info")
 def system_info() -> dict:
-    """
-    Basic system metadata.
-    """
-
     return {
         "application": PROJECT_NAME,
         "version": PROJECT_VERSION,
@@ -585,15 +1232,11 @@ def system_info() -> dict:
 
 
 # ============================================================
-# SECTION 09 - PROJECT STATUS ENDPOINT
+# SECTION 14 - PROJECT STATUS ENDPOINT
 # ============================================================
 
 @app.get("/project/status")
 def project_status() -> dict:
-    """
-    Human-readable project status endpoint.
-    """
-
     return {
         "project": PROJECT_NAME,
         "status": "ACTIVE DEVELOPMENT",
@@ -617,74 +1260,35 @@ def project_status() -> dict:
             "database_layer": "CREATED",
             "project_ledger": "CREATED",
             "visual_homepage": "CREATED",
+            "demo_prediction_workbench": "CREATED",
         },
-        "current_focus": "Project visibility, database foundation, and MLB data source verification",
+        "current_focus": "Visible product experience and MLB data source verification",
         "next_target": "Team ingestion from MLB Stats API",
         "development_rule": DEVELOPMENT_RULE,
     }
 
 
 # ============================================================
-# SECTION 10 - PROJECT ROADMAP ENDPOINT
+# SECTION 15 - PROJECT ROADMAP ENDPOINT
 # ============================================================
 
 @app.get("/project/roadmap")
 def project_roadmap() -> dict:
-    """
-    Project roadmap endpoint.
-    """
-
     return {
         "completed": [
-            {
-                "item": "GitHub repository",
-                "status": "complete",
-                "purpose": "Source control and deployment pipeline",
-            },
-            {
-                "item": "Render deployment",
-                "status": "complete",
-                "purpose": "Live web service deployment",
-            },
-            {
-                "item": "main.py",
-                "status": "complete",
-                "purpose": "Visual command center and FastAPI application entry point",
-            },
-            {
-                "item": "requirements.txt",
-                "status": "complete",
-                "purpose": "Python dependency management",
-            },
-            {
-                "item": "PROJECT_LEDGER.md",
-                "status": "complete",
-                "purpose": "Master project tracking ledger",
-            },
-            {
-                "item": "01_database/database.py",
-                "status": "complete",
-                "purpose": "SQLAlchemy database connection layer",
-            },
-            {
-                "item": "01_database/models.py",
-                "status": "complete",
-                "purpose": "Team, player, roster, and stat models",
-            },
-            {
-                "item": "01_database/init_db.py",
-                "status": "in progress",
-                "purpose": "Database initialization engine",
-            },
-            {
-                "item": "02_data_sources/mlb_stats_api.py",
-                "status": "in progress",
-                "purpose": "Official MLB Stats API client",
-            },
+            "GitHub repository",
+            "Render deployment",
+            "Visual homepage",
+            "Demo Prediction Workbench",
+            "requirements.txt",
+            "PROJECT_LEDGER.md",
+            "01_database/database.py",
+            "01_database/models.py",
+            "02_data_sources/mlb_stats_api.py",
         ],
         "current_phase": {
-            "name": "Phase 1.00 Foundation",
-            "objective": "Create a clean, visible, deployable foundation for AISP2 Baseball",
+            "name": "Phase 1.00 Foundation + Product Visibility",
+            "objective": "Create a visible and deployable foundation for AISP2 Baseball",
             "status": "active",
         },
         "next_phase": {
@@ -708,15 +1312,11 @@ def project_roadmap() -> dict:
 
 
 # ============================================================
-# SECTION 11 - PROJECT VISION ENDPOINT
+# SECTION 16 - PROJECT VISION ENDPOINT
 # ============================================================
 
 @app.get("/project/vision")
 def project_vision() -> dict:
-    """
-    Project vision endpoint.
-    """
-
     return {
         "vision": "Build the best baseball intelligence platform possible.",
         "mission": (
@@ -742,23 +1342,15 @@ def project_vision() -> dict:
             "Pitcher strikeout probability",
             "Player over/under total bases probability",
         ],
-        "user_experience_goal": (
-            "The platform should feel like a friendly baseball analyst, "
-            "not a database or raw JSON system."
-        ),
     }
 
 
 # ============================================================
-# SECTION 12 - DATA SOURCE ROADMAP ENDPOINT
+# SECTION 17 - DATA SOURCE ROADMAP ENDPOINT
 # ============================================================
 
 @app.get("/project/data-sources")
 def project_data_sources() -> dict:
-    """
-    Data source roadmap endpoint.
-    """
-
     return {
         "primary_goal": "Use the best available sources for teams, players, rosters, stats, Statcast, and historical baseball data.",
         "tier_1_sources": [
@@ -797,28 +1389,15 @@ def project_data_sources() -> dict:
                 "purpose": "Historical baseball database for long-term model training",
             },
         ],
-        "future_context_sources": [
-            "Weather",
-            "Ballpark factors",
-            "Injuries",
-            "Transactions",
-            "Lineups",
-            "Travel context",
-            "Rest days",
-        ],
     }
 
 
 # ============================================================
-# SECTION 13 - MACHINE LEARNING ROADMAP ENDPOINT
+# SECTION 18 - MACHINE LEARNING ROADMAP ENDPOINT
 # ============================================================
 
 @app.get("/project/ml-roadmap")
 def project_machine_learning_roadmap() -> dict:
-    """
-    Machine learning roadmap endpoint.
-    """
-
     return {
         "course_concepts_to_apply": [
             "Supervised Machine Learning",
@@ -870,17 +1449,14 @@ def project_machine_learning_roadmap() -> dict:
 
 
 # ============================================================
-# SECTION 14 - PROBABILITY OUTPUT DESIGN ENDPOINT
+# SECTION 19 - PROBABILITY OUTPUT DESIGN ENDPOINT
 # ============================================================
 
 @app.get("/project/probability-output-design")
 def probability_output_design() -> dict:
-    """
-    Describes the future human-friendly probability result format.
-    """
-
     return {
         "goal": "Every prediction should be readable, explainable, and useful.",
+        "current_demo_endpoint": "/demo/prediction",
         "future_prediction_card": {
             "player": "Aaron Judge",
             "team": "New York Yankees",
@@ -901,25 +1477,16 @@ def probability_output_design() -> dict:
                 "Opponent pitcher profile",
                 "Ballpark factor",
             ],
-            "plain_english_explanation": (
-                "Judge projects well because his recent power metrics, "
-                "hard-hit rate, and matchup profile support elevated "
-                "home run probability."
-            ),
         },
     }
 
 
 # ============================================================
-# SECTION 15 - FILE INVENTORY ENDPOINT
+# SECTION 20 - FILE INVENTORY ENDPOINT
 # ============================================================
 
 @app.get("/project/files")
 def project_files() -> dict:
-    """
-    Tracks current known project files.
-    """
-
     return {
         "root": [
             "main.py",
@@ -940,38 +1507,35 @@ def project_files() -> dict:
 
 
 # ============================================================
-# SECTION 16 - NEXT ACTION ENDPOINT
+# SECTION 21 - NEXT ACTION ENDPOINT
 # ============================================================
 
 @app.get("/project/next-action")
 def project_next_action() -> dict:
-    """
-    Shows the next planned build action.
-    """
-
     return {
         "current_rule": DEVELOPMENT_RULE,
-        "next_action": "Verify MLB Stats API client locally",
-        "after_that": "Create 03_ingestion directory",
-        "first_ingestion_file": "03_ingestion/team_ingestion.py",
+        "next_action": "Verify the demo prediction UI after Render deploy",
+        "after_that": "Verify MLB Stats API client locally",
+        "then": "Create 03_ingestion/team_ingestion.py",
         "goal": "Load official MLB teams into the AISP2 database",
     }
 
 
 # ============================================================
-# SECTION 17 - LOCAL STARTUP VALIDATION
+# SECTION 22 - LOCAL STARTUP VALIDATION
 # ============================================================
 
 if __name__ == "__main__":
     print("AISP2 Baseball loaded successfully.")
     print("FastAPI visual command center initialized.")
+    print("Demo Prediction Workbench initialized.")
     print(f"Project: {PROJECT_NAME}")
     print(f"Version: {PROJECT_VERSION}")
     print(f"Phase: {PROJECT_PHASE}")
 
 
 # ============================================================
-# SECTION 18 - FUTURE APPLICATION ROADMAP
+# SECTION 23 - FUTURE APPLICATION ROADMAP
 # ============================================================
 
 """
@@ -1004,24 +1568,15 @@ Phase 6.00
 Phase 7.00
     Dashboard integration
 
-Future Command Center Expansion
-
-/project/status
-/project/roadmap
-/project/vision
-/project/data-sources
-/project/ml-roadmap
-/project/probability-output-design
-/project/files
-/project/next-action
-
 Future Human UI
 
 A future dashboard should convert these endpoints into:
-    - progress cards
-    - project status panels
-    - data source readiness indicators
-    - model readiness indicators
+    - team selectors
+    - player selectors
+    - live data status panels
     - database health visuals
     - prediction result cards
+    - probability charts
+    - confidence explanations
+    - model comparison views
 """
