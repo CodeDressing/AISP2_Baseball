@@ -1,0 +1,403 @@
+/* ============================================================
+   AISP2 BASEBALL
+   FILE: static/css/player_explorer.css
+   PURPOSE: dedicated styling system for Player Explorer
+   ============================================================ */
+
+
+/* ============================================================
+   SECTION 01 - PLAYER EXPLORER FOUNDATION
+   FILE: static/css/player_explorer.css
+   PURPOSE: page-specific variables and visual identity
+   ============================================================ */
+
+:root {
+    --player-primary: #7dd3fc;
+    --player-secondary: #4ade80;
+    --player-panel: rgba(15, 23, 42, 0.88);
+    --player-border: rgba(125, 211, 252, 0.16);
+    --player-glow: 0 0 40px rgba(125, 211, 252, 0.18);
+}
+
+
+/* ============================================================
+   SECTION 02 - PLAYER HERO SYSTEM
+   FILE: static/css/player_explorer.css
+   PURPOSE: hero card layout and player identity styling
+   ============================================================ */
+
+.player-hero-panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 32px;
+    background: linear-gradient(135deg, rgba(8, 47, 73, .92), rgba(15, 23, 42, .98));
+    border: 1px solid var(--player-border);
+    box-shadow: var(--player-glow);
+}
+
+.player-hero-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(74, 222, 128, .08), transparent 40%);
+    pointer-events: none;
+}
+
+.player-headshot {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.headshot-placeholder {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 72px;
+    background: linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 0 50px rgba(125,211,252,.20);
+}
+
+
+/* ============================================================
+   SECTION 03 - PLAYER PROFILE COMPONENTS
+   FILE: static/css/player_explorer.css
+   PURPOSE: team badges, labels, metadata and profile cards
+   ============================================================ */
+
+.player-team-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: .80rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #d1fae5;
+    background: rgba(34,197,94,.12);
+    border: 1px solid rgba(34,197,94,.20);
+}
+
+.player-hero-name {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    font-weight: 900;
+    line-height: 1;
+    margin-top: 14px;
+}
+
+.player-hero-meta {
+    margin-top: 10px;
+    color: #94a3b8;
+    font-size: 1rem;
+}
+
+.player-hero-description {
+    margin-top: 18px;
+    max-width: 850px;
+    color: #cbd5e1;
+    line-height: 1.8;
+}
+
+
+/* ============================================================
+   SECTION 04 - PLAYER CARD SYSTEM
+   FILE: static/css/player_explorer.css
+   PURPOSE: reusable cards used throughout player explorer
+   ============================================================ */
+
+.player-card {
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+
+.player-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(125,211,252,.35);
+    box-shadow: 0 16px 40px rgba(0,0,0,.30);
+}
+
+.player-card .player-name {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.player-card .player-meta {
+    margin-top: 8px;
+    color: #94a3b8;
+    line-height: 1.6;
+}
+
+
+/* ============================================================
+   SECTION 05 - PLAYER METRIC CARDS
+   FILE: static/css/player_explorer.css
+   PURPOSE: upgrade snapshot metric cards for batting average,
+   OPS, home runs, RBI, and future live stat displays
+   ============================================================ */
+
+.player-metric-card,
+.kpi-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.player-metric-card::before,
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(125, 211, 252, .08), transparent 42%);
+    pointer-events: none;
+}
+
+.kpi-card .kpi-value {
+    color: #f8fafc;
+    text-shadow: 0 0 22px rgba(125, 211, 252, .12);
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(125, 211, 252, .28);
+}
+
+
+/* ============================================================
+   SECTION 06 - STATCAST CARD SYSTEM
+   FILE: static/css/player_explorer.css
+   PURPOSE: visual language for Statcast-style player metrics
+   ============================================================ */
+
+.probability-card {
+    position: relative;
+    overflow: hidden;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+
+.probability-card::after {
+    content: "";
+    position: absolute;
+    width: 160px;
+    height: 160px;
+    right: -70px;
+    top: -70px;
+    border-radius: 50%;
+    background: rgba(125, 211, 252, .08);
+    pointer-events: none;
+}
+
+.probability-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(125, 211, 252, .36);
+    box-shadow: 0 20px 55px rgba(0,0,0,.35);
+}
+
+.probability-title,
+.probability-value,
+.probability-confidence {
+    position: relative;
+    z-index: 1;
+}
+
+.probability-confidence {
+    line-height: 1.6;
+}
+
+
+/* ============================================================
+   SECTION 07 - AI ANALYST PANEL
+   FILE: static/css/player_explorer.css
+   PURPOSE: premium styling for AI-generated scouting notes
+   ============================================================ */
+
+.insight-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    background: linear-gradient(145deg, rgba(15, 23, 42, .88), rgba(8, 47, 73, .54));
+    border: 1px solid rgba(125, 211, 252, .14);
+}
+
+.insight-card::before {
+    content: "AI";
+    position: absolute;
+    right: 22px;
+    top: 18px;
+    font-size: 4rem;
+    font-weight: 1000;
+    letter-spacing: -.08em;
+    color: rgba(125, 211, 252, .055);
+}
+
+.insight-title,
+.insight-text {
+    position: relative;
+    z-index: 1;
+}
+
+.insight-title {
+    color: #f8fafc;
+}
+
+.insight-text {
+    color: #cbd5e1;
+}
+
+
+/* ============================================================
+   SECTION 08 - PREDICTION READINESS VISUALS
+   FILE: static/css/player_explorer.css
+   PURPOSE: reusable readiness bars and model-status visuals
+   ============================================================ */
+
+.player-readiness-bar {
+    width: 100%;
+    height: 12px;
+    margin-top: 12px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, .72);
+    border: 1px solid rgba(255,255,255,.08);
+}
+
+.player-readiness-fill {
+    height: 100%;
+    width: 64%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #4ade80, #7dd3fc);
+}
+
+.player-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    color: #bbf7d0;
+    background: rgba(34,197,94,.10);
+    border: 1px solid rgba(34,197,94,.20);
+    font-size: .78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+
+/* ============================================================
+   SECTION 09 - ADVANCED HERO EFFECTS
+   FILE: static/css/player_explorer.css
+   PURPOSE: premium visual effects for player hero area
+   ============================================================ */
+
+.player-hero-panel::after {
+    content: "";
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    right: -250px;
+    top: -250px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(125,211,252,.10), transparent 70%);
+    pointer-events: none;
+}
+
+.player-hero-name {
+    background: linear-gradient(90deg, #ffffff, #7dd3fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+
+/* ============================================================
+   SECTION 10 - STATCAST INTELLIGENCE STYLING
+   FILE: static/css/player_explorer.css
+   PURPOSE: premium Statcast visualization cards
+   ============================================================ */
+
+.probability-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
+    gap: 20px;
+}
+
+.probability-value {
+    font-size: 2rem;
+    font-weight: 900;
+}
+
+.probability-card:hover .probability-value {
+    transform: scale(1.05);
+}
+
+
+/* ============================================================
+   SECTION 11 - OUTCOME INTELLIGENCE STYLING
+   FILE: static/css/player_explorer.css
+   PURPOSE: prediction outcome cards
+   ============================================================ */
+
+.player-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(240px,1fr));
+    gap: 20px;
+}
+
+.player-card {
+    background: linear-gradient(145deg, rgba(15,23,42,.88), rgba(30,41,59,.88));
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 22px;
+    padding: 20px;
+}
+
+
+/* ============================================================
+   SECTION 12 - RESPONSIVE MOBILE ARCHITECTURE
+   FILE: static/css/player_explorer.css
+   PURPOSE: mobile and tablet optimization
+   ============================================================ */
+
+@media (max-width: 1100px) {
+    .player-hero-grid {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .player-hero-name {
+        font-size: 2.4rem;
+    }
+
+    .headshot-placeholder {
+        width: 120px;
+        height: 120px;
+        font-size: 52px;
+    }
+
+    .probability-grid,
+    .player-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ============================================================
+   SECTION 13 - FUTURE PLAYER EXPLORER CSS ROADMAP
+   FILE: static/css/player_explorer.css
+   PURPOSE: future styling expansion ledger
+   ============================================================ */
+
+/*
+13.01 Team color themes
+13.02 Real player image styling
+13.03 Player comparison layout
+13.04 Recent form chart cards
+13.05 Statcast percentile bars
+13.06 Prediction confidence meter
+13.07 Mobile command center
+13.08 Animation polish
+*/
