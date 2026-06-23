@@ -550,3 +550,234 @@ function renderFutureSimulationDistribution(payload) {
 17.12 Exportable prediction report
 
 */
+
+/* ============================================================
+   SECTION 18 - DEMO PREDICTION ENGINE
+   FILE: static/js/prediction.js
+   PURPOSE: frontend fallback prediction logic for demo mode
+   when future live model endpoints are not yet connected
+   ============================================================ */
+
+function buildDemoPredictionIntelligence(payload) {
+
+    const outcome =
+        payload.outcome || "Home Run";
+
+    const player =
+        payload.player || "Selected Player";
+
+    const team =
+        payload.team || "Selected Team";
+
+    let baseProbability = 52;
+
+    if (outcome.includes("Home Run")) {
+        baseProbability = 28;
+    }
+
+    if (outcome.includes("Hit")) {
+        baseProbability = 64;
+    }
+
+    if (outcome.includes("RBI")) {
+        baseProbability = 46;
+    }
+
+    if (outcome.includes("Run")) {
+        baseProbability = 51;
+    }
+
+    if (outcome.includes("Total Bases")) {
+        baseProbability = 57;
+    }
+
+    if (outcome.includes("Strikeout")) {
+        baseProbability = 42;
+    }
+
+    return {
+        player: player,
+        team: team,
+        outcome: outcome,
+        probability: baseProbability,
+        confidence: calculateDemoConfidence(baseProbability),
+        tier: getPredictionTier(baseProbability)
+    };
+}
+
+
+function calculateDemoConfidence(probability) {
+
+    if (probability >= 75) {
+        return 88;
+    }
+
+    if (probability >= 60) {
+        return 76;
+    }
+
+    if (probability >= 45) {
+        return 64;
+    }
+
+    return 52;
+}
+
+
+/* ============================================================
+   SECTION 19 - OUTCOME INTELLIGENCE
+   FILE: static/js/prediction.js
+   PURPOSE: classify selected prediction into readable baseball
+   intelligence categories
+   ============================================================ */
+
+function buildOutcomeIntelligence(outcome) {
+
+    if (outcome.includes("Home Run")) {
+        return {
+            profile: "Power Profile",
+            metric: "Exit velocity, barrel rate, launch angle",
+            risk: "High variance",
+            angle: "Power outcomes depend heavily on contact quality and matchup."
+        };
+    }
+
+    if (outcome.includes("Hit")) {
+        return {
+            profile: "Contact Profile",
+            metric: "AVG, OBP, contact rate, recent form",
+            risk: "Moderate",
+            angle: "Hit outcomes are more stable than home run outcomes."
+        };
+    }
+
+    if (outcome.includes("RBI")) {
+        return {
+            profile: "Run Production Profile",
+            metric: "Lineup context, team offense, runners-on-base expectation",
+            risk: "Context dependent",
+            angle: "RBI outcomes depend on both player quality and opportunity."
+        };
+    }
+
+    if (outcome.includes("Total Bases")) {
+        return {
+            profile: "Slugging Profile",
+            metric: "OPS, SLG, extra-base-hit rate",
+            risk: "Moderate-high",
+            angle: "Total bases combine hit probability with power upside."
+        };
+    }
+
+    if (outcome.includes("Strikeout")) {
+        return {
+            profile: "Pitching / Whiff Profile",
+            metric: "K rate, whiff rate, chase rate, pitch mix",
+            risk: "Matchup dependent",
+            angle: "Strikeout outcomes require pitcher and batter context."
+        };
+    }
+
+    return {
+        profile: "General Outcome Profile",
+        metric: "Player form, matchup, and team context",
+        risk: "Unknown",
+        angle: "AISP2 will refine this with live data."
+    };
+}
+
+
+/* ============================================================
+   SECTION 20 - AI EXPLANATION GENERATOR
+   FILE: static/js/prediction.js
+   PURPOSE: generate readable demo explanations for prediction
+   result cards before live AI model integration
+   ============================================================ */
+
+function buildDemoAIExplanation(prediction) {
+
+    const intelligence =
+        buildOutcomeIntelligence(prediction.outcome);
+
+    return (
+        prediction.player +
+        " projects as a " +
+        intelligence.profile.toLowerCase() +
+        " candidate for this outcome. " +
+        "The selected result is supported by " +
+        intelligence.metric +
+        ". Risk level is currently classified as " +
+        intelligence.risk +
+        ". " +
+        intelligence.angle
+    );
+}
+
+
+function getPredictionTier(probability) {
+
+    if (probability >= 90) {
+        return "Elite";
+    }
+
+    if (probability >= 75) {
+        return "High";
+    }
+
+    if (probability >= 60) {
+        return "Moderate";
+    }
+
+    if (probability >= 40) {
+        return "Risky";
+    }
+
+    return "Longshot";
+}
+
+
+/* ============================================================
+   SECTION 21 - PREDICTION VISUAL ENHANCEMENTS
+   FILE: static/js/prediction.js
+   PURPOSE: update optional future DOM targets for probability
+   tier, AI explanation, risk profile, and model context
+   ============================================================ */
+
+function renderDemoPredictionEnhancements(payload) {
+
+    const demoPrediction =
+        buildDemoPredictionIntelligence(payload);
+
+    const explanation =
+        buildDemoAIExplanation(demoPrediction);
+
+    const intelligence =
+        buildOutcomeIntelligence(demoPrediction.outcome);
+
+    setTextIfExists(
+        "[data-result-tier]",
+        demoPrediction.tier
+    );
+
+    setTextIfExists(
+        "[data-result-ai-explanation]",
+        explanation
+    );
+
+    setTextIfExists(
+        "[data-result-risk]",
+        intelligence.risk
+    );
+
+    setTextIfExists(
+        "[data-result-profile]",
+        intelligence.profile
+    );
+
+    setTextIfExists(
+        "[data-result-supporting-metric]",
+        intelligence.metric
+    );
+
+    return demoPrediction;
+}
