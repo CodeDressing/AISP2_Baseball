@@ -1,0 +1,677 @@
+<!-- ============================================================
+     AISP2 BASEBALL
+     FILE: templates/prediction_workbench.html
+     PURPOSE: flagship prediction center for team selection,
+     player selection, outcome selection, probability analysis,
+     machine learning explanations, simulation previews,
+     matchup intelligence, and future prediction workflows
+     ============================================================ -->
+
+
+<!-- ============================================================
+     SECTION 01 - DOCUMENT SETUP
+     ============================================================ -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="AISP2 Prediction Workbench for MLB predictions, player props, probability analysis, and baseball intelligence."
+    >
+
+    <title>
+        AISP2 Baseball | Prediction Workbench
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/aisp2.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/css/prediction.css"
+    >
+
+</head>
+
+
+<!-- ============================================================
+     SECTION 02 - PAGE BODY
+     ============================================================ -->
+
+<body>
+
+<div class="app-shell">
+
+
+    <!-- ========================================================
+         SECTION 03 - TOP NAVIGATION
+         ======================================================== -->
+
+    <header class="topbar">
+
+        <a
+            class="brand-mark"
+            href="/"
+        >
+            <span class="brand-icon">
+                ⚾
+            </span>
+
+            <span>
+                AISP2
+            </span>
+        </a>
+
+        <nav class="nav-links">
+
+            <a href="/">
+                Chat
+            </a>
+
+            <a href="/players">
+                Players
+            </a>
+
+            <a href="/tools/prediction">
+                Predictions
+            </a>
+
+            <a href="/dashboard">
+                Dashboard
+            </a>
+
+            <a href="/docs">
+                API
+            </a>
+
+        </nav>
+
+    </header>
+
+
+    <!-- ========================================================
+         SECTION 04 - PREDICTION CONTAINER
+         ======================================================== -->
+
+    <main class="prediction-container">
+
+
+        <!-- ====================================================
+             SECTION 05 - PAGE HEADER
+             ==================================================== -->
+
+        <section class="prediction-header">
+
+            <div class="eyebrow">
+
+                <span class="pulse"></span>
+
+                AISP2 Prediction Engine
+
+            </div>
+
+            <h1 class="prediction-title">
+
+                Prediction
+                Workbench
+
+            </h1>
+
+            <p class="prediction-subtitle">
+
+                Build player predictions, compare outcomes,
+                evaluate probabilities, inspect supporting
+                metrics, and review future machine learning
+                explanations.
+
+            </p>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 06 - CONTROL CENTER
+             ==================================================== -->
+
+        <section class="prediction-selector-panel">
+
+            <h2>
+                Prediction Controls
+            </h2>
+
+            <div
+                class="prediction-form-grid"
+                data-prediction-form
+            >
+
+                <!-- ============================================
+                     SECTION 06.01 - TEAM SELECTOR
+                     ============================================ -->
+
+                <div class="prediction-field">
+
+                    <label>
+                        Team
+                    </label>
+
+                    <select
+                        data-prediction-team
+                    >
+                        <option>
+                            New York Yankees
+                        </option>
+
+                        <option>
+                            Los Angeles Dodgers
+                        </option>
+
+                        <option>
+                            New York Mets
+                        </option>
+
+                        <option>
+                            Atlanta Braves
+                        </option>
+                    </select>
+
+                </div>
+
+
+                <!-- ============================================
+                     SECTION 06.02 - PLAYER SELECTOR
+                     ============================================ -->
+
+                <div class="prediction-field">
+
+                    <label>
+                        Player
+                    </label>
+
+                    <select
+                        data-prediction-player
+                    >
+                        <option>
+                            Aaron Judge
+                        </option>
+
+                        <option>
+                            Shohei Ohtani
+                        </option>
+
+                        <option>
+                            Juan Soto
+                        </option>
+
+                        <option>
+                            Mookie Betts
+                        </option>
+                    </select>
+
+                </div>
+
+
+                <!-- ============================================
+                     SECTION 06.03 - OUTCOME SELECTOR
+                     ============================================ -->
+
+                <div class="prediction-field">
+
+                    <label>
+                        Outcome
+                    </label>
+
+                    <select
+                        data-prediction-outcome
+                    >
+                        <option>
+                            Home Run
+                        </option>
+
+                        <option>
+                            Hit
+                        </option>
+
+                        <option>
+                            RBI
+                        </option>
+
+                        <option>
+                            Run Scored
+                        </option>
+
+                        <option>
+                            Total Bases
+                        </option>
+
+                        <option>
+                            Strikeout
+                        </option>
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <!-- ================================================
+                 SECTION 06.04 - ACTION BUTTONS
+                 ================================================ -->
+
+            <div class="prediction-action-row">
+
+                <button
+                    class="prediction-primary-button"
+                    type="submit"
+                    data-prediction-submit
+                >
+                    Run Prediction
+                </button>
+
+                <button
+                    class="prediction-secondary-button"
+                    type="button"
+                >
+                    Compare Players
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 07 - RESULT GRID
+             ==================================================== -->
+
+        <section class="prediction-result-grid">
+
+
+            <!-- ================================================
+                 SECTION 07.01 - HERO PROBABILITY CARD
+                 ================================================ -->
+
+            <article
+                class="main-probability-card"
+                data-prediction-result
+            >
+
+                <div class="prediction-eyebrow">
+
+                    AISP2 Prediction
+
+                </div>
+
+                <h2
+                    class="prediction-player-name"
+                    data-result-player
+                >
+                    Aaron Judge
+                </h2>
+
+                <div
+                    class="prediction-outcome-label"
+                    data-result-outcome
+                >
+                    Home Run Probability
+                </div>
+
+                <div
+                    class="prediction-big-number"
+                    data-result-probability
+                >
+                    0%
+                </div>
+
+                <div
+                    class="prediction-confidence"
+                    data-result-confidence
+                >
+                    Confidence Pending
+                </div>
+
+            </article>
+
+
+            <!-- ================================================
+                 SECTION 07.02 - AI EXPLANATION PANEL
+                 ================================================ -->
+
+            <aside class="prediction-explanation-panel">
+
+                <h2 class="prediction-explanation-title">
+
+                    AI Explanation
+
+                </h2>
+
+                <div class="prediction-explanation-text">
+
+                    Future AISP2 models will explain why a
+                    prediction exists using player form,
+                    matchup data, Statcast trends,
+                    team context, park factors,
+                    and machine learning confidence.
+
+                </div>
+
+                <ul class="prediction-source-list">
+
+                    <li>
+                        MLB Data
+                    </li>
+
+                    <li>
+                        Team Context
+                    </li>
+
+                    <li>
+                        Matchup Factors
+                    </li>
+
+                    <li>
+                        Statcast Metrics
+                    </li>
+
+                    <li>
+                        Model Confidence
+                    </li>
+
+                </ul>
+
+            </aside>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 08 - SUPPORTING METRICS
+             ==================================================== -->
+
+        <section
+            class="prediction-stat-grid"
+            style="margin-top:20px;"
+        >
+
+            <article class="prediction-stat-chip">
+                <span>
+                    Exit Velocity
+                </span>
+
+                <strong>
+                    Pending
+                </strong>
+            </article>
+
+            <article class="prediction-stat-chip">
+                <span>
+                    Barrel Rate
+                </span>
+
+                <strong>
+                    Pending
+                </strong>
+            </article>
+
+            <article class="prediction-stat-chip">
+                <span>
+                    Hard Hit Rate
+                </span>
+
+                <strong>
+                    Pending
+                </strong>
+            </article>
+
+            <article class="prediction-stat-chip">
+                <span>
+                    xSLG
+                </span>
+
+                <strong>
+                    Pending
+                </strong>
+            </article>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 09 - MATCHUP ANALYSIS
+             ==================================================== -->
+
+        <section
+            class="prediction-explanation-panel"
+            style="margin-top:24px;"
+        >
+
+            <h2 class="prediction-explanation-title">
+
+                Matchup Analysis
+
+            </h2>
+
+            <div class="prediction-explanation-text">
+
+                Future matchup intelligence will evaluate:
+
+                <br><br>
+
+                • Batter vs Pitcher
+
+                <br>
+
+                • Handedness Splits
+
+                <br>
+
+                • Historical Matchups
+
+                <br>
+
+                • Ballpark Factors
+
+                <br>
+
+                • Weather Context
+
+                <br>
+
+                • Bullpen Strength
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 10 - PROP OUTCOME LIBRARY
+             ==================================================== -->
+
+        <section
+            class="prop-grid"
+            style="margin-top:24px;"
+        >
+
+            <article class="prop-card">
+                <div class="prop-title">
+                    Home Run
+                </div>
+
+                <div class="prop-probability">
+                    0%
+                </div>
+            </article>
+
+            <article class="prop-card">
+                <div class="prop-title">
+                    Hit
+                </div>
+
+                <div class="prop-probability">
+                    0%
+                </div>
+            </article>
+
+            <article class="prop-card">
+                <div class="prop-title">
+                    RBI
+                </div>
+
+                <div class="prop-probability">
+                    0%
+                </div>
+            </article>
+
+            <article class="prop-card">
+                <div class="prop-title">
+                    Run
+                </div>
+
+                <div class="prop-probability">
+                    0%
+                </div>
+            </article>
+
+            <article class="prop-card">
+                <div class="prop-title">
+                    Total Bases
+                </div>
+
+                <div class="prop-probability">
+                    0%
+                </div>
+            </article>
+
+            <article class="prop-card">
+                <div class="prop-title">
+                    Strikeout
+                </div>
+
+                <div class="prop-probability">
+                    0%
+                </div>
+            </article>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 11 - MONTE CARLO PREVIEW
+             ==================================================== -->
+
+        <section
+            class="prediction-explanation-panel"
+            style="margin-top:24px;"
+        >
+
+            <h2 class="prediction-explanation-title">
+
+                Monte Carlo Simulation Preview
+
+            </h2>
+
+            <div class="prediction-explanation-text">
+
+                Future machine learning models will run
+                thousands of simulated outcomes to estimate:
+
+                <br><br>
+
+                • Expected Value
+
+                <br>
+
+                • Confidence Interval
+
+                <br>
+
+                • Upside Scenario
+
+                <br>
+
+                • Downside Scenario
+
+                <br>
+
+                • Outcome Distribution
+
+            </div>
+
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 12 - AI ANALYST NOTES
+             ==================================================== -->
+
+        <section
+            class="prediction-explanation-panel"
+            style="margin-top:24px;"
+        >
+
+            <h2 class="prediction-explanation-title">
+
+                AI Analyst Notes
+
+            </h2>
+
+            <div class="prediction-explanation-text">
+
+                This page is the future centerpiece of AISP2.
+
+                It will eventually combine MLB statistics,
+                Statcast metrics, matchup analysis,
+                simulation models, supervised learning,
+                probability engines, and natural language
+                explanations into a single baseball
+                intelligence experience.
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<!-- ============================================================
+     SECTION 13 - SCRIPT LOADING
+     ============================================================ -->
+
+<script src="/static/js/aisp2.js"></script>
+
+<script src="/static/js/prediction.js"></script>
+
+</body>
+
+</html>
+
+
+<!-- ============================================================
+     SECTION 14 - FUTURE ROADMAP
+
+     14.01 Live Team Database
+     14.02 Live Player Database
+     14.03 Statcast Integration
+     14.04 Real Probability Models
+     14.05 Monte Carlo Engine
+     14.06 Confidence Intervals
+     14.07 Explainable AI Layer
+     14.08 Multi-Model Comparison
+     14.09 Betting Edge Detection
+     14.10 Advanced Outcome Simulation
+
+     ============================================================ -->
