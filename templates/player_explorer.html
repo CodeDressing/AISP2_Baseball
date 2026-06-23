@@ -256,8 +256,157 @@
             </section>
 
 
+                        <!-- ================================================
+                 SECTION 07 - PLAYER HERO COMMAND CARD
+                 FILE: templates/player_explorer.html
+                 PURPOSE: primary player identity, team context,
+                 role summary, scouting identity, and prediction
+                 readiness overview
+                 ================================================ -->
+
+            <section
+                class="analytics-panel"
+                style="margin-top:24px;"
+            >
+
+                <div
+                    style="
+                        display:grid;
+                        grid-template-columns:220px 1fr;
+                        gap:28px;
+                        align-items:center;
+                    "
+                >
+
+                    <div
+                        style="
+                            min-height:220px;
+                            border-radius:32px;
+                            display:grid;
+                            place-items:center;
+                            background:linear-gradient(145deg, rgba(8,47,73,.88), rgba(15,23,42,.94));
+                            border:1px solid rgba(56,189,248,.24);
+                            box-shadow:0 30px 90px rgba(0,0,0,.35);
+                        "
+                    >
+
+                        <div
+                            style="
+                                width:132px;
+                                height:132px;
+                                border-radius:50%;
+                                display:grid;
+                                place-items:center;
+                                font-size:54px;
+                                background:rgba(255,255,255,.06);
+                                border:1px solid rgba(255,255,255,.10);
+                            "
+                        >
+                            ⚾
+                        </div>
+
+                    </div>
+
+                    <div>
+
+                        <div class="eyebrow">
+                            <span class="pulse"></span>
+                            Demo Player Profile
+                        </div>
+
+                        <h2
+                            class="dashboard-title"
+                            style="margin-top:10px;"
+                            data-player-hero-name
+                        >
+                            Aaron Judge
+                        </h2>
+
+                        <p
+                            class="dashboard-subtitle"
+                            style="max-width:850px;"
+                            data-player-hero-summary
+                        >
+                            Elite power hitter with premium exit velocity,
+                            barrel-rate upside, middle-of-the-order run
+                            production, and future home run probability model
+                            relevance.
+                        </p>
+
+                        <div
+                            class="player-grid"
+                            style="
+                                grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+                                margin-top:22px;
+                            "
+                        >
+
+                            <div class="player-card">
+                                <div class="player-name">
+                                    Team
+                                </div>
+
+                                <div
+                                    class="player-meta"
+                                    data-player-hero-team
+                                >
+                                    New York Yankees
+                                </div>
+                            </div>
+
+                            <div class="player-card">
+                                <div class="player-name">
+                                    Position
+                                </div>
+
+                                <div
+                                    class="player-meta"
+                                    data-player-hero-position
+                                >
+                                    Outfielder
+                                </div>
+                            </div>
+
+                            <div class="player-card">
+                                <div class="player-name">
+                                    Player Type
+                                </div>
+
+                                <div
+                                    class="player-meta"
+                                    data-player-hero-type
+                                >
+                                    Power Bat
+                                </div>
+                            </div>
+
+                            <div class="player-card">
+                                <div class="player-name">
+                                    Prediction Role
+                                </div>
+
+                                <div
+                                    class="player-meta"
+                                    data-player-hero-role
+                                >
+                                    Home Run / RBI / Total Bases
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
             <!-- ================================================
-                 SECTION 07 - PLAYER SUMMARY GRID
+                 SECTION 08 - PLAYER SNAPSHOT METRICS
+                 FILE: templates/player_explorer.html
+                 PURPOSE: compact top-level player metric cards
+                 for future live season statistics
                  ================================================ -->
 
             <section
@@ -267,66 +416,69 @@
 
                 <article class="kpi-card">
                     <div class="kpi-label">
-                        Player
+                        AVG
                     </div>
 
                     <div
                         class="kpi-value"
-                        data-player-display-name
+                        data-player-stat-avg
                     >
-                        Aaron Judge
+                        .000
                     </div>
 
                     <div class="kpi-change-positive">
-                        Demo profile
+                        Future season batting average
                     </div>
                 </article>
 
                 <article class="kpi-card">
                     <div class="kpi-label">
-                        Team
+                        OPS
                     </div>
 
                     <div
                         class="kpi-value"
-                        data-player-display-team
+                        data-player-stat-ops
                     >
-                        NYY
+                        .000
                     </div>
 
                     <div class="kpi-change-positive">
-                        Roster context pending
+                        Future on-base plus slugging
                     </div>
                 </article>
 
                 <article class="kpi-card">
                     <div class="kpi-label">
-                        Position
+                        HR
                     </div>
 
                     <div
                         class="kpi-value"
-                        data-player-display-position
+                        data-player-stat-hr
                     >
-                        OF
+                        0
                     </div>
 
                     <div class="kpi-change-positive">
-                        Future MLB API field
+                        Future home run total
                     </div>
                 </article>
 
                 <article class="kpi-card">
                     <div class="kpi-label">
-                        Model Status
+                        RBI
                     </div>
 
-                    <div class="kpi-value">
-                        Demo
+                    <div
+                        class="kpi-value"
+                        data-player-stat-rbi
+                    >
+                        0
                     </div>
 
                     <div class="kpi-change-positive">
-                        ML layer not connected yet
+                        Future run production metric
                     </div>
                 </article>
 
@@ -334,14 +486,18 @@
 
 
             <!-- ================================================
-                 SECTION 08 - MAIN PLAYER ANALYTICS GRID
+                 SECTION 09 - PLAYER PROFILE AND READINESS GRID
+                 FILE: templates/player_explorer.html
+                 PURPOSE: detailed player profile table and data
+                 readiness status for prediction modeling
                  ================================================ -->
 
             <section class="analytics-grid">
 
 
                 <!-- ============================================
-                     SECTION 08.01 - PLAYER PROFILE PANEL
+                     SECTION 09.01 - PLAYER PROFILE PANEL
+                     FILE: templates/player_explorer.html
                      ============================================ -->
 
                 <article class="analytics-panel">
@@ -353,7 +509,8 @@
                     <p class="panel-subtitle">
                         Future live profile data will include MLB player ID,
                         team, position, handedness, height, weight, birth
-                        info, debut date, and active status.
+                        information, debut date, roster status, and active
+                        status.
                     </p>
 
                     <table class="team-table">
@@ -396,7 +553,7 @@
                                 </th>
 
                                 <td data-profile-bats>
-                                    Future data
+                                    Right-handed hitter
                                 </td>
                             </tr>
 
@@ -406,17 +563,17 @@
                                 </th>
 
                                 <td data-profile-throws>
-                                    Future data
+                                    Right-handed thrower
                                 </td>
                             </tr>
 
                             <tr>
                                 <th>
-                                    MLB Debut
+                                    Prediction Category
                                 </th>
 
-                                <td data-profile-debut>
-                                    Future data
+                                <td data-profile-prediction-category>
+                                    Power / Run Production
                                 </td>
                             </tr>
 
@@ -428,59 +585,60 @@
 
 
                 <!-- ============================================
-                     SECTION 08.02 - PREDICTION READINESS PANEL
+                     SECTION 09.02 - MODEL READINESS PANEL
+                     FILE: templates/player_explorer.html
                      ============================================ -->
 
                 <aside class="analytics-panel">
 
                     <h2 class="panel-title">
-                        Prediction Readiness
+                        Model Readiness
                     </h2>
 
                     <p class="panel-subtitle">
-                        The player prediction system will become stronger
-                        as more data layers are connected.
+                        AISP2 will score every player based on which data
+                        layers are available for reliable analysis.
                     </p>
 
                     <div class="player-grid">
 
                         <div class="player-card">
                             <div class="player-name">
-                                Player Profile
+                                Player Identity
                             </div>
 
                             <div class="player-meta">
-                                Model exists · live data pending
+                                Template ready · database connection pending
                             </div>
                         </div>
 
                         <div class="player-card">
                             <div class="player-name">
-                                Season Stats
+                                Season Statistics
                             </div>
 
                             <div class="player-meta">
-                                Planned ingestion
+                                Planned ingestion layer
                             </div>
                         </div>
 
                         <div class="player-card">
                             <div class="player-name">
-                                Game Logs
+                                Recent Form
                             </div>
 
                             <div class="player-meta">
-                                Planned
+                                Future rolling-window calculations
                             </div>
                         </div>
 
                         <div class="player-card">
                             <div class="player-name">
-                                Statcast Trends
+                                Statcast Profile
                             </div>
 
                             <div class="player-meta">
-                                Future Baseball Savant layer
+                                Future Baseball Savant integration
                             </div>
                         </div>
 
@@ -492,7 +650,11 @@
 
 
             <!-- ================================================
-                 SECTION 09 - STAT PROFILE PREVIEW
+                 SECTION 10 - STATCAST INTELLIGENCE PREVIEW
+                 FILE: templates/player_explorer.html
+                 PURPOSE: future Statcast indicators for power,
+                 contact quality, plate discipline, and prediction
+                 feature engineering
                  ================================================ -->
 
             <section
@@ -501,55 +663,82 @@
             >
 
                 <h2 class="panel-title">
-                    Statistical Profile Preview
+                    Statcast Intelligence
                 </h2>
 
                 <p class="panel-subtitle">
-                    These cards are placeholders for future real batting,
-                    pitching, and Statcast metrics.
+                    This area is prepared for Baseball Savant and Statcast
+                    metrics that will eventually feed home run, hit, total
+                    bases, RBI, and strikeout probability models.
                 </p>
 
                 <div class="probability-grid">
 
                     <article class="probability-card">
                         <div class="probability-title">
-                            Hit Probability Inputs
+                            Exit Velocity
                         </div>
 
-                        <div class="probability-value">
+                        <div
+                            class="probability-value"
+                            data-statcast-exit-velocity
+                        >
                             0
                         </div>
 
                         <div class="probability-confidence">
-                            AVG, OBP, contact rate, matchup profile
+                            Future average and max exit velocity
                         </div>
                     </article>
 
                     <article class="probability-card">
                         <div class="probability-title">
-                            Home Run Inputs
+                            Barrel Rate
                         </div>
 
-                        <div class="probability-value">
-                            0
+                        <div
+                            class="probability-value"
+                            data-statcast-barrel-rate
+                        >
+                            0%
                         </div>
 
                         <div class="probability-confidence">
-                            Exit velocity, launch angle, barrels, park factor
+                            Future barrel percentage feature
                         </div>
                     </article>
 
                     <article class="probability-card">
                         <div class="probability-title">
-                            Plate Discipline Inputs
+                            Hard Hit Rate
                         </div>
 
-                        <div class="probability-value">
+                        <div
+                            class="probability-value"
+                            data-statcast-hard-hit-rate
+                        >
+                            0%
+                        </div>
+
+                        <div class="probability-confidence">
+                            Future hard-contact indicator
+                        </div>
+                    </article>
+
+                    <article class="probability-card">
+                        <div class="probability-title">
+                            Launch Angle
+                        </div>
+
+                        <div
+                            class="probability-value"
+                            data-statcast-launch-angle
+                        >
                             0
                         </div>
 
                         <div class="probability-confidence">
-                            Walk rate, strikeout rate, chase rate, zone rate
+                            Future home run trajectory signal
                         </div>
                     </article>
 
@@ -559,7 +748,10 @@
 
 
             <!-- ================================================
-                 SECTION 10 - PLAYER OUTCOME LIBRARY
+                 SECTION 11 - PLAYER OUTCOME INTELLIGENCE
+                 FILE: templates/player_explorer.html
+                 PURPOSE: organize prediction targets and define
+                 how player-level outcome modeling will work
                  ================================================ -->
 
             <section
@@ -568,12 +760,13 @@
             >
 
                 <h2 class="panel-title">
-                    Player Outcome Library
+                    Player Outcome Intelligence
                 </h2>
 
                 <p class="panel-subtitle">
-                    Future player predictions will start with these core
-                    MLB outcome categories.
+                    AISP2 will eventually connect each player to a library
+                    of outcome models, each supported by data features,
+                    confidence scoring, and plain-English explanations.
                 </p>
 
                 <div class="player-grid">
@@ -584,7 +777,8 @@
                         </div>
 
                         <div class="player-meta">
-                            Supervised probability model target
+                            Contact rate, pitcher profile, handedness splits,
+                            recent form, batting order position.
                         </div>
                     </div>
 
@@ -594,7 +788,8 @@
                         </div>
 
                         <div class="player-meta">
-                            Power, matchup, park, weather, and form context
+                            Exit velocity, barrel rate, launch angle,
+                            pitcher pitch mix, ballpark, weather.
                         </div>
                     </div>
 
@@ -604,7 +799,8 @@
                         </div>
 
                         <div class="player-meta">
-                            Multi-outcome batting event probability
+                            Hit probability, extra-base-hit probability,
+                            slugging profile, matchup strength.
                         </div>
                     </div>
 
@@ -614,7 +810,8 @@
                         </div>
 
                         <div class="player-meta">
-                            Lineup, team offense, and context dependency
+                            Lineup context, team run environment,
+                            runners-on-base expectation, matchup.
                         </div>
                     </div>
 
@@ -624,17 +821,19 @@
                         </div>
 
                         <div class="player-meta">
-                            OBP, lineup position, team run environment
+                            OBP, lineup position, team offense,
+                            stolen-base threat, downstream hitters.
                         </div>
                     </div>
 
                     <div class="player-card">
                         <div class="player-name">
-                            Strikes Out
+                            Strikeout Outcome
                         </div>
 
                         <div class="player-meta">
-                            Batter profile vs pitcher strikeout skill
+                            Batter strikeout rate, pitcher strikeout rate,
+                            chase rate, whiff rate, pitch mix.
                         </div>
                     </div>
 
@@ -644,7 +843,11 @@
 
 
             <!-- ================================================
-                 SECTION 11 - AI PLAYER ANALYST NOTES
+                 SECTION 12 - AI PLAYER ANALYST AND NEXT ACTIONS
+                 FILE: templates/player_explorer.html
+                 PURPOSE: plain-English player interpretation,
+                 scouting notes, and next-action links for deeper
+                 prediction workflows
                  ================================================ -->
 
             <section
@@ -653,42 +856,94 @@
             >
 
                 <h2 class="panel-title">
-                    AI Player Analyst Notes
+                    AI Player Analyst
                 </h2>
 
                 <p class="panel-subtitle">
-                    This panel will eventually turn raw player statistics
-                    into plain-English scouting and prediction explanations.
+                    This panel will eventually summarize the player’s
+                    current form, statistical profile, prediction strengths,
+                    prediction risks, matchup fit, and recommended next
+                    analysis step.
                 </p>
 
                 <div class="insight-card">
 
                     <div class="insight-title">
-                        Current Insight
+                        Current Player Insight
                     </div>
 
                     <div class="insight-text">
-                        Player Explorer is now prepared as a front-end
-                        destination for roster ingestion, player profiles,
-                        season statistics, Statcast trends, and probability
-                        outputs. The next backend step is to ingest players
-                        and connect live player routes.
+                        Aaron Judge is being used as the demo profile for
+                        AISP2 player intelligence. The page is now structured
+                        to support identity, team context, position, player
+                        type, season stats, Statcast features, outcome models,
+                        and AI explanations once live player ingestion and
+                        player routes are connected.
                     </div>
+
+                </div>
+
+                <div
+                    class="player-grid"
+                    style="margin-top:20px;"
+                >
+
+                    <a
+                        class="player-card"
+                        href="/tools/prediction"
+                    >
+                        <div class="player-name">
+                            Open Prediction Workbench
+                        </div>
+
+                        <div class="player-meta">
+                            Move from player profile to probability analysis.
+                        </div>
+                    </a>
+
+                    <a
+                        class="player-card"
+                        href="/dashboard"
+                    >
+                        <div class="player-name">
+                            Open Dashboard
+                        </div>
+
+                        <div class="player-meta">
+                            Review project health and data readiness.
+                        </div>
+                    </a>
+
+                    <a
+                        class="player-card"
+                        href="/project/data-sources"
+                    >
+                        <div class="player-name">
+                            View Data Sources
+                        </div>
+
+                        <div class="player-meta">
+                            Review planned MLB, Statcast, and historical data layers.
+                        </div>
+                    </a>
 
                 </div>
 
             </section>
 
+
+                        <!-- ========================================================
+                 SECTION 13 - SCRIPT LOADING
+                 FILE: templates/player_explorer.html
+                 PURPOSE: load shared application behavior and future
+                 player explorer interactivity
+                 ======================================================== -->
+
+            <script src="/static/js/aisp2.js"></script>
+
         </main>
 
     </div>
-
-
-    <!-- ========================================================
-         SECTION 12 - SCRIPT LOADING
-         ======================================================== -->
-
-    <script src="/static/js/aisp2.js"></script>
 
 </body>
 
@@ -696,16 +951,16 @@
 
 
 <!-- ============================================================
-     SECTION 13 - FUTURE PLAYER EXPLORER ROADMAP
+     SECTION 14 - FUTURE PLAYER EXPLORER ROADMAP
 
-     13.01 Connect player dropdown to real database players.
-     13.02 Add player route: /players.
-     13.03 Add player route: /api/players.
-     13.04 Add player profile endpoint.
-     13.05 Add roster-linked player display.
-     13.06 Add season stat cards.
-     13.07 Add Statcast profile cards.
-     13.08 Add player comparison panel.
-     13.09 Add prediction shortcuts.
-     13.10 Add AI player summary generation.
+     14.01 Connect player dropdown to real database players.
+     14.02 Add player route: /players.
+     14.03 Add player route: /api/players.
+     14.04 Add player profile endpoint.
+     14.05 Add roster-linked player display.
+     14.06 Add season stat cards.
+     14.07 Add Statcast profile cards.
+     14.08 Add player comparison panel.
+     14.09 Add prediction shortcuts.
+     14.10 Add AI player summary generation.
      ============================================================ -->
