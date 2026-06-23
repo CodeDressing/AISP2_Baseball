@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+import requests
 
 
 # ============================================================
@@ -851,3 +852,86 @@ Product Rule:
     Chat becomes the primary interface.
     main.py stays clean and route-focused.
 """
+
+# ============================================================
+# SECTION 16 - LIVE MLB DATA API
+# FILE: main.py
+# PURPOSE: expose all MLB teams and active roster players
+# from MLB Stats API for frontend selectors
+# ============================================================
+
+MLB_STATS_API_BASE = "https://statsapi.mlb.com/api/v1"
+
+
+def fetch_mlb_json(path: str) -> dict:
+    response = requests.get(
+        f"{MLB_STATS_API_BASE}{path}",
+        timeout=15,
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+@app.get("/api/mlb/teams")
+def api_mlb_teams() -> dict:
+    payload = fetch_mlb_json(
+        "/teams?sportId=1&activeStatus=Y"
+    )
+
+    teams = []
+
+    for team in payload.get("teams", []):
+        teams.append(
+            {
+                "id": team.get("id"),
+                "name": team.get("name"),
+                "abbreviation": team.get("abbreviation"),
+                "league": team.get("league", {}).get("name"),
+                "division": team.get("division", {}).get("name"),
+                "venue": team.get("venue", {}).get("name"),
+            }
+        )
+
+    teams.sort(
+        key=lambda item: item["name"] or ""
+    )
+
+    return {
+        "count": len(teams),
+        "teams": teams,
+    }
+
+
+@app.get("/api/mlb/teams/{team_id}/players")
+def api_mlb_team_players(team_id: int) -> dict:
+    payload = fetch_mlb_json(
+        f"/teams/{team_id}/roster?rosterType=active"
+    )
+
+    players = []
+
+    for item in payload.get("roster", []):
+        person = item.get("person", {})
+        position = item.get("position", {})
+
+        players.append(
+            {
+                "id": person.get("id"),
+                "name": person.get("fullName"),
+                "position": position.get("name"),
+                "position_code": position.get("code"),
+                "status": item.get("status", {}).get("description"),
+            }
+        )
+
+    players.sort(
+        key=lambda item: item["name"] or ""
+    )
+
+    return {
+        "team_id": team_id,
+        "count": len(players),
+        "players": players,
+    }
