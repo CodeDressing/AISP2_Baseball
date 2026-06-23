@@ -13,3 +13,4 @@ sqlalchemy
 requests
 python-dotenv
 pydantic
+jinja2
