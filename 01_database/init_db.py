@@ -12,19 +12,24 @@
 # SECTION 01 - IMPORTS
 # ============================================================
 
+from __future__ import annotations
+
 from database import Base
+from database import database_health_check
+from database import database_health_details
 from database import engine
 
 import models
 
 
 # ============================================================
-# SECTION 02 - DATABASE TABLE REGISTRATION
+# SECTION 02 - REGISTERED TABLES
 # ============================================================
 
 REGISTERED_TABLES = [
     "teams",
     "players",
+    "roster_entries",
     "player_season_stats",
 ]
 
@@ -39,7 +44,7 @@ def create_database_tables() -> None:
     """
 
     Base.metadata.create_all(
-        bind=engine
+        bind=engine,
     )
 
 
@@ -49,34 +54,44 @@ def create_database_tables() -> None:
 
 def drop_database_tables() -> None:
     """
-    Drops all tables.
+    Drops all SQLAlchemy tables registered under Base.
 
     Development use only.
     """
 
     Base.metadata.drop_all(
-        bind=engine
+        bind=engine,
     )
 
 
 # ============================================================
-# SECTION 05 - DATABASE SCHEMA REPORT
+# SECTION 05 - BUILD SCHEMA REPORT
 # ============================================================
 
 def build_schema_report() -> dict:
     """
-    Returns a summary of the current database schema.
+    Returns a human-readable database schema report.
     """
 
+    metadata_tables = sorted(
+        Base.metadata.tables.keys()
+    )
+
     return {
+        "database_url": str(engine.url),
         "registered_tables": REGISTERED_TABLES,
-        "table_count": len(REGISTERED_TABLES),
-        "database_engine": str(engine.url),
+        "metadata_tables": metadata_tables,
+        "registered_table_count": len(REGISTERED_TABLES),
+        "metadata_table_count": len(metadata_tables),
+        "all_registered_tables_detected": all(
+            table_name in metadata_tables
+            for table_name in REGISTERED_TABLES
+        ),
     }
 
 
 # ============================================================
-# SECTION 06 - DATABASE INITIALIZATION
+# SECTION 06 - INITIALIZE DATABASE
 # ============================================================
 
 def initialize_database() -> dict:
@@ -88,24 +103,32 @@ def initialize_database() -> dict:
 
     return {
         "success": True,
-        "tables_created": len(REGISTERED_TABLES),
-        "tables": REGISTERED_TABLES,
+        "operation": "initialize_database",
+        "tables_created_or_verified": len(Base.metadata.tables.keys()),
+        "schema_report": build_schema_report(),
+        "database_health": database_health_details(),
     }
 
 
 # ============================================================
-# SECTION 07 - DATABASE HEALTH CHECK
+# SECTION 07 - DATABASE STARTUP CHECK
 # ============================================================
 
 def database_startup_check() -> dict:
     """
-    Startup verification.
+    Verifies database readiness after initialization.
     """
 
+    schema_report = build_schema_report()
+
     return {
-        "database_initialized": True,
+        "database_initialized": database_health_check(),
+        "registered_tables_detected": schema_report[
+            "all_registered_tables_detected"
+        ],
         "registered_tables": REGISTERED_TABLES,
-        "table_count": len(REGISTERED_TABLES),
+        "metadata_tables": schema_report["metadata_tables"],
+        "table_count": schema_report["metadata_table_count"],
     }
 
 
