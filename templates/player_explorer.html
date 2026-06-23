@@ -7,484 +7,586 @@
      ============================================================ -->
 
 
-<!-- ============================================================
-     SECTION 01 - DOCUMENT SETUP
-     ============================================================ -->
+/* ============================================================
+   AISP2 BASEBALL
+   FILE: static/css/player_explorer.css
+   PURPOSE: dedicated styling system for Player Explorer
+   ============================================================ */
 
-<!DOCTYPE html>
-<html lang="en">
 
-<head>
 
-    <meta charset="UTF-8">
+/* ============================================================
+   SECTION 01 - PLAYER EXPLORER FOUNDATION
+   FILE: static/css/player_explorer.css
+   PURPOSE: page-specific variables and visual identity
+   ============================================================ */
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+:root {
 
-    <meta
-        name="description"
-        content="AISP2 Player Explorer for MLB player search, profiles, statistics, trends, and prediction preparation."
-    >
+    --player-primary:
+        #7dd3fc;
 
-    <title>
-        AISP2 Baseball | Player Explorer
-    </title>
+    --player-secondary:
+        #4ade80;
 
-    <link
-        rel="stylesheet"
-        href="/static/css/aisp2.css"
-    >
+    --player-panel:
+        rgba(15, 23, 42, 0.88);
 
-    <link
-        rel="stylesheet"
-        href="/static/css/dashboard.css"
-    >
+    --player-border:
+        rgba(125, 211, 252, 0.16);
 
-</head>
+    --player-glow:
+        0 0 40px rgba(125, 211, 252, 0.18);
 
+}
 
-<!-- ============================================================
-     SECTION 02 - PAGE BODY
-     ============================================================ -->
 
-<body>
 
-    <div class="app-shell">
+/* ============================================================
+   SECTION 02 - PLAYER HERO SYSTEM
+   FILE: static/css/player_explorer.css
+   PURPOSE: hero card layout and player identity styling
+   ============================================================ */
 
+.player-hero-panel {
 
-        <!-- ====================================================
-             SECTION 03 - TOP NAVIGATION
-             ==================================================== -->
+    position: relative;
 
-        <header class="topbar">
+    overflow: hidden;
 
-            <a
-                class="brand-mark"
-                href="/"
-                aria-label="AISP2 homepage"
-            >
-                <span class="brand-icon">
-                    ⚾
-                </span>
+    border-radius: 32px;
 
-                <span>
-                    AISP2
-                </span>
-            </a>
+    background:
+        linear-gradient(
+            135deg,
+            rgba(8, 47, 73, .92),
+            rgba(15, 23, 42, .98)
+        );
 
-            <nav
-                class="nav-links"
-                aria-label="Player explorer navigation"
-            >
-                <a href="/">
-                    Chat
-                </a>
+    border:
+        1px solid var(--player-border);
 
-                <a href="/players">
-                    Players
-                </a>
+    box-shadow:
+        var(--player-glow);
 
-                <a href="/tools/prediction">
-                    Predictions
-                </a>
+}
 
-                <a href="/dashboard">
-                    Dashboard
-                </a>
 
-                <a href="/docs">
-                    API
-                </a>
-            </nav>
 
-        </header>
+.player-hero-panel::before {
 
+    content: "";
 
-        <!-- ====================================================
-             SECTION 04 - PLAYER EXPLORER CONTAINER
-             ==================================================== -->
+    position: absolute;
 
-        <main class="dashboard-container">
+    inset: 0;
 
+    background:
+        radial-gradient(
+            circle at top right,
+            rgba(74, 222, 128, .08),
+            transparent 40%
+        );
 
-            <!-- ================================================
-                 SECTION 05 - HEADER
-                 ================================================ -->
+    pointer-events: none;
 
-            <section class="dashboard-header">
+}
 
-                <p class="eyebrow">
-                    <span class="pulse"></span>
-                    Player Intelligence
-                </p>
 
-                <h1 class="dashboard-title">
-                    Player Explorer
-                </h1>
 
-                <p class="dashboard-subtitle">
-                    Search MLB players, review future player profiles,
-                    inspect roster context, compare trends, and prepare
-                    prediction workflows for hits, home runs, RBIs,
-                    total bases, strikeouts, and other outcomes.
-                </p>
+.player-headshot {
 
-            </section>
+    display: flex;
 
+    justify-content: center;
 
-            <!-- ================================================
-                 SECTION 06 - PLAYER SEARCH PANEL
-                 ================================================ -->
+    align-items: center;
 
-            <section class="analytics-panel">
+}
 
-                <h2 class="panel-title">
-                    Search Player
-                </h2>
 
-                <p class="panel-subtitle">
-                    This interface is ready for live player data once
-                    player ingestion and player routes are connected.
-                </p>
 
-                <div
-                    class="prediction-form-grid"
-                    style="margin-top:20px;"
-                >
+.headshot-placeholder {
 
-                    <div class="prediction-field">
+    width: 160px;
 
-                        <label>
-                            Team
-                        </label>
+    height: 160px;
 
-                        <select data-player-team>
-                            <option>
-                                New York Yankees
-                            </option>
+    border-radius: 50%;
 
-                            <option>
-                                Los Angeles Dodgers
-                            </option>
+    display: flex;
 
-                            <option>
-                                New York Mets
-                            </option>
+    align-items: center;
 
-                            <option>
-                                Atlanta Braves
-                            </option>
-                        </select>
+    justify-content: center;
 
-                    </div>
+    font-size: 72px;
 
-                    <div class="prediction-field">
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,.08),
+            rgba(255,255,255,.02)
+        );
 
-                        <label>
-                            Player
-                        </label>
+    border:
+        1px solid rgba(255,255,255,.12);
 
-                        <select data-player-name>
-                            <option>
-                                Aaron Judge
-                            </option>
+    box-shadow:
+        0 0 50px rgba(125,211,252,.20);
 
-                            <option>
-                                Shohei Ohtani
-                            </option>
-
-                            <option>
-                                Juan Soto
-                            </option>
-
-                            <option>
-                                Mookie Betts
-                            </option>
-                        </select>
-
-                    </div>
-
-                    <div class="prediction-field">
-
-                        <label>
-                            Focus
-                        </label>
-
-                        <select data-player-focus>
-                            <option>
-                                Batting Profile
-                            </option>
-
-                            <option>
-                                Power Trends
-                            </option>
-
-                            <option>
-                                Plate Discipline
-                            </option>
-
-                            <option>
-                                Prediction Readiness
-                            </option>
-                        </select>
-
-                    </div>
-
-                </div>
-
-                <div class="prediction-action-row">
-
-                    <button
-                        class="prediction-primary-button"
-                        type="button"
-                        data-player-load
-                    >
-                        Load Player
-                    </button>
-
-                    <a
-                        class="prediction-secondary-button"
-                        href="/tools/prediction"
-                    >
-                        Open Prediction Tool
-                    </a>
-
-                </div>
-
-            </section>
-
-
-                        <!-- ================================================
-                 SECTION 07 - PLAYER HERO COMMAND CARD
-                 FILE: templates/player_explorer.html
-                 PURPOSE: primary player identity, team context,
-                 role summary, scouting identity, and prediction
-                 readiness overview
-                 ================================================ -->
-
-            <section
-                class="analytics-panel"
-                style="margin-top:24px;"
-            >
-
-                <div
-                    style="
-                        display:grid;
-                        grid-template-columns:220px 1fr;
-                        gap:28px;
-                        align-items:center;
-                    "
-                >
-
-                    <div
-                        style="
-                            min-height:220px;
-                            border-radius:32px;
-                            display:grid;
-                            place-items:center;
-                            background:linear-gradient(145deg, rgba(8,47,73,.88), rgba(15,23,42,.94));
-                            border:1px solid rgba(56,189,248,.24);
-                            box-shadow:0 30px 90px rgba(0,0,0,.35);
-                        "
-                    >
-
-                        <div
-                            style="
-                                width:132px;
-                                height:132px;
-                                border-radius:50%;
-                                display:grid;
-                                place-items:center;
-                                font-size:54px;
-                                background:rgba(255,255,255,.06);
-                                border:1px solid rgba(255,255,255,.10);
-                            "
-                        >
-                            ⚾
-                        </div>
-
-                    </div>
-
-                    <div>
-
-                        <div class="eyebrow">
-                            <span class="pulse"></span>
-                            Demo Player Profile
-                        </div>
-
-                        <h2
-                            class="dashboard-title"
-                            style="margin-top:10px;"
-                            data-player-hero-name
-                        >
-                            Aaron Judge
-                        </h2>
-
-                        <p
-                            class="dashboard-subtitle"
-                            style="max-width:850px;"
-                            data-player-hero-summary
-                        >
-                            Elite power hitter with premium exit velocity,
-                            barrel-rate upside, middle-of-the-order run
-                            production, and future home run probability model
-                            relevance.
-                        </p>
-
-                        <div
-                            class="player-grid"
-                            style="
-                                grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-                                margin-top:22px;
-                            "
-                        >
-
-                            <div class="player-card">
-                                <div class="player-name">
-                                    Team
-                                </div>
-
-                                <div
-                                    class="player-meta"
-                                    data-player-hero-team
-                                >
-                                    New York Yankees
-                                </div>
-                            </div>
-
-                            <div class="player-card">
-                                <div class="player-name">
-                                    Position
-                                </div>
-
-                                <div
-                                    class="player-meta"
-                                    data-player-hero-position
-                                >
-                                    Outfielder
-                                </div>
-                            </div>
-
-                            <div class="player-card">
-                                <div class="player-name">
-                                    Player Type
-                                </div>
-
-                                <div
-                                    class="player-meta"
-                                    data-player-hero-type
-                                >
-                                    Power Bat
-                                </div>
-                            </div>
-
-                            <div class="player-card">
-                                <div class="player-name">
-                                    Prediction Role
-                                </div>
-
-                                <div
-                                    class="player-meta"
-                                    data-player-hero-role
-                                >
-                                    Home Run / RBI / Total Bases
-                                </div>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </section>
-
-
-            <!-- ================================================
-                 SECTION 08 - PLAYER SNAPSHOT METRICS
-                 FILE: templates/player_explorer.html
-                 PURPOSE: compact top-level player metric cards
-                 for future live season statistics
-                 ================================================ -->
-
-            <section
-                class="kpi-grid"
-                style="margin-top:24px;"
-            >
-
-                <article class="kpi-card">
-                    <div class="kpi-label">
-                        AVG
-                    </div>
-
-                    <div
-                        class="kpi-value"
-                        data-player-stat-avg
-                    >
-                        .000
-                    </div>
-
-                    <div class="kpi-change-positive">
-                        Future season batting average
-                    </div>
-                </article>
-
-                <article class="kpi-card">
-                    <div class="kpi-label">
-                        OPS
-                    </div>
-
-                    <div
-                        class="kpi-value"
-                        data-player-stat-ops
-                    >
-                        .000
-                    </div>
-
-                    <div class="kpi-change-positive">
-                        Future on-base plus slugging
-                    </div>
-                </article>
-
-                <article class="kpi-card">
-                    <div class="kpi-label">
-                        HR
-                    </div>
-
-                    <div
-                        class="kpi-value"
-                        data-player-stat-hr
-                    >
-                        0
-                    </div>
-
-                    <div class="kpi-change-positive">
-                        Future home run total
-                    </div>
-                </article>
-
-                <article class="kpi-card">
-                    <div class="kpi-label">
-                        RBI
-                    </div>
-
-                    <div
-                        class="kpi-value"
-                        data-player-stat-rbi
-                    >
-                        0
-                    </div>
-
-                    <div class="kpi-change-positive">
-                        Future run production metric
-                    </div>
-                </article>
-
-            </section>
+}
 
 
+
+/* ============================================================
+   SECTION 03 - PLAYER PROFILE COMPONENTS
+   FILE: static/css/player_explorer.css
+   PURPOSE: team badges, labels, metadata and profile cards
+   ============================================================ */
+
+.player-team-badge {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 8px 14px;
+
+    border-radius: 999px;
+
+    font-size: .80rem;
+
+    font-weight: 700;
+
+    text-transform: uppercase;
+
+    letter-spacing: .08em;
+
+    color: #d1fae5;
+
+    background:
+        rgba(34,197,94,.12);
+
+    border:
+        1px solid rgba(34,197,94,.20);
+
+}
+
+
+
+.player-hero-name {
+
+    font-size: clamp(
+        2.5rem,
+        5vw,
+        4.5rem
+    );
+
+    font-weight: 900;
+
+    line-height: 1;
+
+    margin-top: 14px;
+
+}
+
+
+
+.player-hero-meta {
+
+    margin-top: 10px;
+
+    color: #94a3b8;
+
+    font-size: 1rem;
+
+}
+
+
+
+.player-hero-description {
+
+    margin-top: 18px;
+
+    max-width: 850px;
+
+    color: #cbd5e1;
+
+    line-height: 1.8;
+
+}
+
+
+
+/* ============================================================
+   SECTION 04 - PLAYER CARD SYSTEM
+   FILE: static/css/player_explorer.css
+   PURPOSE: reusable cards used throughout player explorer
+   ============================================================ */
+
+.player-card {
+
+    transition:
+        transform .25s ease,
+        border-color .25s ease,
+        box-shadow .25s ease;
+
+}
+
+
+
+.player-card:hover {
+
+    transform:
+        translateY(-6px);
+
+    border-color:
+        rgba(125,211,252,.35);
+
+    box-shadow:
+        0 16px 40px rgba(0,0,0,.30);
+
+}
+
+
+
+.player-card .player-name {
+
+    font-size: 1rem;
+
+    font-weight: 800;
+
+}
+
+
+
+.player-card .player-meta {
+
+    margin-top: 8px;
+
+    color: #94a3b8;
+
+    line-height: 1.6;
+
+}
+            /* ============================================================
+   SECTION 05 - PLAYER METRIC CARDS
+   FILE: static/css/player_explorer.css
+   PURPOSE: upgrade snapshot metric cards for batting average,
+   OPS, home runs, RBI, and future live stat displays
+   ============================================================ */
+
+.player-metric-card,
+.kpi-card {
+
+    position: relative;
+
+    overflow: hidden;
+
+}
+
+
+
+.player-metric-card::before,
+.kpi-card::before {
+
+    content: "";
+
+    position: absolute;
+
+    inset: 0;
+
+    background:
+        radial-gradient(
+            circle at top right,
+            rgba(125, 211, 252, .08),
+            transparent 42%
+        );
+
+    pointer-events: none;
+
+}
+
+
+
+.kpi-card .kpi-value {
+
+    color: #f8fafc;
+
+    text-shadow:
+        0 0 22px rgba(125, 211, 252, .12);
+
+}
+
+
+
+.kpi-card:hover {
+
+    transform:
+        translateY(-4px);
+
+    border-color:
+        rgba(125, 211, 252, .28);
+
+}
+
+
+
+/* ============================================================
+   SECTION 06 - STATCAST CARD SYSTEM
+   FILE: static/css/player_explorer.css
+   PURPOSE: visual language for Statcast-style player metrics
+   such as exit velocity, barrel rate, hard-hit rate, and
+   launch angle
+   ============================================================ */
+
+.probability-card {
+
+    position: relative;
+
+    overflow: hidden;
+
+    transition:
+        transform .25s ease,
+        border-color .25s ease,
+        box-shadow .25s ease;
+
+}
+
+
+
+.probability-card::after {
+
+    content: "";
+
+    position: absolute;
+
+    width: 160px;
+
+    height: 160px;
+
+    right: -70px;
+
+    top: -70px;
+
+    border-radius: 50%;
+
+    background:
+        rgba(125, 211, 252, .08);
+
+    pointer-events: none;
+
+}
+
+
+
+.probability-card:hover {
+
+    transform:
+        translateY(-5px);
+
+    border-color:
+        rgba(125, 211, 252, .36);
+
+    box-shadow:
+        0 20px 55px rgba(0,0,0,.35);
+
+}
+
+
+
+.probability-title {
+
+    position: relative;
+
+    z-index: 1;
+
+}
+
+
+
+.probability-value {
+
+    position: relative;
+
+    z-index: 1;
+
+}
+
+
+
+.probability-confidence {
+
+    position: relative;
+
+    z-index: 1;
+
+    line-height: 1.6;
+
+}
+
+
+
+/* ============================================================
+   SECTION 07 - AI ANALYST PANEL
+   FILE: static/css/player_explorer.css
+   PURPOSE: premium styling for AI-generated scouting notes,
+   model interpretation, and player explanation cards
+   ============================================================ */
+
+.insight-card {
+
+    position: relative;
+
+    overflow: hidden;
+
+    border-radius: 24px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(15, 23, 42, .88),
+            rgba(8, 47, 73, .54)
+        );
+
+    border:
+        1px solid rgba(125, 211, 252, .14);
+
+}
+
+
+
+.insight-card::before {
+
+    content: "AI";
+
+    position: absolute;
+
+    right: 22px;
+
+    top: 18px;
+
+    font-size: 4rem;
+
+    font-weight: 1000;
+
+    letter-spacing: -.08em;
+
+    color:
+        rgba(125, 211, 252, .055);
+
+}
+
+
+
+.insight-title {
+
+    position: relative;
+
+    z-index: 1;
+
+    color:
+        #f8fafc;
+
+}
+
+
+
+.insight-text {
+
+    position: relative;
+
+    z-index: 1;
+
+    color:
+        #cbd5e1;
+
+}
+
+
+
+/* ============================================================
+   SECTION 08 - PREDICTION READINESS VISUALS
+   FILE: static/css/player_explorer.css
+   PURPOSE: reusable readiness bars and model-status visuals for
+   future player data, Statcast data, model confidence, and
+   prediction readiness scoring
+   ============================================================ */
+
+.player-readiness-bar {
+
+    width: 100%;
+
+    height: 12px;
+
+    margin-top: 12px;
+
+    overflow: hidden;
+
+    border-radius: 999px;
+
+    background:
+        rgba(2, 6, 23, .72);
+
+    border:
+        1px solid rgba(255,255,255,.08);
+
+}
+
+
+
+.player-readiness-fill {
+
+    height: 100%;
+
+    width: 64%;
+
+    border-radius: 999px;
+
+    background:
+        linear-gradient(
+            90deg,
+            #4ade80,
+            #7dd3fc
+        );
+
+}
+
+
+
+.player-status-pill {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 8px 12px;
+
+    border-radius: 999px;
+
+    color:
+        #bbf7d0;
+
+    background:
+        rgba(34,197,94,.10);
+
+    border:
+        1px solid rgba(34,197,94,.20);
+
+    font-size: .78rem;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    letter-spacing: .08em;
+
+}
             <!-- ================================================
                  SECTION 09 - PLAYER PROFILE AND READINESS GRID
                  FILE: templates/player_explorer.html
