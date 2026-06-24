@@ -129,15 +129,24 @@ from intent_detection import INTENT_GENERAL_BASEBALL
 from intent_detection import build_intent_report
 
 # ============================================================
-# SECTION 01.08 - SECURITY IMPORTS
+# SECTION 01.08 - AI ORCHESTRATION IMPORTS
 # FILE: main.py
-# PURPOSE: centralized chat security and guardrail controls
+# PURPOSE: connect security, semantic detection, entity
+# detection, context building, response generation,
+# probability routing, and interaction memory
 # ============================================================
 
-from security_guardrails import clean_chat_message
-from security_guardrails import is_blocked_chat_message
-from security_guardrails import build_safe_chat_response
 from security_guardrails import build_chat_security_report
+from security_guardrails import build_safe_chat_response
+
+from entity_detection import build_entity_report
+from entity_detection import MLB_TEAM_ALIASES
+
+from context_builder import build_baseball_context
+
+from response_generator import generate_response_from_context
+
+from interaction_memory import remember_chat_interaction
 # ============================================================
 # SECTION 02 - APPLICATION METADATA
 # ============================================================
@@ -446,270 +455,226 @@ def build_demo_probability(
 
 
 # ============================================================
-# SECTION 08 - SEMANTIC CHAT RESPONSE ENGINE
+# SECTION 08 - SEMANTIC CHAT ORCHESTRATION ENGINE
 # FILE: main.py
-# PURPOSE: secure semantic chat orchestration using intent
-# detection, team detection, player detection, outcome detection,
-# demo probability generation, and readable baseball responses
+# PURPOSE: route every chat message through security,
+# semantic interpretation, entity detection, intent detection,
+# context building, live MLB lookup, response generation,
+# and interaction memory
 # ============================================================
 
-MAX_CHAT_MESSAGE_LENGTH = 600
+def build_engine_probability(
+    player_name: str,
+    outcome_key: str,
+) -> dict:
+    return build_demo_probability(
+        player_name=player_name,
+        outcome_key=outcome_key,
+    )
 
 
-def clean_chat_message(message: str | None) -> str:
-    if not message:
-        return ""
-
-    cleaned_message = str(message).strip()
-
-    if len(cleaned_message) > MAX_CHAT_MESSAGE_LENGTH:
-        cleaned_message = cleaned_message[:MAX_CHAT_MESSAGE_LENGTH]
-
-    return cleaned_message
-
-
-def is_blocked_chat_message(message: str) -> bool:
+def extract_possible_player_search_name(message: str) -> str | None:
     lowered_message = message.lower()
 
-    blocked_phrases = [
-        "ignore previous instructions",
-        "system prompt",
-        "developer message",
-        "show me your hidden",
-        "reveal your instructions",
-        "drop database",
-        "delete database",
-        "delete all files",
-        "run shell",
-        "execute command",
+    search_phrases = [
+        "search for",
+        "look up",
+        "find",
+        "who is",
+        "tell me about",
     ]
+
+    for phrase in search_phrases:
+        if phrase in lowered_message:
+            possible_name = message[
+                lowered_message.find(phrase) + len(phrase):
+            ].strip(" ?.!")
+
+            if possible_name:
+                return possible_name
+
+    return None
+
+
+def build_live_team_list_reply() -> str:
+    try:
+        payload = fetch_mlb_json(
+            "/teams?sportId=1&activeStatus=Y"
+        )
+
+        teams = [
+            team.get("name")
+            for team in payload.get("teams", [])
+            if team.get("name")
+        ]
+
+        teams.sort()
+
+        return (
+            f"I currently recognize {len(teams)} active MLB teams:\n\n"
+            + "\n".join(f"- {team}" for team in teams)
+        )
+
+    except Exception:
+        teams = sorted(
+            MLB_TEAM_ALIASES.keys(),
+        )
+
+        return (
+            f"I currently recognize {len(teams)} MLB teams from the AISP2 alias engine:\n\n"
+            + "\n".join(f"- {team}" for team in teams)
+        )
+
+
+def build_live_player_search_reply(message: str) -> str:
+    search_name = extract_possible_player_search_name(
+        message,
+    )
+
+    if not search_name:
+        return (
+            "I can search for players, but I need a player name. "
+            "Try: Can I search for Corbin Carroll?"
+        )
+
+    try:
+        payload = fetch_mlb_json(
+            f"/sports/1/players?season={DEFAULT_SEASON}"
+        )
+
+        people = payload.get(
+            "people",
+            [],
+        )
+
+        search_tokens = [
+            token.lower()
+            for token in search_name.split()
+            if token
+        ]
+
+        matches = []
+
+        for person in people:
+            full_name = person.get(
+                "fullName",
+                "",
+            )
+
+            lowered_name = full_name.lower()
+
+            if all(
+                token in lowered_name
+                for token in search_tokens
+            ):
+                matches.append(person)
+
+        if not matches:
+            return (
+                f"I searched the live MLB player list but could not find {search_name}. "
+                "Try the full player name or check spelling."
+            )
+
+        player = matches[0]
+
+        return (
+            f"Yes. I found {player.get('fullName')} in the live MLB player index.\n\n"
+            f"Player ID: {player.get('id')}\n"
+            f"Primary Number: {player.get('primaryNumber', 'N/A')}\n"
+            f"Position: {player.get('primaryPosition', {}).get('name', 'N/A')}\n\n"
+            "Next upgrade will connect this live player search directly to team, roster, stats, and probability lookup."
+        )
+
+    except Exception:
+        return (
+            f"I understood that you want to search for {search_name}, but the live MLB player lookup "
+            "is not available from the server right now."
+        )
+
+
+def should_use_live_player_search(
+    message: str,
+    context: dict,
+) -> bool:
+    if context.get("player"):
+        return False
+
+    lowered_message = message.lower()
 
     return any(
         phrase in lowered_message
-        for phrase in blocked_phrases
-    )
-
-
-def build_safe_chat_response(reason: str = "blocked") -> dict:
-    return {
-        "reply": (
-            "I can help with baseball teams, players, rosters, stats, "
-            "matchups, and probability-style analysis. I cannot help with "
-            "unsafe system, database, or instruction-bypass requests."
-        ),
-        "intent": "security_guardrail",
-        "security": {
-            "blocked": True,
-            "reason": reason,
-        },
-    }
-
-
-def find_all_detected_players(message: str) -> list[str]:
-    lowered_message = message.lower()
-    detected_players: list[str] = []
-
-    for player_name in DEMO_PLAYER_PROFILES.keys():
-        player_lower = player_name.lower()
-        last_name = player_lower.split()[-1]
-
-        if player_lower in lowered_message:
-            detected_players.append(player_name)
-            continue
-
-        if last_name in lowered_message.split():
-            detected_players.append(player_name)
-
-    return detected_players
-
-
-def find_all_detected_teams(message: str) -> list[str]:
-    lowered_message = message.lower()
-    detected_teams: list[str] = []
-
-    for team_name, team_data in DEMO_TEAMS.items():
-        team_lower = team_name.lower()
-        abbreviation = team_data.get("abbreviation", "").lower()
-
-        if team_lower in lowered_message:
-            detected_teams.append(team_name)
-            continue
-
-        if abbreviation and abbreviation in lowered_message.split():
-            detected_teams.append(team_name)
-
-    return detected_teams
-
-
-def build_team_list_reply() -> str:
-    team_lines = [
-        f"- {team_name} ({team_data['abbreviation']})"
-        for team_name, team_data in DEMO_TEAMS.items()
-    ]
-
-    return (
-        f"I currently have {len(DEMO_TEAMS)} demo MLB teams loaded:\n\n"
-        + "\n".join(team_lines)
-        + "\n\nThe live MLB endpoint is also connected for all active MLB teams."
-    )
-
-
-def build_player_list_reply() -> str:
-    player_names = sorted(DEMO_PLAYER_PROFILES.keys())
-
-    preview_players = player_names[:60]
-
-    return (
-        f"I currently have {len(player_names)} demo player profiles loaded:\n\n"
-        + "\n".join(f"- {player}" for player in preview_players)
-    )
-
-
-def build_team_info_reply(team_name: str) -> str:
-    team_data = DEMO_TEAMS.get(team_name)
-
-    if not team_data:
-        return build_team_list_reply()
-
-    players = team_data.get("players", [])
-
-    return (
-        f"{team_name}\n\n"
-        f"League: {team_data.get('league')}\n"
-        f"Division: {team_data.get('division')}\n"
-        f"Ballpark: {team_data.get('ballpark')}\n\n"
-        "Demo roster:\n"
-        + "\n".join(f"- {player}" for player in players)
-    )
-
-
-def build_player_info_reply(player_name: str) -> str:
-    profile = DEMO_PLAYER_PROFILES.get(player_name)
-
-    if not profile:
-        return (
-            "I could not find that player in the demo profile database yet. "
-            "Try asking about Aaron Judge, Shohei Ohtani, Juan Soto, Bryce Harper, "
-            "Mookie Betts, or another loaded demo player."
-        )
-
-    return (
-        f"{player_name}\n\n"
-        f"Style: {profile['style']}\n"
-        f"Recent Form: {profile['recent_form']}\n"
-        f"Primary Metric: {profile['primary_metric']}\n"
-        f"Base Demo Probability: {profile['base_probability']}%\n"
-        f"Confidence: {profile['confidence']}%"
-    )
-
-
-def build_probability_reply(
-    player_name: str,
-    outcome_key: str | None,
-) -> str:
-    selected_outcome = outcome_key or "home_run"
-
-    if selected_outcome not in DEMO_OUTCOMES:
-        selected_outcome = "home_run"
-
-    prediction = build_demo_probability(
-        player_name=player_name,
-        outcome_key=selected_outcome,
-    )
-
-    profile = prediction["profile"]
-
-    return (
-        f"{player_name}\n"
-        f"Outcome: {DEMO_OUTCOMES[selected_outcome]}\n\n"
-        f"Estimated Demo Probability: {prediction['probability']}%\n"
-        f"Confidence: {prediction['confidence']}%\n\n"
-        f"Reasoning:\n"
-        f"- Style: {profile['style']}\n"
-        f"- Recent Form: {profile['recent_form']}\n"
-        f"- Primary Metric: {profile['primary_metric']}\n\n"
-        "This is a demo probability, not betting advice."
-    )
-
-
-def build_player_comparison_reply(players: list[str]) -> str:
-    selected_players = players[:2]
-
-    if len(selected_players) < 2:
-        return "Give me two players to compare, such as Judge vs Ohtani."
-
-    lines = []
-
-    for player_name in selected_players:
-        prediction = build_demo_probability(
-            player_name=player_name,
-            outcome_key="home_run",
-        )
-
-        lines.append(
-            f"{player_name}: {prediction['probability']}% HR demo probability, "
-            f"{prediction['confidence']}% confidence"
-        )
-
-    return (
-        f"Player Comparison\n\n"
-        + "\n".join(f"- {line}" for line in lines)
-        + "\n\nThis comparison is currently based on demo profile data."
-    )
-
-
-def build_help_reply() -> str:
-    return (
-        "You can ask me questions like:\n\n"
-        "- What teams do you have?\n"
-        "- Show me Yankees players.\n"
-        "- Tell me about Aaron Judge.\n"
-        "- What is Bryce Harper's home run probability?\n"
-        "- Can Juan Soto get a hit?\n"
-        "- Compare Judge and Ohtani.\n"
-        "- Who has RBI upside?\n\n"
-        "I understand teams, players, rosters, outcomes, comparisons, and demo probabilities."
+        for phrase in [
+            "search for",
+            "look up",
+            "find",
+            "who is",
+            "can i search",
+        ]
     )
 
 
 def build_chat_reply(message: str) -> dict:
-    cleaned_message = clean_chat_message(message)
+    security_report = build_chat_security_report(
+        message,
+    )
+
+    cleaned_message = security_report[
+        "cleaned_message"
+    ]
 
     if not cleaned_message:
         return {
             "reply": (
-                "Ask me about a team, player, roster, matchup, home run probability, "
-                "hit probability, RBI chance, total bases, or player comparison."
+                "Ask me about an MLB team, player, roster, matchup, probability, "
+                "player search, or prediction."
             ),
             "intent": "empty",
+            "security": security_report,
         }
 
-    if is_blocked_chat_message(cleaned_message):
+    if security_report["blocked"]:
         return build_safe_chat_response(
-            reason="unsafe_or_system_request",
+            reason=security_report["reason"],
         )
 
-    detected_player = detect_player(
-        cleaned_message,
-        DEMO_PLAYER_PROFILES,
+    semantic_report = interpret_baseball_question(
+        message=cleaned_message,
+        teams=DEMO_TEAMS,
+        player_profiles=DEMO_PLAYER_PROFILES,
     )
 
-    detected_team = detect_team(
-        cleaned_message,
-        DEMO_TEAMS,
+    entity_report = build_entity_report(
+        message=cleaned_message,
+        player_profiles=DEMO_PLAYER_PROFILES,
     )
 
-    detected_outcome = detect_outcome(
-        cleaned_message,
+    detected_player = (
+        semantic_report.get("player")
+        or (
+            entity_report.get("primary_player", {}) or {}
+        ).get("canonical_name")
     )
 
-    detected_players = find_all_detected_players(
-        cleaned_message,
+    detected_team = (
+        (
+            entity_report.get("primary_team", {}) or {}
+        ).get("canonical_name")
+        or semantic_report.get("team")
     )
 
-    detected_teams = find_all_detected_teams(
-        cleaned_message,
+    detected_outcome = semantic_report.get(
+        "outcome",
     )
+
+    detected_players = [
+        player["canonical_name"]
+        for player in entity_report.get("players", [])
+    ] or semantic_report.get("players", [])
+
+    detected_teams = [
+        team["canonical_name"]
+        for team in entity_report.get("teams", [])
+    ] or semantic_report.get("teams", [])
 
     intent_report = build_intent_report(
         message=cleaned_message,
@@ -720,76 +685,75 @@ def build_chat_reply(message: str) -> dict:
         detected_teams=detected_teams,
     )
 
-    final_intent = intent_report["final_intent"]
+    context = build_baseball_context(
+        message=cleaned_message,
+        intent_report=intent_report,
+        entity_report=entity_report,
+        semantic_report=semantic_report,
+    )
 
-    if final_intent == INTENT_HELP:
-        reply = build_help_reply()
+    final_intent = intent_report.get(
+        "final_intent",
+    )
 
-    elif final_intent == INTENT_LIST_TEAMS:
-        reply = build_team_list_reply()
+    lowered_message = cleaned_message.lower()
 
-    elif final_intent == INTENT_LIST_PLAYERS:
-        reply = build_player_list_reply()
+    if (
+        final_intent == INTENT_LIST_TEAMS
+        or "all mlb teams" in lowered_message
+        or "how many mlb teams" in lowered_message
+        or "normal english list" in lowered_message
+    ):
+        reply = build_live_team_list_reply()
+        context["task"] = "team_list"
 
-    elif final_intent == INTENT_COMPARE_PLAYERS:
-        reply = build_player_comparison_reply(
-            detected_players,
+    elif should_use_live_player_search(
+        cleaned_message,
+        context,
+    ):
+        reply = build_live_player_search_reply(
+            cleaned_message,
         )
-
-    elif final_intent == INTENT_PLAYER_PROBABILITY and detected_player:
-        reply = build_probability_reply(
-            player_name=detected_player,
-            outcome_key=detected_outcome,
-        )
-
-    elif final_intent == INTENT_TEAM_INFO and detected_team:
-        reply = build_team_info_reply(
-            detected_team,
-        )
-
-    elif final_intent == INTENT_PLAYER_INFO and detected_player:
-        reply = build_player_info_reply(
-            detected_player,
-        )
-
-    elif detected_player and detected_outcome:
-        reply = build_probability_reply(
-            player_name=detected_player,
-            outcome_key=detected_outcome,
-        )
-
-    elif detected_player:
-        reply = build_player_info_reply(
-            detected_player,
-        )
-
-    elif detected_team:
-        reply = build_team_info_reply(
-            detected_team,
-        )
+        context["task"] = "live_player_search"
 
     else:
-        reply = (
-            "I understand this as a baseball question, but I need a little more structure. "
-            "Try asking about a specific team, player, roster, comparison, or outcome probability."
+        reply = generate_response_from_context(
+            context=context,
+            demo_teams=DEMO_TEAMS,
+            player_profiles=DEMO_PLAYER_PROFILES,
+            demo_outcomes=DEMO_OUTCOMES,
+            build_probability_function=build_engine_probability,
         )
 
-    return {
+    chat_response = {
         "reply": reply,
         "intent": final_intent,
+        "context": context,
         "semantic": {
-            "player": detected_player,
-            "team": detected_team,
-            "outcome": detected_outcome,
-            "players": detected_players,
-            "teams": detected_teams,
+            "player": context.get("player"),
+            "team": context.get("team"),
+            "outcome": context.get("outcome"),
+            "players": context.get("players", []),
+            "teams": context.get("teams", []),
             "intent_report": intent_report,
+            "entity_report": entity_report,
+            "semantic_report": semantic_report,
         },
         "security": {
             "blocked": False,
             "message_length": len(cleaned_message),
+            "report": security_report,
         },
     }
+
+    memory_status = remember_chat_interaction(
+        user_message=cleaned_message,
+        chat_response=chat_response,
+    )
+
+    chat_response["memory"] = memory_status
+
+    return chat_response
 # ============================================================
 # SECTION 09 - TEMPLATE ROUTES
 # ============================================================
