@@ -95,58 +95,58 @@ from mlb_stats_api import DEFAULT_SEASON
 
 
 # ============================================================
-# SECTION 01.06 - SEMANTIC ENGINE IMPORTS
+# SECTION 01.06 - NLP SEMANTIC ENGINE IMPORTS
 # FILE: main.py
-# PURPOSE: connect chat routing to entity and outcome detection
+# PURPOSE: connect chat routing to semantic interpretation,
+# entity detection, context building, and outcome detection
 # ============================================================
 
-from semantic_engine import detect_team
-from semantic_engine import detect_player
-from semantic_engine import detect_outcome
-from semantic_engine import interpret_baseball_question
+from nlp.semantic_engine import detect_team
+from nlp.semantic_engine import detect_player
+from nlp.semantic_engine import detect_outcome
+from nlp.semantic_engine import interpret_baseball_question
+
+from nlp.entity_detection import build_entity_report
+from nlp.entity_detection import MLB_TEAM_ALIASES
+
+from nlp.context_builder import build_baseball_context
 
 
 # ============================================================
-# SECTION 01.07 - INTENT DETECTION IMPORTS
+# SECTION 01.07 - NLP INTENT DETECTION IMPORTS
 # FILE: main.py
 # PURPOSE: connect chat routing to intent classification
 # ============================================================
 
-from intent_detection import INTENT_LIST_TEAMS
-from intent_detection import INTENT_LIST_PLAYERS
-from intent_detection import INTENT_TEAM_INFO
-from intent_detection import INTENT_PLAYER_INFO
-from intent_detection import INTENT_PLAYER_PROBABILITY
-from intent_detection import INTENT_COMPARE_PLAYERS
-from intent_detection import INTENT_COMPARE_TEAMS
-from intent_detection import INTENT_GENERAL_PROBABILITY
-from intent_detection import INTENT_MATCHUP_ANALYSIS
-from intent_detection import INTENT_STAT_REQUEST
-from intent_detection import INTENT_EXPLAIN_MODEL
-from intent_detection import INTENT_HELP
-from intent_detection import INTENT_GENERAL_BASEBALL
+from nlp.intent_detection import INTENT_LIST_TEAMS
+from nlp.intent_detection import INTENT_LIST_PLAYERS
+from nlp.intent_detection import INTENT_TEAM_INFO
+from nlp.intent_detection import INTENT_PLAYER_INFO
+from nlp.intent_detection import INTENT_PLAYER_PROBABILITY
+from nlp.intent_detection import INTENT_COMPARE_PLAYERS
+from nlp.intent_detection import INTENT_COMPARE_TEAMS
+from nlp.intent_detection import INTENT_GENERAL_PROBABILITY
+from nlp.intent_detection import INTENT_MATCHUP_ANALYSIS
+from nlp.intent_detection import INTENT_STAT_REQUEST
+from nlp.intent_detection import INTENT_EXPLAIN_MODEL
+from nlp.intent_detection import INTENT_HELP
+from nlp.intent_detection import INTENT_GENERAL_BASEBALL
+from nlp.intent_detection import build_intent_report
 
-from intent_detection import build_intent_report
 
 # ============================================================
-# SECTION 01.08 - AI ORCHESTRATION IMPORTS
+# SECTION 01.08 - AI CORE AND RESPONSE IMPORTS
 # FILE: main.py
-# PURPOSE: connect security, semantic detection, entity
-# detection, context building, response generation,
-# probability routing, and interaction memory
+# PURPOSE: connect security, response generation, and memory
+# after 04_ai directory reorganization
 # ============================================================
 
-from security_guardrails import build_chat_security_report
-from security_guardrails import build_safe_chat_response
+from core.security_guardrails import build_chat_security_report
+from core.security_guardrails import build_safe_chat_response
 
-from entity_detection import build_entity_report
-from entity_detection import MLB_TEAM_ALIASES
-
-from context_builder import build_baseball_context
+from core.interaction_memory import remember_chat_interaction
 
 from response_generator import generate_response_from_context
-
-from interaction_memory import remember_chat_interaction
 # ============================================================
 # SECTION 02 - APPLICATION METADATA
 # ============================================================
