@@ -127,6 +127,17 @@ from intent_detection import INTENT_HELP
 from intent_detection import INTENT_GENERAL_BASEBALL
 
 from intent_detection import build_intent_report
+
+# ============================================================
+# SECTION 01.08 - SECURITY IMPORTS
+# FILE: main.py
+# PURPOSE: centralized chat security and guardrail controls
+# ============================================================
+
+from security_guardrails import clean_chat_message
+from security_guardrails import is_blocked_chat_message
+from security_guardrails import build_safe_chat_response
+from security_guardrails import build_chat_security_report
 # ============================================================
 # SECTION 02 - APPLICATION METADATA
 # ============================================================
