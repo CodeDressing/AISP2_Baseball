@@ -141,8 +141,12 @@
         </section>
 
 
-        <!-- ====================================================
+             <!-- ====================================================
              SECTION 06 - CONTROL CENTER
+             FILE: templates/prediction_workbench.html
+             PURPOSE: team selection, player selection, outcome
+             selection, prediction action controls, and future
+             live database-powered selector workflow
              ==================================================== -->
 
         <section class="prediction-selector-panel">
@@ -151,14 +155,15 @@
                 Prediction Controls
             </h2>
 
+            <p class="prediction-subtitle">
+                Select a team, choose a player, pick an outcome,
+                then run a demo probability analysis.
+            </p>
+
             <div
                 class="prediction-form-grid"
                 data-prediction-form
             >
-
-                <!-- ============================================
-                     SECTION 06.01 - TEAM SELECTOR
-                     ============================================ -->
 
                 <div class="prediction-field">
 
@@ -166,32 +171,24 @@
                         Team
                     </label>
 
-                    <select
-                        data-prediction-team
-                    >
-                        <option>
-                            New York Yankees
-                        </option>
-
-                        <option>
-                            Los Angeles Dodgers
-                        </option>
-
-                        <option>
-                            New York Mets
-                        </option>
-
-                        <option>
-                            Atlanta Braves
-                        </option>
+                    <select data-prediction-team>
+                        <option>New York Yankees</option>
+                        <option>Boston Red Sox</option>
+                        <option>Baltimore Orioles</option>
+                        <option>Cleveland Guardians</option>
+                        <option>Detroit Tigers</option>
+                        <option>Houston Astros</option>
+                        <option>Texas Rangers</option>
+                        <option>Seattle Mariners</option>
+                        <option>New York Mets</option>
+                        <option>Atlanta Braves</option>
+                        <option>Philadelphia Phillies</option>
+                        <option>Los Angeles Dodgers</option>
+                        <option>San Diego Padres</option>
+                        <option>Chicago Cubs</option>
                     </select>
 
                 </div>
-
-
-                <!-- ============================================
-                     SECTION 06.02 - PLAYER SELECTOR
-                     ============================================ -->
 
                 <div class="prediction-field">
 
@@ -199,32 +196,13 @@
                         Player
                     </label>
 
-                    <select
-                        data-prediction-player
-                    >
-                        <option>
-                            Aaron Judge
-                        </option>
-
-                        <option>
-                            Shohei Ohtani
-                        </option>
-
-                        <option>
-                            Juan Soto
-                        </option>
-
-                        <option>
-                            Mookie Betts
-                        </option>
+                    <select data-prediction-player>
+                        <option>Aaron Judge</option>
+                        <option>Giancarlo Stanton</option>
+                        <option>Gerrit Cole</option>
                     </select>
 
                 </div>
-
-
-                <!-- ============================================
-                     SECTION 06.03 - OUTCOME SELECTOR
-                     ============================================ -->
 
                 <div class="prediction-field">
 
@@ -232,48 +210,24 @@
                         Outcome
                     </label>
 
-                    <select
-                        data-prediction-outcome
-                    >
-                        <option>
-                            Home Run
-                        </option>
-
-                        <option>
-                            Hit
-                        </option>
-
-                        <option>
-                            RBI
-                        </option>
-
-                        <option>
-                            Run Scored
-                        </option>
-
-                        <option>
-                            Total Bases
-                        </option>
-
-                        <option>
-                            Strikeout
-                        </option>
+                    <select data-prediction-outcome>
+                        <option value="home_run">Home Run</option>
+                        <option value="hit">Hit</option>
+                        <option value="rbi">RBI</option>
+                        <option value="run_scored">Run Scored</option>
+                        <option value="total_bases">Total Bases</option>
+                        <option value="strikeout">Strikeout</option>
                     </select>
 
                 </div>
 
             </div>
 
-
-            <!-- ================================================
-                 SECTION 06.04 - ACTION BUTTONS
-                 ================================================ -->
-
             <div class="prediction-action-row">
 
                 <button
                     class="prediction-primary-button"
-                    type="submit"
+                    type="button"
                     data-prediction-submit
                 >
                     Run Prediction
@@ -282,15 +236,21 @@
                 <button
                     class="prediction-secondary-button"
                     type="button"
+                    data-prediction-reset
                 >
-                    Compare Players
+                    Reset
                 </button>
+
+                <a
+                    class="prediction-secondary-button"
+                    href="/players"
+                >
+                    Open Player Explorer
+                </a>
 
             </div>
 
         </section>
-
-
         <!-- ====================================================
              SECTION 07 - RESULT GRID
              ==================================================== -->
