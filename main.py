@@ -435,95 +435,350 @@ def build_demo_probability(
 
 
 # ============================================================
-# SECTION 08 - CHAT RESPONSE ENGINE
+# SECTION 08 - SEMANTIC CHAT RESPONSE ENGINE
+# FILE: main.py
+# PURPOSE: secure semantic chat orchestration using intent
+# detection, team detection, player detection, outcome detection,
+# demo probability generation, and readable baseball responses
 # ============================================================
 
-def build_chat_reply(message: str) -> dict:
-    cleaned_message = message.lower().strip()
+MAX_CHAT_MESSAGE_LENGTH = 600
 
-    if not cleaned_message:
-        return {
-            "reply": "Ask me about a team, player, matchup, home run probability, hit probability, or baseball trend.",
-            "intent": "empty",
-        }
 
-    if "judge" in cleaned_message or "home run" in cleaned_message or "hr" in cleaned_message:
-        return {
-            "reply": (
-                "For demo mode, Aaron Judge projects as a high-power outcome candidate. "
-                "A future real model would compare recent barrel rate, exit velocity, launch angle, "
-                "pitcher matchup, ballpark, weather, and lineup context before estimating home run probability."
-            ),
-            "intent": "home_run_probability",
-        }
+def clean_chat_message(message: str | None) -> str:
+    if not message:
+        return ""
 
-    if "ohtani" in cleaned_message:
-        return {
-            "reply": (
-                "Shohei Ohtani is treated as an elite power and contact profile in this demo. "
-                "In the full system, AISP2 will evaluate Statcast trends, recent form, handedness splits, "
-                "pitcher profile, and park factors."
-            ),
-            "intent": "player_analysis",
-        }
+    cleaned_message = str(message).strip()
 
-    if "soto" in cleaned_message:
-        return {
-            "reply": (
-                "Juan Soto profiles as an elite plate-discipline hitter. "
-                "AISP2 will eventually analyze walk rate, OBP, pitch selection, contact quality, "
-                "and matchup context for hit, walk, RBI, and total-base predictions."
-            ),
-            "intent": "player_analysis",
-        }
+    if len(cleaned_message) > MAX_CHAT_MESSAGE_LENGTH:
+        cleaned_message = cleaned_message[:MAX_CHAT_MESSAGE_LENGTH]
 
-    if "yankees" in cleaned_message:
-        return {
-            "reply": (
-                "The Yankees are available in demo mode. Once database-backed team routes are connected, "
-                "this chat will pull live team data, rosters, player stats, and matchup context."
-            ),
-            "intent": "team_analysis",
-        }
+    return cleaned_message
 
-    if "dodgers" in cleaned_message:
-        return {
-            "reply": (
-                "The Dodgers are available in demo mode with Ohtani, Betts, and Freeman. "
-                "Future versions will connect real rosters, schedules, splits, and projections."
-            ),
-            "intent": "team_analysis",
-        }
 
-    if "probability" in cleaned_message or "prediction" in cleaned_message or "predict" in cleaned_message:
-        return {
-            "reply": (
-                "AISP2 is being designed around probability cards: estimated probability, confidence, "
-                "supporting stats, and a plain-English explanation. The current version is demo-only; "
-                "the next major backend step is connecting real teams, players, rosters, and stats."
-            ),
-            "intent": "prediction_explanation",
-        }
+def is_blocked_chat_message(message: str) -> bool:
+    lowered_message = message.lower()
 
-    if "team" in cleaned_message or "players" in cleaned_message or "roster" in cleaned_message:
-        return {
-            "reply": (
-                "The platform foundation now supports teams, players, rosters, and season-stat models. "
-                "The clean product flow will be: select team, select player, choose outcome, then view a readable probability card."
-            ),
-            "intent": "platform_status",
-        }
+    blocked_phrases = [
+        "ignore previous instructions",
+        "system prompt",
+        "developer message",
+        "show me your hidden",
+        "reveal your instructions",
+        "drop database",
+        "delete database",
+        "delete all files",
+        "run shell",
+        "execute command",
+    ]
 
+    return any(
+        phrase in lowered_message
+        for phrase in blocked_phrases
+    )
+
+
+def build_safe_chat_response(reason: str = "blocked") -> dict:
     return {
         "reply": (
-            "I can help with baseball intelligence questions like home run probability, hit probability, "
-            "team comparisons, player trends, matchup analysis, and future model explanations. Right now "
-            "I am running in sleek demo mode while the real data pipeline is being connected."
+            "I can help with baseball teams, players, rosters, stats, "
+            "matchups, and probability-style analysis. I cannot help with "
+            "unsafe system, database, or instruction-bypass requests."
         ),
-        "intent": "general",
+        "intent": "security_guardrail",
+        "security": {
+            "blocked": True,
+            "reason": reason,
+        },
     }
 
 
+def find_all_detected_players(message: str) -> list[str]:
+    lowered_message = message.lower()
+    detected_players: list[str] = []
+
+    for player_name in DEMO_PLAYER_PROFILES.keys():
+        player_lower = player_name.lower()
+        last_name = player_lower.split()[-1]
+
+        if player_lower in lowered_message:
+            detected_players.append(player_name)
+            continue
+
+        if last_name in lowered_message.split():
+            detected_players.append(player_name)
+
+    return detected_players
+
+
+def find_all_detected_teams(message: str) -> list[str]:
+    lowered_message = message.lower()
+    detected_teams: list[str] = []
+
+    for team_name, team_data in DEMO_TEAMS.items():
+        team_lower = team_name.lower()
+        abbreviation = team_data.get("abbreviation", "").lower()
+
+        if team_lower in lowered_message:
+            detected_teams.append(team_name)
+            continue
+
+        if abbreviation and abbreviation in lowered_message.split():
+            detected_teams.append(team_name)
+
+    return detected_teams
+
+
+def build_team_list_reply() -> str:
+    team_lines = [
+        f"- {team_name} ({team_data['abbreviation']})"
+        for team_name, team_data in DEMO_TEAMS.items()
+    ]
+
+    return (
+        f"I currently have {len(DEMO_TEAMS)} demo MLB teams loaded:\n\n"
+        + "\n".join(team_lines)
+        + "\n\nThe live MLB endpoint is also connected for all active MLB teams."
+    )
+
+
+def build_player_list_reply() -> str:
+    player_names = sorted(DEMO_PLAYER_PROFILES.keys())
+
+    preview_players = player_names[:60]
+
+    return (
+        f"I currently have {len(player_names)} demo player profiles loaded:\n\n"
+        + "\n".join(f"- {player}" for player in preview_players)
+    )
+
+
+def build_team_info_reply(team_name: str) -> str:
+    team_data = DEMO_TEAMS.get(team_name)
+
+    if not team_data:
+        return build_team_list_reply()
+
+    players = team_data.get("players", [])
+
+    return (
+        f"{team_name}\n\n"
+        f"League: {team_data.get('league')}\n"
+        f"Division: {team_data.get('division')}\n"
+        f"Ballpark: {team_data.get('ballpark')}\n\n"
+        "Demo roster:\n"
+        + "\n".join(f"- {player}" for player in players)
+    )
+
+
+def build_player_info_reply(player_name: str) -> str:
+    profile = DEMO_PLAYER_PROFILES.get(player_name)
+
+    if not profile:
+        return (
+            "I could not find that player in the demo profile database yet. "
+            "Try asking about Aaron Judge, Shohei Ohtani, Juan Soto, Bryce Harper, "
+            "Mookie Betts, or another loaded demo player."
+        )
+
+    return (
+        f"{player_name}\n\n"
+        f"Style: {profile['style']}\n"
+        f"Recent Form: {profile['recent_form']}\n"
+        f"Primary Metric: {profile['primary_metric']}\n"
+        f"Base Demo Probability: {profile['base_probability']}%\n"
+        f"Confidence: {profile['confidence']}%"
+    )
+
+
+def build_probability_reply(
+    player_name: str,
+    outcome_key: str | None,
+) -> str:
+    selected_outcome = outcome_key or "home_run"
+
+    if selected_outcome not in DEMO_OUTCOMES:
+        selected_outcome = "home_run"
+
+    prediction = build_demo_probability(
+        player_name=player_name,
+        outcome_key=selected_outcome,
+    )
+
+    profile = prediction["profile"]
+
+    return (
+        f"{player_name}\n"
+        f"Outcome: {DEMO_OUTCOMES[selected_outcome]}\n\n"
+        f"Estimated Demo Probability: {prediction['probability']}%\n"
+        f"Confidence: {prediction['confidence']}%\n\n"
+        f"Reasoning:\n"
+        f"- Style: {profile['style']}\n"
+        f"- Recent Form: {profile['recent_form']}\n"
+        f"- Primary Metric: {profile['primary_metric']}\n\n"
+        "This is a demo probability, not betting advice."
+    )
+
+
+def build_player_comparison_reply(players: list[str]) -> str:
+    selected_players = players[:2]
+
+    if len(selected_players) < 2:
+        return "Give me two players to compare, such as Judge vs Ohtani."
+
+    lines = []
+
+    for player_name in selected_players:
+        prediction = build_demo_probability(
+            player_name=player_name,
+            outcome_key="home_run",
+        )
+
+        lines.append(
+            f"{player_name}: {prediction['probability']}% HR demo probability, "
+            f"{prediction['confidence']}% confidence"
+        )
+
+    return (
+        f"Player Comparison\n\n"
+        + "\n".join(f"- {line}" for line in lines)
+        + "\n\nThis comparison is currently based on demo profile data."
+    )
+
+
+def build_help_reply() -> str:
+    return (
+        "You can ask me questions like:\n\n"
+        "- What teams do you have?\n"
+        "- Show me Yankees players.\n"
+        "- Tell me about Aaron Judge.\n"
+        "- What is Bryce Harper's home run probability?\n"
+        "- Can Juan Soto get a hit?\n"
+        "- Compare Judge and Ohtani.\n"
+        "- Who has RBI upside?\n\n"
+        "I understand teams, players, rosters, outcomes, comparisons, and demo probabilities."
+    )
+
+
+def build_chat_reply(message: str) -> dict:
+    cleaned_message = clean_chat_message(message)
+
+    if not cleaned_message:
+        return {
+            "reply": (
+                "Ask me about a team, player, roster, matchup, home run probability, "
+                "hit probability, RBI chance, total bases, or player comparison."
+            ),
+            "intent": "empty",
+        }
+
+    if is_blocked_chat_message(cleaned_message):
+        return build_safe_chat_response(
+            reason="unsafe_or_system_request",
+        )
+
+    detected_player = detect_player(
+        cleaned_message,
+        DEMO_PLAYER_PROFILES,
+    )
+
+    detected_team = detect_team(
+        cleaned_message,
+        DEMO_TEAMS,
+    )
+
+    detected_outcome = detect_outcome(
+        cleaned_message,
+    )
+
+    detected_players = find_all_detected_players(
+        cleaned_message,
+    )
+
+    detected_teams = find_all_detected_teams(
+        cleaned_message,
+    )
+
+    intent_report = build_intent_report(
+        message=cleaned_message,
+        detected_player=detected_player,
+        detected_team=detected_team,
+        detected_outcome=detected_outcome,
+        detected_players=detected_players,
+        detected_teams=detected_teams,
+    )
+
+    final_intent = intent_report["final_intent"]
+
+    if final_intent == INTENT_HELP:
+        reply = build_help_reply()
+
+    elif final_intent == INTENT_LIST_TEAMS:
+        reply = build_team_list_reply()
+
+    elif final_intent == INTENT_LIST_PLAYERS:
+        reply = build_player_list_reply()
+
+    elif final_intent == INTENT_COMPARE_PLAYERS:
+        reply = build_player_comparison_reply(
+            detected_players,
+        )
+
+    elif final_intent == INTENT_PLAYER_PROBABILITY and detected_player:
+        reply = build_probability_reply(
+            player_name=detected_player,
+            outcome_key=detected_outcome,
+        )
+
+    elif final_intent == INTENT_TEAM_INFO and detected_team:
+        reply = build_team_info_reply(
+            detected_team,
+        )
+
+    elif final_intent == INTENT_PLAYER_INFO and detected_player:
+        reply = build_player_info_reply(
+            detected_player,
+        )
+
+    elif detected_player and detected_outcome:
+        reply = build_probability_reply(
+            player_name=detected_player,
+            outcome_key=detected_outcome,
+        )
+
+    elif detected_player:
+        reply = build_player_info_reply(
+            detected_player,
+        )
+
+    elif detected_team:
+        reply = build_team_info_reply(
+            detected_team,
+        )
+
+    else:
+        reply = (
+            "I understand this as a baseball question, but I need a little more structure. "
+            "Try asking about a specific team, player, roster, comparison, or outcome probability."
+        )
+
+    return {
+        "reply": reply,
+        "intent": final_intent,
+        "semantic": {
+            "player": detected_player,
+            "team": detected_team,
+            "outcome": detected_outcome,
+            "players": detected_players,
+            "teams": detected_teams,
+            "intent_report": intent_report,
+        },
+        "security": {
+            "blocked": False,
+            "message_length": len(cleaned_message),
+        },
+    }
 # ============================================================
 # SECTION 09 - TEMPLATE ROUTES
 # ============================================================
