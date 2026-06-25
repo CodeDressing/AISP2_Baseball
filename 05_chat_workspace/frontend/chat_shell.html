@@ -1,0 +1,137 @@
+<!-- ============================================================
+AISP2 BASEBALL
+FILE: 05_chat_workspace/frontend/chat_shell.html
+PURPOSE: reusable floating AI assistant shell for every page
+============================================================ -->
+
+<!-- ============================================================
+SECTION 01 - FLOATING CHAT ROOT
+============================================================ -->
+
+<div
+    id="aisp2-floating-chat-panel"
+    class="aisp2-floating-chat-panel"
+    data-aisp2-floating-panel
+>
+    <!-- ========================================================
+    SECTION 02 - CHAT WINDOW
+    ========================================================= -->
+
+    <section
+        class="aisp2-chat-window"
+        data-aisp2-chat-window
+        aria-label="AISP2 AI Assistant"
+    >
+        <!-- ====================================================
+        SECTION 03 - CHAT HEADER / DRAG HANDLE
+        ===================================================== -->
+
+        <header
+            class="aisp2-chat-header"
+            data-aisp2-chat-drag-handle
+        >
+            <div class="aisp2-chat-title-block">
+                <span class="aisp2-chat-status-dot"></span>
+                <div>
+                    <h2>AISP2 Assistant</h2>
+                    <p>Baseball intelligence workspace</p>
+                </div>
+            </div>
+
+            <div class="aisp2-chat-actions">
+                <button
+                    type="button"
+                    class="aisp2-chat-action"
+                    data-aisp2-chat-collapse
+                    aria-label="Collapse chat"
+                >
+                    —
+                </button>
+
+                <button
+                    type="button"
+                    class="aisp2-chat-action"
+                    data-aisp2-chat-fullscreen
+                    aria-label="Fullscreen chat"
+                >
+                    ⛶
+                </button>
+
+                <button
+                    type="button"
+                    class="aisp2-chat-action"
+                    data-aisp2-chat-close
+                    aria-label="Close chat"
+                >
+                    ×
+                </button>
+            </div>
+        </header>
+
+        <!-- ====================================================
+        SECTION 04 - CHAT BODY
+        ===================================================== -->
+
+        <div class="aisp2-chat-body">
+            <div
+                class="aisp2-chat-messages"
+                data-aisp2-chat-messages
+            >
+                <div class="aisp2-chat-message aisp2-chat-message-assistant">
+                    <p>
+                        Welcome to AISP2. Ask me about players, teams,
+                        rosters, matchups, probabilities, or projections.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====================================================
+        SECTION 05 - CHAT INPUT
+        ===================================================== -->
+
+        <form
+            class="aisp2-chat-form"
+            data-aisp2-chat-form
+        >
+            <textarea
+                class="aisp2-chat-input"
+                data-aisp2-chat-input
+                placeholder="Ask AISP2 a baseball question..."
+                rows="2"
+            ></textarea>
+
+            <button
+                type="submit"
+                class="aisp2-chat-send"
+                data-aisp2-chat-send
+            >
+                Send
+            </button>
+        </form>
+
+        <!-- ====================================================
+        SECTION 06 - RESIZE HANDLE
+        ===================================================== -->
+
+        <button
+            type="button"
+            class="aisp2-chat-resize-handle"
+            data-aisp2-chat-resize-handle
+            aria-label="Resize chat"
+        ></button>
+    </section>
+
+    <!-- ========================================================
+    SECTION 07 - MINIMIZED LAUNCHER
+    ========================================================= -->
+
+    <button
+        type="button"
+        class="aisp2-chat-launcher"
+        data-aisp2-chat-launcher
+        aria-label="Open AISP2 Assistant"
+    >
+        AI
+    </button>
+</div>
