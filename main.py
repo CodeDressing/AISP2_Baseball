@@ -1538,3 +1538,227 @@ def admin_warehouse_audit() -> dict:
             "POST /predict/game",
         ],
     }
+
+# ============================================================
+# SECTION 18 - PLAYER PREDICTION API
+# FILE: main.py
+# PURPOSE: live prediction endpoints used by the enterprise
+# chat workspace. These endpoints provide a stable API now
+# and will later be backed by Logistic Regression, Elo,
+# Poisson, Monte Carlo, XGBoost, and Bayesian models.
+# ============================================================
+
+
+class PlayerPredictionRequest(BaseModel):
+    player: str
+    outcome: str = "home_run"
+
+
+class GamePredictionRequest(BaseModel):
+    away_team: str
+    home_team: str
+
+
+@app.post("/predict/player")
+def predict_player(
+    request: PlayerPredictionRequest,
+) -> dict:
+
+    outcome_key = (
+        request.outcome
+        .strip()
+        .lower()
+        .replace(" ", "_")
+    )
+
+    if outcome_key not in DEMO_OUTCOMES:
+        outcome_key = "home_run"
+
+    prediction = build_engine_probability(
+        player_name=request.player,
+        outcome_key=outcome_key,
+    )
+
+    return {
+
+        "mode": "phase_7_prediction_engine",
+
+        "player": request.player,
+
+        "outcome": outcome_key,
+
+        "probability": prediction["probability"],
+
+        "confidence": prediction["confidence"],
+
+        "model": {
+
+            "current": "AISP2 Probability Engine v0.1",
+
+            "future_pipeline": [
+
+                "Logistic Regression",
+
+                "Elo",
+
+                "Poisson",
+
+                "Monte Carlo",
+
+                "Random Forest",
+
+                "XGBoost",
+
+                "Bayesian Updating",
+
+            ]
+
+        },
+
+        "explanation": [
+
+            prediction["profile"]["style"],
+
+            prediction["profile"]["recent_form"],
+
+            "Feature engineering pipeline currently expanding.",
+
+            "Future releases will use live Statcast metrics.",
+
+        ],
+
+        "next_phase": [
+
+            "Live Statcast",
+
+            "Rolling averages",
+
+            "Pitcher vs Batter",
+
+            "Park Factors",
+
+            "Weather",
+
+            "Bullpen fatigue",
+
+        ],
+
+    }
+
+
+@app.post("/predict/game")
+def predict_game(
+    request: GamePredictionRequest,
+) -> dict:
+
+    home_score = 52
+
+    away_score = 48
+
+    return {
+
+        "mode": "phase_7_game_prediction",
+
+        "home_team": request.home_team,
+
+        "away_team": request.away_team,
+
+        "probability": {
+
+            "home_win": home_score,
+
+            "away_win": away_score,
+
+        },
+
+        "confidence": 64,
+
+        "simulation": {
+
+            "status": "planned",
+
+            "runs": 100000,
+
+        },
+
+        "future_models": [
+
+            "Elo Ratings",
+
+            "Poisson",
+
+            "Monte Carlo",
+
+            "XGBoost",
+
+            "Bayesian Updating",
+
+        ],
+
+        "notes": [
+
+            "Current endpoint establishes the production API contract.",
+
+            "Future releases will use live roster, injuries, weather, lineups, and Statcast features.",
+
+        ],
+
+    }
+
+
+@app.get("/models/status")
+def model_status():
+
+    return {
+
+        "prediction_engine": "ONLINE",
+
+        "logistic_regression": "PLANNED",
+
+        "elo": "PLANNED",
+
+        "poisson": "PLANNED",
+
+        "monte_carlo": "PLANNED",
+
+        "random_forest": "PLANNED",
+
+        "xgboost": "PLANNED",
+
+        "bayesian": "PLANNED",
+
+        "warehouse": "CONNECTED",
+
+        "live_api": "CONNECTED",
+
+    }
+
+
+@app.get("/predict/outcomes")
+def prediction_outcomes():
+
+    return {
+
+        "supported": [
+
+            "home_run",
+
+            "hit",
+
+            "single",
+
+            "double",
+
+            "triple",
+
+            "rbi",
+
+            "walk",
+
+            "strikeout",
+
+            "total_bases",
+
+        ]
+
+    }

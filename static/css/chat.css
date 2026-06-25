@@ -551,3 +551,434 @@ Future Chat Upgrades
 16.10 Multi-Agent Analysis
 
 */
+/* ============================================================
+   SECTION 17 - ENTERPRISE WORKSPACE LAYOUT
+   ============================================================ */
+
+.workspace-layout {
+
+    display: grid;
+
+    grid-template-columns:
+        260px
+        minmax(0,1fr)
+        340px;
+
+    gap: 18px;
+
+    width: 100%;
+
+    min-height: 720px;
+
+    margin-top: 28px;
+}
+
+.workspace-sidebar,
+.workspace-details,
+.workspace-main {
+
+    border-radius: 24px;
+
+    border:
+        1px solid rgba(255,255,255,.08);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(15,23,42,.82),
+            rgba(2,6,23,.95)
+        );
+
+    backdrop-filter:
+        blur(18px);
+
+    overflow: hidden;
+}
+
+.workspace-sidebar {
+
+    display: flex;
+
+    flex-direction: column;
+}
+
+.workspace-main {
+
+    display: flex;
+
+    flex-direction: column;
+
+    min-height: 720px;
+}
+
+.workspace-details {
+
+    display: flex;
+
+    flex-direction: column;
+}
+
+
+/* ============================================================
+   SECTION 18 - LEFT NAVIGATION
+   ============================================================ */
+
+.workspace-nav {
+
+    display: flex;
+
+    flex-direction: column;
+
+    padding: 20px;
+
+    gap: 10px;
+}
+
+.workspace-nav-title {
+
+    color: white;
+
+    font-size: 12px;
+
+    font-weight: 900;
+
+    text-transform: uppercase;
+
+    letter-spacing: .18em;
+
+    opacity: .65;
+
+    margin-bottom: 12px;
+}
+
+.workspace-nav-button {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    width: 100%;
+
+    padding: 14px 18px;
+
+    border-radius: 16px;
+
+    border:
+        1px solid transparent;
+
+    background:
+        transparent;
+
+    color:
+        #cbd5e1;
+
+    cursor: pointer;
+
+    transition:
+        .18s ease;
+}
+
+.workspace-nav-button:hover {
+
+    background:
+        rgba(56,189,248,.10);
+
+    border-color:
+        rgba(56,189,248,.25);
+
+    color:
+        white;
+
+    transform:
+        translateX(4px);
+}
+
+.workspace-nav-button.active {
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.35),
+            rgba(56,189,248,.20)
+        );
+
+    border-color:
+        rgba(56,189,248,.35);
+
+    color:
+        white;
+}
+
+
+/* ============================================================
+   SECTION 19 - INFORMATION CARDS
+   ============================================================ */
+
+.workspace-card {
+
+    margin: 18px;
+
+    padding: 18px;
+
+    border-radius: 20px;
+
+    border:
+        1px solid rgba(255,255,255,.08);
+
+    background:
+        rgba(255,255,255,.03);
+}
+
+.workspace-card-title {
+
+    color:
+        #7dd3fc;
+
+    font-size: 12px;
+
+    font-weight: 900;
+
+    letter-spacing: .12em;
+
+    text-transform: uppercase;
+
+    margin-bottom: 14px;
+}
+
+.workspace-card-value {
+
+    color: white;
+
+    font-size: 28px;
+
+    font-weight: 900;
+}
+
+.workspace-card-label {
+
+    color:
+        #94a3b8;
+
+    font-size: 13px;
+
+    margin-top: 8px;
+}
+
+
+/* ============================================================
+   SECTION 20 - TEAM / PLAYER LISTS
+   ============================================================ */
+
+.workspace-list {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 10px;
+
+    padding: 18px;
+}
+
+.workspace-list-item {
+
+    padding: 14px;
+
+    border-radius: 14px;
+
+    cursor: pointer;
+
+    border:
+        1px solid rgba(255,255,255,.05);
+
+    background:
+        rgba(255,255,255,.03);
+
+    transition:
+        .18s ease;
+}
+
+.workspace-list-item:hover {
+
+    background:
+        rgba(56,189,248,.10);
+
+    border-color:
+        rgba(56,189,248,.30);
+
+    transform:
+        translateX(4px);
+}
+
+
+/* ============================================================
+   SECTION 21 - PREDICTION PANEL
+   ============================================================ */
+
+.prediction-panel {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 16px;
+
+    padding: 20px;
+}
+
+.prediction-stat {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    padding: 14px;
+
+    border-radius: 14px;
+
+    background:
+        rgba(255,255,255,.04);
+}
+
+.prediction-label {
+
+    color:
+        #94a3b8;
+
+    font-size: 13px;
+}
+
+.prediction-number {
+
+    color:
+        #7dd3fc;
+
+    font-size: 22px;
+
+    font-weight: 900;
+}
+
+
+/* ============================================================
+   SECTION 22 - SAFETY NOTICE
+   ============================================================ */
+
+.ai-safety-banner {
+
+    margin: 20px;
+
+    padding: 18px;
+
+    border-radius: 18px;
+
+    border-left:
+        5px solid #38bdf8;
+
+    background:
+        rgba(56,189,248,.08);
+
+    color:
+        #cbd5e1;
+
+    line-height: 1.7;
+
+    font-size: 13px;
+}
+
+.ai-safety-banner strong {
+
+    display: block;
+
+    color:
+        white;
+
+    margin-bottom: 8px;
+}
+
+
+/* ============================================================
+   SECTION 23 - SYSTEM STATUS
+   ============================================================ */
+
+.system-status {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2,1fr);
+
+    gap: 12px;
+
+    padding: 18px;
+}
+
+.system-tile {
+
+    border-radius: 16px;
+
+    padding: 18px;
+
+    background:
+        rgba(255,255,255,.03);
+
+    border:
+        1px solid rgba(255,255,255,.08);
+}
+
+.system-title {
+
+    color:
+        #94a3b8;
+
+    font-size: 11px;
+
+    text-transform: uppercase;
+
+    letter-spacing: .08em;
+}
+
+.system-value {
+
+    margin-top: 10px;
+
+    color:
+        white;
+
+    font-size: 20px;
+
+    font-weight: 900;
+}
+
+
+/* ============================================================
+   SECTION 24 - DESKTOP RESPONSIVE
+   ============================================================ */
+
+@media (max-width:1200px){
+
+    .workspace-layout{
+
+        grid-template-columns:
+            1fr;
+    }
+
+    .workspace-sidebar{
+
+        order:2;
+    }
+
+    .workspace-details{
+
+        order:3;
+    }
+
+    .workspace-main{
+
+        order:1;
+    }
+
+}

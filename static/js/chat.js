@@ -499,3 +499,389 @@ function getFallbackReply() {
         "Ask about teams, players, database status, or prediction setup."
     );
 }
+
+/* ============================================================
+   SECTION 17 - ENTERPRISE WORKSPACE CONTROLLER
+   ============================================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    initializeWorkspace
+);
+
+function initializeWorkspace() {
+
+    initializeWorkspaceNavigation();
+
+    refreshWorkspaceStatus();
+
+    refreshWorkspaceCounts();
+
+}
+
+
+/* ============================================================
+   SECTION 18 - WORKSPACE NAVIGATION
+   ============================================================ */
+
+function initializeWorkspaceNavigation() {
+
+    const buttons =
+        document.querySelectorAll(
+            ".workspace-nav-button"
+        );
+
+    buttons.forEach(function(button){
+
+        button.addEventListener(
+            "click",
+            function(){
+
+                buttons.forEach(function(item){
+
+                    item.classList.remove("active");
+
+                });
+
+                button.classList.add("active");
+
+                const command =
+                    button.innerText
+                        .trim()
+                        .toLowerCase();
+
+                routeWorkspaceCommand(command);
+
+            }
+        );
+
+    });
+
+}
+
+async function routeWorkspaceCommand(command){
+
+    if(command.includes("chat")){
+
+        focusChatInput();
+
+        return;
+
+    }
+
+    if(command.includes("team")){
+
+        sendChatMessage(
+            "show all MLB teams"
+        );
+
+        return;
+
+    }
+
+    if(command.includes("player")){
+
+        sendChatMessage(
+            "search Aaron Judge"
+        );
+
+        return;
+
+    }
+
+    if(command.includes("prediction")){
+
+        sendChatMessage(
+            "predict Aaron Judge home run"
+        );
+
+        return;
+
+    }
+
+    if(command.includes("warehouse")){
+
+        sendChatMessage(
+            "database status"
+        );
+
+        return;
+
+    }
+
+    if(command.includes("system")){
+
+        sendChatMessage(
+            "health"
+        );
+
+        return;
+
+    }
+
+    if(command.includes("statcast")){
+
+        addBotMessage(
+            "Statcast explorer will be connected during Phase 8."
+        );
+
+        return;
+
+    }
+
+    if(command.includes("model")){
+
+        addBotMessage(
+            "Machine learning model dashboard coming soon."
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   SECTION 19 - WORKSPACE STATUS
+   ============================================================ */
+
+async function refreshWorkspaceStatus(){
+
+    try{
+
+        const health =
+            await fetchJSON("/health");
+
+        setSystemTile(
+            "API",
+            (
+                health.status ||
+                "ONLINE"
+            ).toUpperCase()
+        );
+
+    }
+
+    catch(error){
+
+        setSystemTile(
+            "API",
+            "OFFLINE"
+        );
+
+    }
+
+}
+
+async function refreshWorkspaceCounts(){
+
+    try{
+
+        const summary =
+            await fetchJSON(
+                "/admin/database/summary"
+            );
+
+        setSystemTile(
+            "DATABASE",
+            summary.database_connected
+                ? "READY"
+                : "OFFLINE"
+        );
+
+        setSystemTile(
+            "TEAMS",
+            String(
+                summary.teams || 0
+            )
+        );
+
+        setSystemTile(
+            "MODELS",
+            String(
+                summary.player_predictions || 1
+            )
+        );
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+
+/* ============================================================
+   SECTION 20 - SYSTEM TILE HELPERS
+   ============================================================ */
+
+function setSystemTile(title,value){
+
+    const titles =
+        document.querySelectorAll(
+            ".system-title"
+        );
+
+    titles.forEach(function(label){
+
+        if(
+            label.innerText
+                .trim()
+                .toUpperCase()
+            !==
+            title.toUpperCase()
+        ){
+
+            return;
+
+        }
+
+        const valueElement =
+            label.nextElementSibling;
+
+        if(valueElement){
+
+            valueElement.innerText =
+                value;
+
+        }
+
+    });
+
+}
+
+
+/* ============================================================
+   SECTION 21 - PLAYER SUMMARY CARD
+   ============================================================ */
+
+function updateSelectedPlayerCard(player){
+
+    const title =
+        document.querySelector(
+            ".workspace-card-value"
+        );
+
+    const label =
+        document.querySelector(
+            ".workspace-card-label"
+        );
+
+    if(!title){
+
+        return;
+
+    }
+
+    title.innerText =
+        player.name;
+
+    if(label){
+
+        label.innerText =
+            [
+                player.team,
+                player.position,
+                player.status
+            ]
+            .filter(Boolean)
+            .join(" • ");
+
+    }
+
+}
+
+
+/* ============================================================
+   SECTION 22 - PATCH PLAYER SEARCH
+   ============================================================ */
+
+const originalHandlePlayerSearchQuestion =
+    handlePlayerSearchQuestion;
+
+handlePlayerSearchQuestion =
+async function(message){
+
+    const response =
+        await originalHandlePlayerSearchQuestion(
+            message
+        );
+
+    if(
+        AISP2_CHAT_STATE.players.length
+    ){
+
+        updateSelectedPlayerCard(
+
+            AISP2_CHAT_STATE.players[0]
+
+        );
+
+    }
+
+    return response;
+
+};
+
+
+/* ============================================================
+   SECTION 23 - PATCH TEAM SEARCH
+   ============================================================ */
+
+const originalHandleTeamsQuestion =
+    handleTeamsQuestion;
+
+handleTeamsQuestion =
+async function(){
+
+    const response =
+        await originalHandleTeamsQuestion();
+
+    setSystemTile(
+
+        "TEAMS",
+
+        String(
+
+            AISP2_CHAT_STATE.teams.length
+
+        )
+
+    );
+
+    return response;
+
+};
+
+
+/* ============================================================
+   SECTION 24 - FUTURE ENTERPRISE HOOKS
+   ============================================================ */
+
+/*
+
+Next Upgrades
+
+24.01 Live Team Browser
+
+24.02 Player Explorer
+
+24.03 Prediction Workbench
+
+24.04 Monte Carlo Viewer
+
+24.05 Elo Ratings
+
+24.06 Bayesian Updating
+
+24.07 Logistic Regression
+
+24.08 XGBoost
+
+24.09 Statcast Explorer
+
+24.10 Explainable AI
+
+*/

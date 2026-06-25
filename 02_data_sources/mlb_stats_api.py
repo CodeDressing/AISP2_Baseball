@@ -966,3 +966,330 @@ Context:
     Rest days
     Travel context
 """
+# ============================================================
+# SECTION 20 - ENTERPRISE WAREHOUSE HELPERS
+# PURPOSE:
+# Build complete MLB datasets for warehouse ingestion.
+# Future ingestion services will call these methods instead of
+# piecing together multiple API calls.
+# ============================================================
+
+    def build_complete_team_dataset(
+        self,
+        season: int = DEFAULT_SEASON,
+    ) -> list[dict[str, Any]]:
+        """
+        Returns one complete dataset for every MLB team.
+
+        Future use:
+            Warehouse ingestion
+            Team browser
+            Prediction engine
+            Dashboard
+        """
+
+        dataset: list[dict[str, Any]] = []
+
+        teams = self.get_teams(
+            season=season,
+        )
+
+        for team in teams:
+
+            team_id = team.get("id")
+
+            if not team_id:
+                continue
+
+            try:
+
+                roster = self.summarize_roster(
+                    team_id=team_id,
+                    season=season,
+                )
+
+                dataset.append(
+                    {
+
+                        "team": {
+
+                            "id": team_id,
+
+                            "name": team.get("name"),
+
+                            "abbreviation": team.get("abbreviation"),
+
+                            "league": team.get("league", {}).get("name"),
+
+                            "division": team.get("division", {}).get("name"),
+
+                            "venue": team.get("venue", {}).get("name"),
+
+                        },
+
+                        "roster": roster,
+
+                        "player_count": len(roster),
+
+                    }
+                )
+
+            except Exception as exc:
+
+                dataset.append(
+                    {
+
+                        "team": {
+
+                            "id": team_id,
+
+                            "name": team.get("name"),
+
+                        },
+
+                        "roster": [],
+
+                        "player_count": 0,
+
+                        "error": str(exc),
+
+                    }
+                )
+
+        return dataset
+
+
+    def build_complete_player_dataset(
+        self,
+        season: int = DEFAULT_SEASON,
+    ) -> list[dict[str, Any]]:
+        """
+        Returns every active MLB player with a normalized schema.
+
+        This becomes the primary warehouse ingestion source.
+        """
+
+        dataset: list[dict[str, Any]] = []
+
+        players = self.get_all_active_players(
+            season=season,
+        )
+
+        for player in players:
+
+            dataset.append(
+                {
+
+                    "player_id":
+                        player.get("id"),
+
+                    "name":
+                        player.get("fullName"),
+
+                    "first_name":
+                        player.get("firstName"),
+
+                    "last_name":
+                        player.get("lastName"),
+
+                    "primary_number":
+                        player.get("primaryNumber"),
+
+                    "birth_date":
+                        player.get("birthDate"),
+
+                    "height":
+                        player.get("height"),
+
+                    "weight":
+                        player.get("weight"),
+
+                    "bat_side":
+                        player.get(
+                            "batSide",
+                            {},
+                        ).get("code"),
+
+                    "pitch_hand":
+                        player.get(
+                            "pitchHand",
+                            {},
+                        ).get("code"),
+
+                    "position":
+                        player.get(
+                            "primaryPosition",
+                            {},
+                        ).get("name"),
+
+                    "position_code":
+                        player.get(
+                            "primaryPosition",
+                            {},
+                        ).get("code"),
+
+                    "active":
+                        player.get("active"),
+
+                }
+            )
+
+        dataset.sort(
+            key=lambda item:
+            item["name"] or ""
+        )
+
+        return dataset
+
+
+    def warehouse_summary(
+        self,
+        season: int = DEFAULT_SEASON,
+    ) -> dict[str, Any]:
+        """
+        Returns a quick summary for dashboard widgets
+        and chatbot health checks.
+        """
+
+        teams = self.get_teams(
+            season=season,
+        )
+
+        players = self.get_all_active_players(
+            season=season,
+        )
+
+        return {
+
+            "season": season,
+
+            "teams": len(teams),
+
+            "players": len(players),
+
+            "source": "MLB Stats API",
+
+            "warehouse_ready": True,
+
+            "next_sources": [
+
+                "Statcast",
+
+                "FanGraphs",
+
+                "Retrosheet",
+
+                "Baseball Reference",
+
+            ],
+
+        }
+
+
+# ============================================================
+# SECTION 21 - FUTURE AI DATA CONTRACT
+# ============================================================
+
+    def prediction_feature_contract(self) -> dict[str, Any]:
+        """
+        Defines the features that every future prediction
+        model will expect.
+        """
+
+        return {
+
+            "team_features": [
+
+                "wins",
+
+                "losses",
+
+                "run_differential",
+
+                "bullpen_usage",
+
+                "travel_distance",
+
+                "rest_days",
+
+                "park_factor",
+
+            ],
+
+            "player_features": [
+
+                "ops",
+
+                "woba",
+
+                "xba",
+
+                "xslg",
+
+                "barrel_rate",
+
+                "hard_hit_rate",
+
+                "sprint_speed",
+
+                "launch_angle",
+
+                "exit_velocity",
+
+            ],
+
+            "pitcher_features": [
+
+                "era",
+
+                "fip",
+
+                "xfip",
+
+                "whip",
+
+                "strikeout_rate",
+
+                "walk_rate",
+
+                "spin_rate",
+
+                "velocity",
+
+            ],
+
+            "environment_features": [
+
+                "temperature",
+
+                "humidity",
+
+                "wind_speed",
+
+                "wind_direction",
+
+                "roof_status",
+
+                "umpire",
+
+            ],
+
+            "future_models": [
+
+                "Logistic Regression",
+
+                "Poisson",
+
+                "Elo",
+
+                "Monte Carlo",
+
+                "Random Forest",
+
+                "XGBoost",
+
+                "Bayesian Updating",
+
+            ],
+
+        }
