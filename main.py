@@ -94,24 +94,31 @@ from mlb_stats_api import MLBStatsAPIClient
 from mlb_stats_api import DEFAULT_SEASON
 
 
-# ============================================================
-# SECTION 01.06 - NLP SEMANTIC ENGINE IMPORTS
+## ============================================================
+# SECTION 01.06 - NLP ENGINE IMPORTS
 # FILE: main.py
-# PURPOSE: connect chat routing to semantic interpretation,
-# entity detection, context building, and outcome detection
+# PURPOSE: connect Natural Language Understanding,
+# semantic interpretation, entity recognition,
+# context building, and outcome detection
 # ============================================================
 
-from nlp.semantic_engine import detect_team
-from nlp.semantic_engine import detect_player
-from nlp.semantic_engine import detect_outcome
-from nlp.semantic_engine import interpret_baseball_question
+from nlp.nlu_engine import build_nlu_report
 
-from nlp.entity_detection import build_entity_report
-from nlp.entity_detection import MLB_TEAM_ALIASES
+from nlp.semantic_engine import (
+    detect_outcome,
+    detect_player,
+    detect_team,
+    interpret_baseball_question,
+)
 
-from nlp.context_builder import build_baseball_context
+from nlp.entity_detection import (
+    MLB_TEAM_ALIASES,
+    build_entity_report,
+)
 
-
+from nlp.context_builder import (
+    build_baseball_context,
+)
 # ============================================================
 # SECTION 01.07 - NLP INTENT DETECTION IMPORTS
 # FILE: main.py
