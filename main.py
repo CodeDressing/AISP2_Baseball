@@ -460,14 +460,13 @@ def build_demo_probability(
         "profile": profile,
     }
 
-
 # ============================================================
-# SECTION 08 - SEMANTIC CHAT ORCHESTRATION ENGINE
+# SECTION 08 - NLU-FIRST CHAT ORCHESTRATION ENGINE
 # FILE: main.py
 # PURPOSE: route every chat message through security,
-# semantic interpretation, entity detection, intent detection,
-# context building, live MLB lookup, response generation,
-# and interaction memory
+# entity detection, Natural Language Understanding, semantic
+# interpretation, intent detection, context building, live MLB
+# lookup, response generation, and interaction memory
 # ============================================================
 
 def build_engine_probability(
@@ -602,8 +601,17 @@ def build_live_player_search_reply(message: str) -> str:
 def should_use_live_player_search(
     message: str,
     context: dict,
+    nlu_report: dict,
 ) -> bool:
     if context.get("player"):
+        return False
+
+    if nlu_report.get("task") in [
+        "best_overall_probability",
+        "best_team_probability",
+        "list_teams",
+        "list_players",
+    ]:
         return False
 
     lowered_message = message.lower()
@@ -617,6 +625,57 @@ def should_use_live_player_search(
             "who is",
             "can i search",
         ]
+    )
+
+
+def build_best_overall_probability_reply(
+    outcome_key: str | None,
+) -> str:
+    selected_outcome = outcome_key or "home_run"
+
+    if selected_outcome not in DEMO_OUTCOMES:
+        selected_outcome = "home_run"
+
+    scored_players = []
+
+    for player_name in DEMO_PLAYER_PROFILES.keys():
+        prediction = build_engine_probability(
+            player_name=player_name,
+            outcome_key=selected_outcome,
+        )
+
+        scored_players.append(
+            {
+                "player": player_name,
+                "probability": prediction["probability"],
+                "confidence": prediction["confidence"],
+                "profile": prediction["profile"],
+            }
+        )
+
+    scored_players.sort(
+        key=lambda item: item["probability"],
+        reverse=True,
+    )
+
+    top_players = scored_players[:5]
+    top_player = top_players[0]
+
+    ranking_lines = [
+        f"{item['player']}: {item['probability']}% probability, {item['confidence']}% confidence"
+        for item in top_players
+    ]
+
+    return (
+        f"Highest AISP2 probability across loaded players\n\n"
+        f"Outcome: {DEMO_OUTCOMES[selected_outcome]}\n\n"
+        f"Top Candidate: {top_player['player']}\n"
+        f"Estimated Probability: {top_player['probability']}%\n"
+        f"Confidence: {top_player['confidence']}%\n\n"
+        "Top 5:\n"
+        + "\n".join(f"- {line}" for line in ranking_lines)
+        + "\n\nThis is currently based on the loaded AISP2 player profile set. "
+        "The next upgrade will expand this to live MLB rosters and real statistical features."
     )
 
 
@@ -644,16 +703,24 @@ def build_chat_reply(message: str) -> dict:
             reason=security_report["reason"],
         )
 
+    entity_report = build_entity_report(
+        message=cleaned_message,
+        player_profiles=DEMO_PLAYER_PROFILES,
+    )
+
+    nlu_report = build_nlu_report(
+        message=cleaned_message,
+        entity_report=entity_report,
+    )
+
     semantic_report = interpret_baseball_question(
         message=cleaned_message,
         teams=DEMO_TEAMS,
         player_profiles=DEMO_PLAYER_PROFILES,
     )
 
-    entity_report = build_entity_report(
-        message=cleaned_message,
-        player_profiles=DEMO_PLAYER_PROFILES,
-    )
+    if nlu_report.get("outcome") and not semantic_report.get("outcome"):
+        semantic_report["outcome"] = nlu_report.get("outcome")
 
     detected_player = (
         semantic_report.get("player")
@@ -669,8 +736,9 @@ def build_chat_reply(message: str) -> dict:
         or semantic_report.get("team")
     )
 
-    detected_outcome = semantic_report.get(
-        "outcome",
+    detected_outcome = (
+        nlu_report.get("outcome")
+        or semantic_report.get("outcome")
     )
 
     detected_players = [
@@ -699,6 +767,14 @@ def build_chat_reply(message: str) -> dict:
         semantic_report=semantic_report,
     )
 
+    if nlu_report.get("task") != "general_baseball_question":
+        context["task"] = nlu_report.get("task")
+
+    if nlu_report.get("outcome"):
+        context["outcome"] = nlu_report.get("outcome")
+
+    context["nlu"] = nlu_report
+
     final_intent = intent_report.get(
         "final_intent",
     )
@@ -706,17 +782,25 @@ def build_chat_reply(message: str) -> dict:
     lowered_message = cleaned_message.lower()
 
     if (
-        final_intent == INTENT_LIST_TEAMS
+        nlu_report.get("task") == "list_teams"
+        or final_intent == INTENT_LIST_TEAMS
         or "all mlb teams" in lowered_message
         or "how many mlb teams" in lowered_message
         or "normal english list" in lowered_message
     ):
         reply = build_live_team_list_reply()
-        context["task"] = "team_list"
+        context["task"] = "list_teams"
+
+    elif nlu_report.get("task") == "best_overall_probability":
+        reply = build_best_overall_probability_reply(
+            outcome_key=nlu_report.get("outcome"),
+        )
+        context["task"] = "best_overall_probability"
 
     elif should_use_live_player_search(
         cleaned_message,
         context,
+        nlu_report,
     ):
         reply = build_live_player_search_reply(
             cleaned_message,
@@ -736,6 +820,7 @@ def build_chat_reply(message: str) -> dict:
         "reply": reply,
         "intent": final_intent,
         "context": context,
+        "nlu": nlu_report,
         "semantic": {
             "player": context.get("player"),
             "team": context.get("team"),
@@ -745,6 +830,7 @@ def build_chat_reply(message: str) -> dict:
             "intent_report": intent_report,
             "entity_report": entity_report,
             "semantic_report": semantic_report,
+            "nlu_report": nlu_report,
         },
         "security": {
             "blocked": False,
