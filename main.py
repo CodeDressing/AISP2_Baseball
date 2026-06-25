@@ -1363,3 +1363,178 @@ def api_mlb_team_players(team_id: int) -> dict:
         "count": len(players),
         "players": players,
     }
+
+# ============================================================
+# SECTION 17 - CHAT COMPATIBILITY API ROUTES
+# FILE: main.py
+# PURPOSE: provide simple frontend-friendly routes used by
+# static/js/chat.js so homepage chat can display live teams,
+# player search results, and warehouse-style summary counts
+# ============================================================
+
+
+@app.get("/admin/database/summary")
+def admin_database_summary() -> dict:
+    teams_payload = api_mlb_teams()
+
+    team_count = teams_payload.get(
+        "count",
+        0,
+    )
+
+    player_count = 0
+
+    for team in teams_payload.get("teams", []):
+        team_id = team.get("id")
+
+        if not team_id:
+            continue
+
+        try:
+            roster_payload = api_mlb_team_players(
+                team_id=team_id,
+            )
+
+            player_count += roster_payload.get(
+                "count",
+                0,
+            )
+
+        except Exception:
+            continue
+
+    return {
+        "mode": "live_mlb_api_compatibility",
+        "teams": team_count,
+        "players": player_count,
+        "games": 0,
+        "game_predictions": 0,
+        "player_predictions": 0,
+        "statcast_events": 0,
+        "database_connected": True,
+        "source": "MLB Stats API live roster lookup",
+        "note": (
+            "This is a live compatibility summary for the homepage chat. "
+            "Future versions should replace this with warehouse database counts."
+        ),
+    }
+
+
+@app.get("/teams")
+def teams_compatibility_list() -> list[dict]:
+    payload = api_mlb_teams()
+
+    return payload.get(
+        "teams",
+        [],
+    )
+
+
+@app.get("/players/search")
+def players_search_compatibility(
+    q: str,
+) -> list[dict]:
+    clean_query = q.strip().lower()
+
+    if not clean_query:
+        return []
+
+    teams_payload = api_mlb_teams()
+
+    results = []
+
+    for team in teams_payload.get("teams", []):
+        team_id = team.get("id")
+
+        if not team_id:
+            continue
+
+        try:
+            roster_payload = api_mlb_team_players(
+                team_id=team_id,
+            )
+
+        except Exception:
+            continue
+
+        for player in roster_payload.get("players", []):
+            player_name = (
+                player.get("name")
+                or ""
+            )
+
+            if clean_query not in player_name.lower():
+                continue
+
+            results.append(
+                {
+                    "player_id": player.get("id"),
+                    "id": player.get("id"),
+                    "name": player_name,
+                    "team": team.get("name"),
+                    "team_id": team.get("id"),
+                    "team_abbreviation": team.get("abbreviation"),
+                    "position": player.get("position"),
+                    "position_code": player.get("position_code"),
+                    "status": player.get("status"),
+                    "bats": "N/A",
+                    "throws": "N/A",
+                    "source": "MLB Stats API active roster",
+                }
+            )
+
+    results.sort(
+        key=lambda item: item.get("name") or ""
+    )
+
+    return results[:25]
+
+
+@app.get("/admin/warehouse/audit")
+def admin_warehouse_audit() -> dict:
+    summary = admin_database_summary()
+
+    teams = summary.get(
+        "teams",
+        0,
+    )
+
+    players = summary.get(
+        "players",
+        0,
+    )
+
+    warehouse_score = 0
+
+    if teams >= 30:
+        warehouse_score += 35
+
+    if players >= 700:
+        warehouse_score += 35
+
+    if summary.get("database_connected"):
+        warehouse_score += 10
+
+    return {
+        "mode": "live_mlb_api_compatibility",
+        "status": "partial_live_data_available",
+        "warehouse_score": warehouse_score,
+        "teams": teams,
+        "players": players,
+        "games": summary.get("games", 0),
+        "roster_entries": players,
+        "player_stats": 0,
+        "statcast_events": summary.get("statcast_events", 0),
+        "ready_for_team_browser": teams > 0,
+        "ready_for_player_search": players > 0,
+        "ready_for_predictions": False,
+        "missing_for_predictions": [
+            "local warehouse persistence",
+            "player season statistics",
+            "game schedule data",
+            "Statcast event storage",
+            "feature engineering service",
+            "POST /predict/player",
+            "POST /predict/game",
+        ],
+    }
