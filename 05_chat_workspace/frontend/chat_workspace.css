@@ -1,0 +1,315 @@
+/* ============================================================
+AISP2 BASEBALL
+FILE: 05_chat_workspace/frontend/chat_workspace.css
+PURPOSE: floating, persistent, draggable, resizable AI chat
+workspace styling for every AISP2 page
+============================================================ */
+
+
+/* ============================================================
+SECTION 01 - FLOATING PANEL ROOT
+============================================================ */
+
+.aisp2-floating-chat-panel {
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    z-index: 9000;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+
+/* ============================================================
+SECTION 02 - CHAT WINDOW BASE
+============================================================ */
+
+.aisp2-chat-window {
+    width: 560px;
+    height: 680px;
+    min-width: 380px;
+    min-height: 460px;
+    max-width: 980px;
+    max-height: 920px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 35%),
+        linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
+    box-shadow:
+        0 30px 90px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    color: #e5edf8;
+}
+
+
+/* ============================================================
+SECTION 03 - CHAT HEADER
+============================================================ */
+
+.aisp2-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    cursor: grab;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.72);
+    user-select: none;
+}
+
+.aisp2-chat-header:active {
+    cursor: grabbing;
+}
+
+.aisp2-chat-title-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.aisp2-chat-title-block h2 {
+    margin: 0;
+    font-size: 0.98rem;
+    letter-spacing: 0.02em;
+}
+
+.aisp2-chat-title-block p {
+    margin: 2px 0 0;
+    color: #94a3b8;
+    font-size: 0.76rem;
+}
+
+.aisp2-chat-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #22c55e;
+    box-shadow: 0 0 18px rgba(34, 197, 94, 0.85);
+}
+
+
+/* ============================================================
+SECTION 04 - CHAT ACTION BUTTONS
+============================================================ */
+
+.aisp2-chat-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.aisp2-chat-action {
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.82);
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.aisp2-chat-action:hover {
+    background: rgba(30, 41, 59, 0.95);
+    color: #ffffff;
+}
+
+
+/* ============================================================
+SECTION 05 - CHAT BODY AND MESSAGES
+============================================================ */
+
+.aisp2-chat-body {
+    flex: 1;
+    overflow: hidden;
+    padding: 16px;
+}
+
+.aisp2-chat-messages {
+    height: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 4px;
+}
+
+.aisp2-chat-message {
+    max-width: 88%;
+    border-radius: 18px;
+    padding: 12px 14px;
+    line-height: 1.45;
+    font-size: 0.9rem;
+}
+
+.aisp2-chat-message p {
+    margin: 0;
+}
+
+.aisp2-chat-message-assistant {
+    align-self: flex-start;
+    background: rgba(30, 41, 59, 0.88);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: #e2e8f0;
+}
+
+.aisp2-chat-message-user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #2563eb, #06b6d4);
+    color: #ffffff;
+}
+
+
+/* ============================================================
+SECTION 06 - CHAT FORM
+============================================================ */
+
+.aisp2-chat-form {
+    display: flex;
+    gap: 10px;
+    padding: 14px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.82);
+}
+
+.aisp2-chat-input {
+    flex: 1;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(2, 6, 23, 0.78);
+    color: #e5edf8;
+    outline: none;
+    font: inherit;
+}
+
+.aisp2-chat-input:focus {
+    border-color: rgba(56, 189, 248, 0.7);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.aisp2-chat-send {
+    border: 0;
+    border-radius: 14px;
+    padding: 0 18px;
+    background: linear-gradient(135deg, #2563eb, #06b6d4);
+    color: #ffffff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.aisp2-chat-send:hover {
+    filter: brightness(1.08);
+}
+
+
+/* ============================================================
+SECTION 07 - RESIZE HANDLE
+============================================================ */
+
+.aisp2-chat-resize-handle {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    cursor: nwse-resize;
+    background:
+        linear-gradient(135deg, transparent 45%, rgba(148, 163, 184, 0.55) 46%, rgba(148, 163, 184, 0.55) 52%, transparent 53%),
+        linear-gradient(135deg, transparent 62%, rgba(148, 163, 184, 0.45) 63%, rgba(148, 163, 184, 0.45) 69%, transparent 70%);
+}
+
+
+/* ============================================================
+SECTION 08 - MINIMIZED LAUNCHER
+============================================================ */
+
+.aisp2-chat-launcher {
+    display: none;
+    width: 64px;
+    height: 64px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 999px;
+    background: linear-gradient(135deg, #2563eb, #06b6d4);
+    color: #ffffff;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    box-shadow: 0 22px 60px rgba(2, 6, 23, 0.5);
+    cursor: pointer;
+}
+
+.aisp2-floating-chat-panel.is-minimized .aisp2-chat-window,
+.aisp2-floating-chat-panel.is-hidden .aisp2-chat-window {
+    display: none;
+}
+
+.aisp2-floating-chat-panel.is-minimized .aisp2-chat-launcher,
+.aisp2-floating-chat-panel.is-hidden .aisp2-chat-launcher {
+    display: block;
+}
+
+
+/* ============================================================
+SECTION 09 - COLLAPSED AND FULLSCREEN STATES
+============================================================ */
+
+.aisp2-floating-chat-panel.is-collapsed .aisp2-chat-body,
+.aisp2-floating-chat-panel.is-collapsed .aisp2-chat-form,
+.aisp2-floating-chat-panel.is-collapsed .aisp2-chat-resize-handle {
+    display: none;
+}
+
+.aisp2-floating-chat-panel.is-collapsed .aisp2-chat-window {
+    height: auto;
+    min-height: 0;
+}
+
+.aisp2-floating-chat-panel.is-fullscreen {
+    inset: 18px;
+    right: 18px;
+    bottom: 18px;
+}
+
+.aisp2-floating-chat-panel.is-fullscreen .aisp2-chat-window {
+    width: calc(100vw - 36px);
+    height: calc(100vh - 36px);
+    max-width: none;
+    max-height: none;
+}
+
+
+/* ============================================================
+SECTION 10 - MOBILE RESPONSIVE RULES
+============================================================ */
+
+@media (max-width: 720px) {
+    .aisp2-floating-chat-panel {
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+    }
+
+    .aisp2-chat-window {
+        width: 100%;
+        height: min(720px, calc(100vh - 24px));
+        min-width: 0;
+        max-width: none;
+    }
+
+    .aisp2-chat-title-block p {
+        display: none;
+    }
+
+    .aisp2-chat-send {
+        padding: 0 14px;
+    }
+}
