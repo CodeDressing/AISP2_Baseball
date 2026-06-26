@@ -369,10 +369,10 @@ class Aisp2ApiClient {
             baseUrl
             || aisp2ReadStorage(
                 AISP2_STORAGE_KEYS.apiBaseUrl,
-                AISP2_DEFAULT_API_BASE_URL,
+                window.location.origin
             )
-            || AISP2_DEFAULT_API_BASE_URL
-        );
+            || window.location.origin
+        ).replace(/\/+$/, "");
     }
 
     setBaseUrl(baseUrl) {
@@ -386,7 +386,7 @@ class Aisp2ApiClient {
 
         aisp2WriteStorage(
             AISP2_STORAGE_KEYS.apiBaseUrl,
-            this.baseUrl,
+            this.baseUrl
         );
     }
 
@@ -396,16 +396,13 @@ class Aisp2ApiClient {
             : `/${path}`;
 
         const url = new URL(
-            `${this.baseUrl.replace(/\/+$/, "")}${safePath}`,
+            `${this.baseUrl}${safePath}`
         );
 
         if (params && typeof params === "object") {
             Object.entries(params).forEach(([key, value]) => {
                 if (value !== null && value !== undefined && value !== "") {
-                    url.searchParams.set(
-                        key,
-                        String(value),
-                    );
+                    url.searchParams.set(key, String(value));
                 }
             });
         }
@@ -438,26 +435,23 @@ class Aisp2ApiClient {
                     },
                     body: body ? JSON.stringify(body) : null,
                     signal: controller.signal,
-                },
+                }
             );
 
             const contentType = response.headers.get("content-type") || "";
 
-            let payload = null;
-
-            if (contentType.includes("application/json")) {
-                payload = await response.json();
-            } else {
-                payload = await response.text();
-            }
+            const payload = contentType.includes("application/json")
+                ? await response.json()
+                : await response.text();
 
             if (!response.ok) {
                 const error = new Error(
-                    `AISP2 API request failed: ${response.status}`,
+                    `AISP2 API request failed: ${response.status}`
                 );
 
                 error.status = response.status;
                 error.payload = payload;
+
                 throw error;
             }
 
@@ -467,102 +461,99 @@ class Aisp2ApiClient {
         }
     }
 
+    async sendChatMessage(message) {
+        return this.request(
+            "/api/chat",
+            {
+                method: "POST",
+                body: {
+                    message,
+                },
+                timeoutMs: 45000,
+            }
+        );
+    }
+
     async getHealth() {
         return this.request("/health");
     }
 
     async getDatabaseHealth() {
-        return this.request("/health/database");
+        return this.request("/health");
     }
 
     async getSystemInfo() {
         return this.request("/system/info");
     }
 
-    async getRoutes() {
-        return this.request("/system/routes");
-    }
-
     async getWarehouseSummary() {
-        return this.request("/admin/database/summary");
+        return this.request("/project/status");
     }
 
     async getWarehouseAudit() {
-        return this.request("/admin/warehouse/audit");
+        return this.request("/project/data-sources");
     }
 
     async getTeams() {
-        return this.request("/teams");
+        const payload = await this.request("/api/mlb/teams");
+
+        return payload?.teams || [];
     }
 
     async getTeam(teamId) {
-        return this.request(`/teams/${teamId}`);
+        const teams = await this.getTeams();
+
+        return teams.find((team) => {
+            return String(team.id) === String(teamId);
+        }) || null;
     }
 
     async searchPlayers(query) {
-        return this.request(
-            "/players/search",
-            {
-                params: {
-                    q: query,
-                },
-            },
-        );
+        const teams = await this.getTeams();
+        const allPlayers = [];
+
+        for (const team of teams) {
+            if (!team?.id) {
+                continue;
+            }
+
+            try {
+                const payload = await this.request(
+                    `/api/mlb/teams/${team.id}/players`
+                );
+
+                const players = payload?.players || [];
+
+                players.forEach((player) => {
+                    allPlayers.push({
+                        ...player,
+                        team: team.name,
+                        team_id: team.id,
+                        abbreviation: team.abbreviation,
+                    });
+                });
+            } catch (error) {
+                console.warn("AISP2 player roster fetch failed:", team.name, error);
+            }
+        }
+
+        const normalizedQuery = aisp2NormalizeText(query).toLowerCase();
+
+        return allPlayers.filter((player) => {
+            return String(player.name || "")
+                .toLowerCase()
+                .includes(normalizedQuery);
+        });
     }
 
     async getPlayer(playerId) {
-        return this.request(`/players/${playerId}`);
-    }
+        const players = await this.searchPlayers("");
 
-    async getGamePredictions(limit = 100) {
-        return this.request(
-            "/predictions/games",
-            {
-                params: {
-                    limit,
-                },
-            },
-        );
-    }
-
-    async getPlayerPredictions(limit = 100) {
-        return this.request(
-            "/predictions/players",
-            {
-                params: {
-                    limit,
-                },
-            },
-        );
-    }
-
-    async syncTeams(season = 2026) {
-        return this.request(
-            "/admin/sync/teams",
-            {
-                method: "POST",
-                params: {
-                    season,
-                },
-                timeoutMs: 120000,
-            },
-        );
-    }
-
-    async syncRosters(season = 2026) {
-        return this.request(
-            "/admin/sync/rosters",
-            {
-                method: "POST",
-                params: {
-                    season,
-                },
-                timeoutMs: 300000,
-            },
-        );
+        return players.find((player) => {
+            return String(player.id) === String(playerId);
+        }) || null;
     }
 }
-
 
 /* ============================================================
 SECTION 07 - DOM CACHE
@@ -1409,7 +1400,7 @@ SECTION 14 - INTENT ROUTER
 ============================================================ */
 
 Aisp2ChatWorkspace.prototype.processUserMessage = async function processUserMessage(
-    userText,
+    userText
 ) {
     const detected = aisp2DetectIntent(userText);
 
@@ -1436,14 +1427,14 @@ Aisp2ChatWorkspace.prototype.processUserMessage = async function processUserMess
 
         if (detected.intent === AISP2_INTENTS.playerSearch) {
             await this.handlePlayerSearchIntent(
-                detected.entities.playerName,
+                detected.entities.playerName
             );
             return;
         }
 
         if (detected.intent === AISP2_INTENTS.predictionSetup) {
             await this.handlePredictionSetupIntent(
-                detected.entities,
+                detected.entities
             );
             return;
         }
@@ -1453,57 +1444,30 @@ Aisp2ChatWorkspace.prototype.processUserMessage = async function processUserMess
                 aisp2FormatHelpResponse(),
                 {
                     intent: detected.intent,
-                },
+                }
             );
             return;
         }
 
+        const chatPayload = await this.api.sendChatMessage(userText);
+
         this.addAssistantMessage(
-            aisp2FormatUnknownResponse(),
+            chatPayload.reply || "AISP2 processed the request, but no reply was returned.",
             {
-                intent: detected.intent,
-            },
+                intent: chatPayload.intent || detected.intent,
+                backend_chat: true,
+                context: chatPayload.context || null,
+                nlu: chatPayload.nlu || null,
+                memory: chatPayload.memory || null,
+            }
         );
     } catch (error) {
         this.handleIntentError(
             error,
-            detected,
+            detected
         );
     }
 };
-
-
-Aisp2ChatWorkspace.prototype.handleIntentError = function handleIntentError(
-    error,
-    detected,
-) {
-    console.error("AISP2 intent error:", error);
-
-    this.state.ui.lastError = {
-        message: error.message,
-        status: error.status || null,
-        intent: detected?.intent || AISP2_INTENTS.unknown,
-        createdAt: aisp2NowIso(),
-    };
-
-    this.saveState();
-
-    this.addErrorMessage(
-        [
-            "**AISP2 encountered an API problem.**",
-            "",
-            `Intent: **${detected?.intent || "unknown"}**`,
-            `Error: **${error.message || "Unknown error"}**`,
-            "",
-            "This usually means the backend route is unavailable, Render is asleep, or the database/API endpoint needs attention.",
-        ].join("\n"),
-        {
-            error: this.state.ui.lastError,
-        },
-    );
-};
-
-
 /* ============================================================
 SECTION 15 - HEALTH / DATABASE / WAREHOUSE INTENTS
 ============================================================ */
@@ -3106,7 +3070,7 @@ Aisp2ChatWorkspace.prototype.initializeResize = function initializeResize() {
         "pointerdown",
         (event) => {
             this.startResize(event);
-        },
+        }
     );
 };
 
@@ -3133,18 +3097,13 @@ Aisp2ChatWorkspace.prototype.startResize = function startResize(event) {
 
     this.state.resize.isResizing = true;
 
-    document.addEventListener(
-        "pointermove",
-        this.boundResizeMove = this.handleResizeMove.bind(this),
-    );
+    document.body.classList.add("aisp2-is-resizing-chat");
 
-    document.addEventListener(
-        "pointerup",
-        this.boundResizeEnd = this.endResize.bind(this),
-        {
-            once: true,
-        },
-    );
+    this.boundResizeMove = this.handleResizeMove.bind(this);
+    this.boundResizeEnd = this.endResize.bind(this);
+
+    document.addEventListener("pointermove", this.boundResizeMove);
+    document.addEventListener("pointerup", this.boundResizeEnd, { once: true });
 };
 
 
@@ -3156,26 +3115,31 @@ Aisp2ChatWorkspace.prototype.handleResizeMove = function handleResizeMove(event)
     const deltaX = event.clientX - this.resizeSession.startPointerX;
     const deltaY = event.clientY - this.resizeSession.startPointerY;
 
+    const viewportMaxWidth = Math.max(380, window.innerWidth - 24);
+    const viewportMaxHeight = Math.max(460, window.innerHeight - 24);
+
     const nextWidth = this.resizeSession.startWidth + deltaX;
     const nextHeight = this.resizeSession.startHeight + deltaY;
 
     const clampedWidth = aisp2Clamp(
         nextWidth,
         380,
-        Math.min(980, window.innerWidth - 24),
+        Math.min(980, viewportMaxWidth)
     );
 
     const clampedHeight = aisp2Clamp(
         nextHeight,
         460,
-        Math.min(920, window.innerHeight - 24),
+        Math.min(920, viewportMaxHeight)
     );
 
-    this.dom.window.style.width = `${clampedWidth}px`;
-    this.dom.window.style.height = `${clampedHeight}px`;
+    this.dom.window.style.width = `${Math.round(clampedWidth)}px`;
+    this.dom.window.style.height = `${Math.round(clampedHeight)}px`;
 
     this.state.resize.width = Math.round(clampedWidth);
     this.state.resize.height = Math.round(clampedHeight);
+
+    this.keepPanelInsideViewport();
 };
 
 
@@ -3184,15 +3148,16 @@ Aisp2ChatWorkspace.prototype.endResize = function endResize() {
 
     this.resizeSession = null;
 
+    document.body.classList.remove("aisp2-is-resizing-chat");
+
     document.removeEventListener(
         "pointermove",
-        this.boundResizeMove,
+        this.boundResizeMove
     );
 
+    this.keepPanelInsideViewport();
     this.saveState();
 };
-
-
 /* ============================================================
 SECTION 32 - WINDOW AND VIEWPORT SAFETY
 ============================================================ */
@@ -3637,32 +3602,35 @@ Aisp2ChatWorkspace.prototype.bootstrap = function bootstrapWithFinalSystems() {
     this.ensureWorkspacePanels();
     this.renderWorkspaceTabs();
 
-    this.addAssistantMessage(
-        [
-            "**AISP2 Workspace Online**",
-            "",
-            "Demo mode is being replaced with real API-aware behavior.",
-            "",
-            "You can now ask:",
-            "",
-            "**Show me all MLB teams**",
-            "**Search for Corbin Carroll**",
-            "**Is the database connected?**",
-            "**How many players are loaded?**",
-            "**Predict Corbin Carroll home run**",
-        ].join("\n"),
-        {
-            source: "final_bootstrap",
-            version: AISP2_WORKSPACE_VERSION,
-        },
-    );
+    const hasFinalBootstrapMessage = this.state.conversation.messages.some((message) => {
+        return message?.metadata?.source === "final_bootstrap";
+    });
+
+    if (!hasFinalBootstrapMessage) {
+        this.addAssistantMessage(
+            [
+                "**AISP2 Workspace Online**",
+                "",
+                "The floating AI workspace is active across the application.",
+                "",
+                "You can ask:",
+                "",
+                "**Show me all MLB teams**",
+                "**Search for Corbin Carroll**",
+                "**Is the database connected?**",
+                "**Who has the highest home run probability right now?**",
+            ].join("\n"),
+            {
+                source: "final_bootstrap",
+                version: AISP2_WORKSPACE_VERSION,
+            }
+        );
+    }
 
     this.saveState();
 
     return true;
 };
-
-
 /* ============================================================
 SECTION 41 - PUBLIC API FOR DEBUGGING AND FUTURE INTEGRATION
 ============================================================ */
