@@ -141,19 +141,27 @@ from nlp.intent_detection import INTENT_GENERAL_BASEBALL
 from nlp.intent_detection import build_intent_report
 
 
-# ============================================================
-# SECTION 01.08 - AI CORE AND RESPONSE IMPORTS
-# FILE: main.py
-# PURPOSE: connect security, response generation, and memory
-# after 04_ai directory reorganization
-# ============================================================
-
-from core.security_guardrails import build_chat_security_report
-from core.security_guardrails import build_safe_chat_response
-
-from core.interaction_memory import remember_chat_interaction
-
-from response_generator import generate_response_from_context
+# =# ============================================================
+# # SECTION 01.08 - AI CORE AND RESPONSE IMPORTS
+# # FILE: main.py
+# # PURPOSE: connect security, persistent memory, continuous
+# # learning, response generation, and self-improving chat flow
+# # ============================================================
+#
+# from core.security_guardrails import (
+#     build_chat_security_report,
+#     build_safe_chat_response,
+# )
+#
+# from core.interaction_memory import (
+#     remember_chat_interaction,
+# )
+#
+# from core.learning_engine import (
+#     learn_from_chat_interaction,
+# )
+#
+# from response_generator import generate_response_from_context
 # ============================================================
 # SECTION 02 - APPLICATION METADATA
 # ============================================================
@@ -845,6 +853,13 @@ def build_chat_reply(message: str) -> dict:
     )
 
     chat_response["memory"] = memory_status
+
+    learning_status = learn_from_chat_interaction(
+        user_message=cleaned_message,
+        chat_response=chat_response,
+    )
+
+    chat_response["learning"] = learning_status
 
     return chat_response
 # ============================================================
