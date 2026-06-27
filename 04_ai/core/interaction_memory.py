@@ -164,13 +164,54 @@ def calculate_memory_importance(
 
 
 # ============================================================
-# SECTION 06 - IN-MEMORY DEVELOPMENT STORE
-# FILE: 04_ai/interaction_memory.py
-# PURPOSE: temporary development memory before database-backed
-# persistent memory is connected
+# SECTION 06 - DATABASE-BACKED MEMORY STORE
+# FILE: 04_ai/core/interaction_memory.py
+# PURPOSE: permanently store chatbot interactions, learning
+# signals, training examples, and alias candidates in SQLAlchemy
+# while preserving an emergency in-memory fallback
 # ============================================================
 
-AISP2_CHAT_MEMORY_STORE: list[dict] = []
+import json
+from datetime import datetime
+
+
+AISP2_CHAT_MEMORY_FALLBACK_STORE: list[dict] = []
+
+
+def get_memory_timestamp() -> str:
+    return datetime.utcnow().isoformat()
+
+
+def serialize_memory_json(value: dict | list | None) -> str | None:
+    if value is None:
+        return None
+
+    try:
+        return json.dumps(
+            value,
+            default=str,
+            ensure_ascii=False,
+        )
+
+    except Exception:
+        return json.dumps(
+            {
+                "serialization_error": True,
+                "value": str(value),
+            },
+            ensure_ascii=False,
+        )
+
+
+def store_fallback_memory_record(record: dict, reason: str) -> dict:
+    AISP2_CHAT_MEMORY_FALLBACK_STORE.append(record)
+
+    return {
+        "status": "fallback_stored",
+        "reason": reason,
+        "fallback_count": len(AISP2_CHAT_MEMORY_FALLBACK_STORE),
+        "latest_summary": record.get("summary"),
+    }
 
 
 def store_chat_memory_record(record: dict) -> dict:
@@ -180,27 +221,325 @@ def store_chat_memory_record(record: dict) -> dict:
             "reason": "empty_record",
         }
 
-    AISP2_CHAT_MEMORY_STORE.append(record)
+    try:
+        from database import managed_database_session
+        from models import ChatMemory
+        from models import LearningSignal
+        from models import TrainingExample
+        from models import EntityAlias
 
-    return {
-        "status": MEMORY_STATUS_STORED,
-        "stored_count": len(AISP2_CHAT_MEMORY_STORE),
-        "latest_summary": record.get("summary"),
-    }
+        with managed_database_session() as database_session:
+            chat_memory = ChatMemory(
+                conversation_id=record.get("conversation_id"),
+                session_id=record.get("session_id"),
+                user_message=record.get("user_message", ""),
+                assistant_response=record.get("assistant_response", ""),
+                detected_intent=record.get("intent"),
+                detected_task=record.get("task"),
+                detected_team=record.get("team"),
+                detected_player=record.get("player"),
+                detected_outcome=record.get("outcome"),
+                nlu_confidence=record.get("nlu_confidence"),
+                importance_score=record.get("importance_score"),
+                raw_context_json=serialize_memory_json(record.get("context")),
+                raw_nlu_json=serialize_memory_json(record.get("nlu")),
+                raw_semantic_json=serialize_memory_json(record.get("semantic")),
+                created_at=get_memory_timestamp(),
+            )
+
+            database_session.add(chat_memory)
+            database_session.flush()
+
+            learning_signals = build_memory_learning_signals(
+                record=record,
+                chat_memory_id=chat_memory.id,
+            )
+
+            for signal in learning_signals:
+                database_session.add(
+                    LearningSignal(
+                        chat_memory_id=chat_memory.id,
+                        signal_type=signal.get("signal_type", "unknown"),
+                        signal_status=signal.get("signal_status", "ready"),
+                        intent=signal.get("intent"),
+                        task=signal.get("task"),
+                        entity_type=signal.get("entity_type"),
+                        entity_value=signal.get("entity_value"),
+                        outcome=signal.get("outcome"),
+                        confidence=signal.get("confidence"),
+                        review_needed=signal.get("review_needed", False),
+                        reason=signal.get("reason"),
+                        raw_signal_json=serialize_memory_json(signal),
+                        created_at=get_memory_timestamp(),
+                    )
+                )
+
+            training_example = build_memory_training_example(
+                record=record,
+                chat_memory_id=chat_memory.id,
+            )
+
+            database_session.add(
+                TrainingExample(
+                    chat_memory_id=chat_memory.id,
+                    input_text=training_example["input_text"],
+                    target_intent=training_example.get("target_intent"),
+                    target_task=training_example.get("target_task"),
+                    target_team=training_example.get("target_team"),
+                    target_player=training_example.get("target_player"),
+                    target_outcome=training_example.get("target_outcome"),
+                    correction_json=serialize_memory_json(
+                        training_example.get("corrections")
+                    ),
+                    target_json=serialize_memory_json(
+                        training_example.get("target")
+                    ),
+                    quality_score=training_example.get("quality_score"),
+                    review_needed=training_example.get("review_needed", False),
+                    approved_for_training=False,
+                    created_at=get_memory_timestamp(),
+                )
+            )
+
+            alias_candidates = build_memory_alias_candidates(record)
+
+            for alias in alias_candidates:
+                existing_alias = (
+                    database_session.query(EntityAlias)
+                    .filter(EntityAlias.entity_type == alias["entity_type"])
+                    .filter(EntityAlias.canonical_value == alias["canonical_value"])
+                    .filter(EntityAlias.alias_value == alias["alias_value"])
+                    .first()
+                )
+
+                if existing_alias:
+                    existing_alias.usage_count += 1
+                    existing_alias.last_seen_at = get_memory_timestamp()
+
+                    if existing_alias.usage_count >= 5:
+                        existing_alias.is_trusted = True
+                        existing_alias.review_needed = False
+
+                else:
+                    database_session.add(
+                        EntityAlias(
+                            entity_type=alias["entity_type"],
+                            canonical_value=alias["canonical_value"],
+                            alias_value=alias["alias_value"],
+                            source="chat_memory",
+                            confidence=alias.get("confidence", 0.65),
+                            usage_count=1,
+                            confirmation_count=0,
+                            is_active=True,
+                            is_trusted=False,
+                            review_needed=True,
+                            created_at=get_memory_timestamp(),
+                            updated_at=get_memory_timestamp(),
+                            last_seen_at=get_memory_timestamp(),
+                        )
+                    )
+
+            return {
+                "status": MEMORY_STATUS_STORED,
+                "storage": "database",
+                "chat_memory_id": chat_memory.id,
+                "learning_signal_count": len(learning_signals),
+                "training_example_created": True,
+                "alias_candidate_count": len(alias_candidates),
+                "latest_summary": record.get("summary"),
+            }
+
+    except Exception as error:
+        return store_fallback_memory_record(
+            record=record,
+            reason=f"database_memory_failed: {error}",
+        )
 
 
 def get_recent_chat_memory(limit: int = 10) -> list[dict]:
     if limit <= 0:
         limit = 10
 
-    return AISP2_CHAT_MEMORY_STORE[-limit:]
+    try:
+        from database import managed_database_session
+        from models import ChatMemory
+
+        with managed_database_session() as database_session:
+            rows = (
+                database_session.query(ChatMemory)
+                .order_by(ChatMemory.id.desc())
+                .limit(limit)
+                .all()
+            )
+
+            return [
+                {
+                    "id": row.id,
+                    "user_message": row.user_message,
+                    "assistant_response": row.assistant_response,
+                    "intent": row.detected_intent,
+                    "task": row.detected_task,
+                    "team": row.detected_team,
+                    "player": row.detected_player,
+                    "outcome": row.detected_outcome,
+                    "importance_score": row.importance_score,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
+
+    except Exception:
+        return AISP2_CHAT_MEMORY_FALLBACK_STORE[-limit:]
 
 
 # ============================================================
 # SECTION 07 - CHAT MEMORY PIPELINE
-# FILE: 04_ai/interaction_memory.py
+# FILE: 04_ai/core/interaction_memory.py
 # PURPOSE: one-call helper used by main.py after every chat reply
+# to permanently store conversations and learning artifacts
 # ============================================================
+
+def build_memory_learning_signals(
+    record: dict,
+    chat_memory_id: int | None = None,
+) -> list[dict]:
+    signals = []
+
+    if record.get("intent") or record.get("task"):
+        signals.append(
+            {
+                "chat_memory_id": chat_memory_id,
+                "signal_type": "intent_signal",
+                "signal_status": "ready",
+                "intent": record.get("intent"),
+                "task": record.get("task"),
+                "confidence": record.get("nlu_confidence"),
+                "review_needed": False,
+                "reason": "intent_or_task_detected",
+            }
+        )
+
+    if record.get("team"):
+        signals.append(
+            {
+                "chat_memory_id": chat_memory_id,
+                "signal_type": "entity_signal",
+                "signal_status": "ready",
+                "entity_type": "team",
+                "entity_value": record.get("team"),
+                "confidence": record.get("nlu_confidence"),
+                "review_needed": False,
+                "reason": "team_detected",
+            }
+        )
+
+    if record.get("player"):
+        signals.append(
+            {
+                "chat_memory_id": chat_memory_id,
+                "signal_type": "entity_signal",
+                "signal_status": "ready",
+                "entity_type": "player",
+                "entity_value": record.get("player"),
+                "confidence": record.get("nlu_confidence"),
+                "review_needed": False,
+                "reason": "player_detected",
+            }
+        )
+
+    if record.get("outcome"):
+        signals.append(
+            {
+                "chat_memory_id": chat_memory_id,
+                "signal_type": "outcome_signal",
+                "signal_status": "ready",
+                "outcome": record.get("outcome"),
+                "confidence": record.get("nlu_confidence"),
+                "review_needed": False,
+                "reason": "outcome_detected",
+            }
+        )
+
+    if record.get("importance_score", 0) < 50:
+        signals.append(
+            {
+                "chat_memory_id": chat_memory_id,
+                "signal_type": "review_signal",
+                "signal_status": "review_needed",
+                "confidence": record.get("nlu_confidence"),
+                "review_needed": True,
+                "reason": "low_importance_or_uncertain_interaction",
+            }
+        )
+
+    return signals
+
+
+def build_memory_training_example(
+    record: dict,
+    chat_memory_id: int | None = None,
+) -> dict:
+    target = {
+        "intent": record.get("intent"),
+        "task": record.get("task"),
+        "team": record.get("team"),
+        "player": record.get("player"),
+        "outcome": record.get("outcome"),
+        "semantic": record.get("semantic", {}),
+    }
+
+    quality_score = float(record.get("importance_score", 50))
+
+    review_needed = quality_score < 60
+
+    return {
+        "chat_memory_id": chat_memory_id,
+        "input_text": record.get("user_message", ""),
+        "target_intent": record.get("intent"),
+        "target_task": record.get("task"),
+        "target_team": record.get("team"),
+        "target_player": record.get("player"),
+        "target_outcome": record.get("outcome"),
+        "target": target,
+        "corrections": (
+            record.get("semantic", {})
+            .get("entity_report", {})
+            .get("corrections", {})
+        ),
+        "quality_score": quality_score,
+        "review_needed": review_needed,
+    }
+
+
+def build_memory_alias_candidates(record: dict) -> list[dict]:
+    semantic = record.get("semantic", {}) or {}
+    entity_report = semantic.get("entity_report", {}) or {}
+    corrections_report = entity_report.get("corrections", {}) or {}
+    corrections = corrections_report.get("corrections", []) or []
+
+    alias_candidates = []
+
+    for correction in corrections:
+        original = clean_memory_text(correction.get("original"))
+        corrected = clean_memory_text(correction.get("corrected"))
+
+        if not original or not corrected:
+            continue
+
+        if original.lower() == corrected.lower():
+            continue
+
+        alias_candidates.append(
+            {
+                "entity_type": correction.get("entity_type", "unknown"),
+                "canonical_value": corrected,
+                "alias_value": original,
+                "confidence": correction.get("confidence", 0.65),
+            }
+        )
+
+    return alias_candidates
+
 
 def remember_chat_interaction(
     user_message: str,
@@ -212,32 +551,44 @@ def remember_chat_interaction(
             "reason": "empty_chat_response",
         }
 
+    context = chat_response.get("context", {}) or {}
+    nlu = chat_response.get("nlu", {}) or {}
+    semantic = chat_response.get("semantic", {}) or {}
+
     record = build_chat_memory_record(
         user_message=user_message,
         assistant_response=chat_response.get("reply", ""),
         intent=chat_response.get("intent"),
-        semantic=chat_response.get("semantic", {}),
+        semantic=semantic,
         security=chat_response.get("security", {}),
     )
+
+    record["task"] = context.get("task") or nlu.get("task")
+    record["context"] = context
+    record["nlu"] = nlu
+    record["nlu_confidence"] = nlu.get("confidence")
 
     return store_chat_memory_record(record)
 
 
 # ============================================================
-# SECTION 08 - FUTURE MEMORY ROADMAP
-# FILE: 04_ai/interaction_memory.py
-# PURPOSE: future database, embeddings, RAG, and feedback learning
+# SECTION 08 - MEMORY ROADMAP
+# FILE: 04_ai/core/interaction_memory.py
+# PURPOSE: database, aliases, embeddings, RAG, and feedback
+# learning roadmap
 # ============================================================
 
 """
-08.01 Add database-backed ChatMemory model.
-08.02 Store session_id and user_id.
-08.03 Add created_at timestamp.
-08.04 Add helpful/not-helpful feedback.
-08.05 Add correction tracking.
-08.06 Add embeddings for semantic retrieval.
-08.07 Add vector database search.
-08.08 Add RAG memory retrieval before answering.
-08.09 Add memory summarization.
-08.10 Add long-term project knowledge extraction.
+08.01 Database-backed ChatMemory storage is active.
+08.02 LearningSignal creation is active.
+08.03 TrainingExample creation is active.
+08.04 EntityAlias candidate storage is active.
+08.05 Add session_id and user_id.
+08.06 Add helpful/not-helpful feedback UI.
+08.07 Add embeddings for semantic retrieval.
+08.08 Add vector database search.
+08.09 Add RAG memory retrieval before answering.
+08.10 Add memory summarization.
+08.11 Add long-term project knowledge extraction.
+08.12 Add alias trust promotion dashboard.
 """
