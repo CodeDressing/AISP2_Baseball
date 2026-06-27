@@ -24,7 +24,7 @@ import models
 
 
 # ============================================================
-# SECTION 02 - CORE BASEBALL TABLE REGISTRY
+# SECTION 02 - ENTERPRISE DATABASE TABLE REGISTRY
 # ============================================================
 
 CORE_BASEBALL_TABLES = [
@@ -33,6 +33,28 @@ CORE_BASEBALL_TABLES = [
     "roster_entries",
     "player_season_stats",
     "games",
+]
+
+
+AI_MEMORY_TABLES = [
+    "chat_memory",
+    "learning_signals",
+    "training_examples",
+    "entity_aliases",
+    "user_feedback",
+]
+
+
+STATCAST_WAREHOUSE_TABLES = [
+    "player_advanced_batting_stats",
+    "player_percentile_rankings",
+    "player_pitch_arsenals",
+    "player_pitch_tempo",
+    "player_batted_ball_profiles",
+    "player_batting_stances",
+    "player_home_run_profiles",
+    "team_plate_discipline",
+    "raw_data_import_logs",
 ]
 
 
@@ -56,14 +78,41 @@ PREDICTION_FOUNDATION_TABLES = [
     "roster_entries",
     "player_season_stats",
     "games",
+    "player_advanced_batting_stats",
+    "player_percentile_rankings",
+    "player_pitch_arsenals",
+    "player_pitch_tempo",
+    "player_batted_ball_profiles",
+    "player_batting_stances",
+    "player_home_run_profiles",
+    "team_plate_discipline",
+]
+
+
+CHATBOT_READY_TABLES = [
+    "teams",
+    "players",
+    "roster_entries",
+    "player_season_stats",
+    "player_advanced_batting_stats",
+    "player_percentile_rankings",
+    "player_pitch_arsenals",
+    "player_pitch_tempo",
+    "player_batted_ball_profiles",
+    "player_home_run_profiles",
+    "team_plate_discipline",
+    "chat_memory",
+    "learning_signals",
+    "training_examples",
+    "entity_aliases",
 ]
 
 
 REGISTERED_TABLES = [
     *CORE_BASEBALL_TABLES,
+    *AI_MEMORY_TABLES,
+    *STATCAST_WAREHOUSE_TABLES,
 ]
-
-
 # ============================================================
 # SECTION 03 - SCHEDULE INGESTION WINDOWS
 # ============================================================
@@ -210,63 +259,54 @@ def build_schema_report() -> dict:
 
     metadata_tables = get_metadata_tables()
 
-    missing_core_tables = get_missing_tables(
-        expected_tables=CORE_BASEBALL_TABLES,
-        detected_tables=metadata_tables,
-    )
-
-    missing_schedule_tables = get_missing_tables(
-        expected_tables=SCHEDULE_READY_TABLES,
-        detected_tables=metadata_tables,
-    )
-
-    missing_player_tables = get_missing_tables(
-        expected_tables=PLAYER_READY_TABLES,
-        detected_tables=metadata_tables,
-    )
-
-    missing_prediction_tables = get_missing_tables(
-        expected_tables=PREDICTION_FOUNDATION_TABLES,
-        detected_tables=metadata_tables,
-    )
+    missing_core_tables = get_missing_tables(CORE_BASEBALL_TABLES, metadata_tables)
+    missing_schedule_tables = get_missing_tables(SCHEDULE_READY_TABLES, metadata_tables)
+    missing_player_tables = get_missing_tables(PLAYER_READY_TABLES, metadata_tables)
+    missing_prediction_tables = get_missing_tables(PREDICTION_FOUNDATION_TABLES, metadata_tables)
+    missing_ai_memory_tables = get_missing_tables(AI_MEMORY_TABLES, metadata_tables)
+    missing_statcast_tables = get_missing_tables(STATCAST_WAREHOUSE_TABLES, metadata_tables)
+    missing_chatbot_tables = get_missing_tables(CHATBOT_READY_TABLES, metadata_tables)
 
     return {
         "database_url": str(engine.url),
         "metadata_tables": metadata_tables,
         "registered_tables": REGISTERED_TABLES,
+
         "core_baseball_tables": CORE_BASEBALL_TABLES,
+        "ai_memory_tables": AI_MEMORY_TABLES,
+        "statcast_warehouse_tables": STATCAST_WAREHOUSE_TABLES,
         "schedule_ready_tables": SCHEDULE_READY_TABLES,
         "player_ready_tables": PLAYER_READY_TABLES,
         "prediction_foundation_tables": PREDICTION_FOUNDATION_TABLES,
+        "chatbot_ready_tables": CHATBOT_READY_TABLES,
+
         "metadata_table_count": len(metadata_tables),
         "registered_table_count": len(REGISTERED_TABLES),
-        "detected_core_tables": get_detected_tables(
-            CORE_BASEBALL_TABLES,
-            metadata_tables,
-        ),
-        "detected_schedule_tables": get_detected_tables(
-            SCHEDULE_READY_TABLES,
-            metadata_tables,
-        ),
-        "detected_player_tables": get_detected_tables(
-            PLAYER_READY_TABLES,
-            metadata_tables,
-        ),
-        "detected_prediction_tables": get_detected_tables(
-            PREDICTION_FOUNDATION_TABLES,
-            metadata_tables,
-        ),
+
+        "detected_core_tables": get_detected_tables(CORE_BASEBALL_TABLES, metadata_tables),
+        "detected_ai_memory_tables": get_detected_tables(AI_MEMORY_TABLES, metadata_tables),
+        "detected_statcast_tables": get_detected_tables(STATCAST_WAREHOUSE_TABLES, metadata_tables),
+        "detected_schedule_tables": get_detected_tables(SCHEDULE_READY_TABLES, metadata_tables),
+        "detected_player_tables": get_detected_tables(PLAYER_READY_TABLES, metadata_tables),
+        "detected_prediction_tables": get_detected_tables(PREDICTION_FOUNDATION_TABLES, metadata_tables),
+        "detected_chatbot_tables": get_detected_tables(CHATBOT_READY_TABLES, metadata_tables),
+
         "missing_core_tables": missing_core_tables,
+        "missing_ai_memory_tables": missing_ai_memory_tables,
+        "missing_statcast_tables": missing_statcast_tables,
         "missing_schedule_tables": missing_schedule_tables,
         "missing_player_tables": missing_player_tables,
         "missing_prediction_tables": missing_prediction_tables,
+        "missing_chatbot_tables": missing_chatbot_tables,
+
         "core_baseball_ready": len(missing_core_tables) == 0,
+        "ai_memory_ready": len(missing_ai_memory_tables) == 0,
+        "statcast_warehouse_ready": len(missing_statcast_tables) == 0,
         "schedule_ingestion_ready": len(missing_schedule_tables) == 0,
         "player_ingestion_ready": len(missing_player_tables) == 0,
         "prediction_foundation_ready": len(missing_prediction_tables) == 0,
+        "chatbot_data_ready": len(missing_chatbot_tables) == 0,
     }
-
-
 # ============================================================
 # SECTION 08 - SCHEDULE PLAN REPORT
 # ============================================================
@@ -326,7 +366,8 @@ def build_schedule_ingestion_plan() -> dict:
 def initialize_database() -> dict:
     """
     Creates all registered database tables and returns a startup
-    report for baseball, schedule, player, and prediction readiness.
+    report for baseball, AI memory, Statcast warehouse, chatbot,
+    schedule, player, and prediction readiness.
     """
 
     create_database_tables()
@@ -334,28 +375,35 @@ def initialize_database() -> dict:
     schema_report = build_schema_report()
 
     return {
-        "success": schema_report["core_baseball_ready"],
+        "success": (
+            schema_report["core_baseball_ready"]
+            and schema_report["ai_memory_ready"]
+            and schema_report["statcast_warehouse_ready"]
+        ),
         "operation": "initialize_database",
         "engine": str(engine.url),
         "tables_created_or_verified": schema_report["metadata_table_count"],
+
         "core_baseball_ready": schema_report["core_baseball_ready"],
+        "ai_memory_ready": schema_report["ai_memory_ready"],
+        "statcast_warehouse_ready": schema_report["statcast_warehouse_ready"],
         "schedule_ingestion_ready": schema_report["schedule_ingestion_ready"],
         "player_ingestion_ready": schema_report["player_ingestion_ready"],
-        "prediction_foundation_ready": schema_report[
-            "prediction_foundation_ready"
-        ],
+        "prediction_foundation_ready": schema_report["prediction_foundation_ready"],
+        "chatbot_data_ready": schema_report["chatbot_data_ready"],
+
         "missing_core_tables": schema_report["missing_core_tables"],
+        "missing_ai_memory_tables": schema_report["missing_ai_memory_tables"],
+        "missing_statcast_tables": schema_report["missing_statcast_tables"],
         "missing_schedule_tables": schema_report["missing_schedule_tables"],
         "missing_player_tables": schema_report["missing_player_tables"],
-        "missing_prediction_tables": schema_report[
-            "missing_prediction_tables"
-        ],
+        "missing_prediction_tables": schema_report["missing_prediction_tables"],
+        "missing_chatbot_tables": schema_report["missing_chatbot_tables"],
+
         "schema_report": schema_report,
         "schedule_ingestion_plan": build_schedule_ingestion_plan(),
         "database_health": database_health_details(),
     }
-
-
 # ============================================================
 # SECTION 10 - DATABASE STARTUP CHECK
 # ============================================================
@@ -371,21 +419,23 @@ def database_startup_check() -> dict:
         "database_initialized": database_health_check(),
         "metadata_tables": schema_report["metadata_tables"],
         "table_count": schema_report["metadata_table_count"],
+
         "core_baseball_ready": schema_report["core_baseball_ready"],
+        "ai_memory_ready": schema_report["ai_memory_ready"],
+        "statcast_warehouse_ready": schema_report["statcast_warehouse_ready"],
         "schedule_ingestion_ready": schema_report["schedule_ingestion_ready"],
         "player_ingestion_ready": schema_report["player_ingestion_ready"],
-        "prediction_foundation_ready": schema_report[
-            "prediction_foundation_ready"
-        ],
+        "prediction_foundation_ready": schema_report["prediction_foundation_ready"],
+        "chatbot_data_ready": schema_report["chatbot_data_ready"],
+
         "missing_core_tables": schema_report["missing_core_tables"],
+        "missing_ai_memory_tables": schema_report["missing_ai_memory_tables"],
+        "missing_statcast_tables": schema_report["missing_statcast_tables"],
         "missing_schedule_tables": schema_report["missing_schedule_tables"],
         "missing_player_tables": schema_report["missing_player_tables"],
-        "missing_prediction_tables": schema_report[
-            "missing_prediction_tables"
-        ],
+        "missing_prediction_tables": schema_report["missing_prediction_tables"],
+        "missing_chatbot_tables": schema_report["missing_chatbot_tables"],
     }
-
-
 # ============================================================
 # SECTION 11 - HUMAN-READABLE STARTUP SUMMARY
 # ============================================================
@@ -401,12 +451,13 @@ def build_startup_summary() -> str:
         "AISP2 Database Startup | "
         f"Tables: {startup_report['table_count']} | "
         f"Core Ready: {startup_report['core_baseball_ready']} | "
+        f"AI Memory Ready: {startup_report['ai_memory_ready']} | "
+        f"Statcast Ready: {startup_report['statcast_warehouse_ready']} | "
         f"Schedule Ready: {startup_report['schedule_ingestion_ready']} | "
         f"Players Ready: {startup_report['player_ingestion_ready']} | "
-        f"Prediction Ready: {startup_report['prediction_foundation_ready']}"
+        f"Prediction Ready: {startup_report['prediction_foundation_ready']} | "
+        f"Chatbot Data Ready: {startup_report['chatbot_data_ready']}"
     )
-
-
 # ============================================================
 # SECTION 12 - COMMAND LINE EXECUTION
 # ============================================================
