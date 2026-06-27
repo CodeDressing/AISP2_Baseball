@@ -569,14 +569,20 @@ def build_entity_report(
 
 # ============================================================
 # SECTION 09 - FUZZY ENTITY CORRECTION
-# FILE: 04_ai/entity_detection.py
+# FILE: 04_ai/nlp/entity_detection.py
 # PURPOSE: recover misspelled players, teams, and baseball
-# terminology before entity routing
+# terminology before entity routing while supporting Render
+# import behavior
 # ============================================================
 
-from fuzzy_matching import (
-    build_fuzzy_nlp_report,
-)
+try:
+    from nlp.fuzzy_matching import (
+        build_fuzzy_nlp_report,
+    )
+except ModuleNotFoundError:
+    from fuzzy_matching import (
+        build_fuzzy_nlp_report,
+    )
 
 
 def apply_fuzzy_entity_corrections(
@@ -603,14 +609,13 @@ def apply_fuzzy_entity_corrections(
 
     corrections = []
 
-    player_match = fuzzy_report.get(
-        "player_match",
-    )
+    player_match = fuzzy_report.get("player_match")
 
     if (
         player_match
         and player_match.get("matched")
         and player_match.get("observed_phrase")
+        and player_match.get("best_match")
     ):
         corrected_message = corrected_message.replace(
             player_match["observed_phrase"],
@@ -626,14 +631,13 @@ def apply_fuzzy_entity_corrections(
             }
         )
 
-    team_match = fuzzy_report.get(
-        "team_match",
-    )
+    team_match = fuzzy_report.get("team_match")
 
     if (
         team_match
         and team_match.get("matched")
         and team_match.get("observed_phrase")
+        and team_match.get("best_match")
     ):
         corrected_message = corrected_message.replace(
             team_match["observed_phrase"],
@@ -649,14 +653,13 @@ def apply_fuzzy_entity_corrections(
             }
         )
 
-    term_match = fuzzy_report.get(
-        "term_match",
-    )
+    term_match = fuzzy_report.get("term_match")
 
     if (
         term_match
         and term_match.get("matched")
         and term_match.get("observed_phrase")
+        and term_match.get("canonical_value")
     ):
         corrected_message = corrected_message.replace(
             term_match["observed_phrase"],
