@@ -984,3 +984,286 @@ class PlayerAdvancedBattingStat(Base):
     player: Mapped[Player | None] = relationship(
         back_populates="advanced_batting_stats",
     )
+
+# ============================================================
+# SECTION 13 - PLAYER PERCENTILE RANKING MODEL
+# ============================================================
+
+class PlayerPercentileRanking(Base):
+    """
+    Stores Statcast percentile rankings by player and season.
+    """
+
+    __tablename__ = "player_percentile_rankings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), nullable=True, index=True)
+    mlb_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    xwoba_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    xba_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    xslg_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    barrel_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    hard_hit_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    exit_velocity_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    sprint_speed_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    arm_strength_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    whiff_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    chase_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    walk_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    strikeout_percentile: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 14 - PLAYER PITCH ARSENAL MODEL
+# ============================================================
+
+class PlayerPitchArsenal(Base):
+    """
+    Stores pitcher pitch-mix, velocity, movement, usage, and result data.
+    """
+
+    __tablename__ = "player_pitch_arsenals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), nullable=True, index=True)
+    mlb_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    pitch_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pitch_name: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+
+    pitch_usage_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    average_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    max_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    spin_rate: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    horizontal_movement: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vertical_movement: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    whiff_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    put_away_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    hard_hit_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 15 - PLAYER PITCH TEMPO MODEL
+# ============================================================
+
+class PlayerPitchTempo(Base):
+    """
+    Stores pitcher pace and pitch-tempo metrics.
+    """
+
+    __tablename__ = "player_pitch_tempo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), nullable=True, index=True)
+    mlb_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    pitch_tempo: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    tempo_empty: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    tempo_runners_on: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    pitch_timer_violations: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 16 - PLAYER BATTED BALL PROFILE MODEL
+# ============================================================
+
+class PlayerBattedBallProfile(Base):
+    """
+    Stores exit velocity, launch angle, hard-hit, barrel, and contact-quality data.
+    """
+
+    __tablename__ = "player_batted_ball_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), nullable=True, index=True)
+    mlb_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    average_exit_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    max_exit_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    launch_angle: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    barrel_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    hard_hit_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    sweet_spot_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    expected_batting_average: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    expected_slugging: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    expected_woba: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 17 - PLAYER BATTING STANCE MODEL
+# ============================================================
+
+class PlayerBattingStance(Base):
+    """
+    Stores batting stance, handedness, stance profile, and physical setup data.
+    """
+
+    __tablename__ = "player_batting_stances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), nullable=True, index=True)
+    mlb_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    bats: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    stance_side: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    stance_description: Mapped[str | None] = mapped_column(String(180), nullable=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 18 - PLAYER HOME RUN PROFILE MODEL
+# ============================================================
+
+class PlayerHomeRunProfile(Base):
+    """
+    Stores home run profile and power-event data.
+    """
+
+    __tablename__ = "player_home_run_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), nullable=True, index=True)
+    mlb_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    home_runs: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    average_home_run_distance: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    max_home_run_distance: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    average_exit_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    max_exit_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    average_launch_angle: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 19 - TEAM PLATE DISCIPLINE MODEL
+# ============================================================
+
+class TeamPlateDiscipline(Base):
+    """
+    Stores team-level plate discipline data.
+    """
+
+    __tablename__ = "team_plate_discipline"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True, index=True)
+    mlb_team_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    team_abbreviation: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
+    pitches: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    zone_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    zone_swing_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    zone_contact_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    chase_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    chase_contact_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    edge_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    first_pitch_swing_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    swing_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    whiff_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    meatball_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    meatball_swing_percent: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    source_file: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ============================================================
+# SECTION 20 - RAW DATA IMPORT LOG MODEL
+# ============================================================
+
+class RawDataImportLog(Base):
+    """
+    Tracks every CSV/data import so AISP2 can audit warehouse growth.
+    """
+
+    __tablename__ = "raw_data_import_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    source_file: Mapped[str] = mapped_column(String(220), nullable=False, index=True)
+    source_category: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    rows_seen: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rows_inserted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rows_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rows_skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    status: Mapped[str] = mapped_column(String(80), default="pending", nullable=False, index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    completed_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
