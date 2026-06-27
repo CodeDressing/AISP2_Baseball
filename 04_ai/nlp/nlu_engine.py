@@ -40,14 +40,121 @@ NLU_SCOPE_TEAM = "team"
 
 
 # ============================================================
-# SECTION 03 - TEXT NORMALIZATION
+# SECTION 03 - ADVANCED LANGUAGE NORMALIZATION
+# PURPOSE: clean messy human language, recover common typos,
+# normalize baseball slang, normalize probability language,
+# and prepare text for NLU routing
 # ============================================================
+
+NLU_DIRECT_REPLACEMENTS = {
+    "whos": "who is",
+    "whats": "what is",
+    "wheres": "where is",
+    "hows": "how is",
+    "cant": "cannot",
+    "wont": "will not",
+    "dont": "do not",
+    "doesnt": "does not",
+    "isnt": "is not",
+    "arent": "are not",
+    "im": "i am",
+    "ive": "i have",
+    "id": "i would",
+    "probablity": "probability",
+    "probabilitys": "probability",
+    "probalility": "probability",
+    "likley": "likely",
+    "most likley": "most likely",
+    "prediciton": "prediction",
+    "predicitons": "predictions",
+    "projecton": "projection",
+    "stat cast": "statcast",
+    "basebal": "baseball",
+    "baseabll": "baseball",
+    "rostor": "roster",
+    "rosterd": "roster",
+    "homerun": "home run",
+    "home-run": "home run",
+    "homeurn": "home run",
+    "home runn": "home run",
+    "dinger": "home run",
+    "dingers": "home run",
+    "bomb": "home run",
+    "bombs": "home run",
+    "go yard": "home run",
+    "goes yard": "home run",
+    "long ball": "home run",
+    "jack": "home run",
+    "yard": "home run",
+    "base knock": "hit",
+    "knock": "hit",
+    "ribbie": "rbi",
+    "ribbies": "rbi",
+    "runs batted in": "rbi",
+    "run batted in": "rbi",
+    "k's": "strikeouts",
+    "ks": "strikeouts",
+    "punchouts": "strikeouts",
+    "whiffs": "strikeouts",
+    "strike out": "strikeout",
+    "strikout": "strikeout",
+    "striekout": "strikeout",
+    "total base": "total bases",
+    "tb": "total bases",
+    "chances": "probability",
+    "chance": "probability",
+    "likelyhood": "probability",
+    "likelihood": "probability",
+    "projection": "probability",
+    "forecast": "probability",
+    "odds": "probability",
+    "best shot": "highest probability",
+    "top shot": "highest probability",
+    "best bet": "highest probability",
+    "most probable": "most likely",
+}
+
+
+NLU_PHRASE_REPLACEMENTS = {
+    "who got the best chance": "who has the highest probability",
+    "who has best chance": "who has the highest probability",
+    "who is the best chance": "who has the highest probability",
+    "who is most likely": "who is most likely",
+    "who most likely": "who is most likely",
+    "whos most likely": "who is most likely",
+    "whos got the best chance": "who has the highest probability",
+    "who has the best shot": "who has the highest probability",
+    "highest chance": "highest probability",
+    "best chance": "highest probability",
+    "top chance": "highest probability",
+    "highest odds": "highest probability",
+    "best odds": "highest probability",
+    "hit home run": "hit a home run",
+    "hitting home run": "hitting a home run",
+    "to homer": "to hit a home run",
+    "to go deep": "to hit a home run",
+    "to go yard": "to hit a home run",
+    "hit bomb": "hit a home run",
+    "hit a bomb": "hit a home run",
+    "get a hit": "record a hit",
+    "gets hit": "record a hit",
+    "gets a hit": "record a hit",
+    "record hit": "record a hit",
+}
+
+
+def collapse_nlu_spaces(value: str) -> str:
+    while "  " in value:
+        value = value.replace("  ", " ")
+
+    return value.strip()
+
 
 def normalize_nlu_text(value: str | None) -> str:
     if not value:
         return ""
 
-    return (
+    cleaned = (
         str(value)
         .lower()
         .replace("?", " ")
@@ -59,9 +166,69 @@ def normalize_nlu_text(value: str | None) -> str:
         .replace("’", "")
         .replace("-", " ")
         .replace("/", " ")
-        .replace("  ", " ")
+        .replace("_", " ")
+        .replace(":", " ")
+        .replace(";", " ")
+        .replace("(", " ")
+        .replace(")", " ")
+        .replace("[", " ")
+        .replace("]", " ")
         .strip()
     )
+
+    cleaned = collapse_nlu_spaces(cleaned)
+
+    for source_phrase, target_phrase in NLU_PHRASE_REPLACEMENTS.items():
+        cleaned = cleaned.replace(
+            source_phrase,
+            target_phrase,
+        )
+
+    tokens = cleaned.split()
+    normalized_tokens = []
+
+    for token in tokens:
+        normalized_tokens.append(
+            NLU_DIRECT_REPLACEMENTS.get(
+                token,
+                token,
+            )
+        )
+
+    cleaned = " ".join(normalized_tokens)
+
+    for source_phrase, target_phrase in NLU_DIRECT_REPLACEMENTS.items():
+        cleaned = cleaned.replace(
+            source_phrase,
+            target_phrase,
+        )
+
+    for source_phrase, target_phrase in NLU_PHRASE_REPLACEMENTS.items():
+        cleaned = cleaned.replace(
+            source_phrase,
+            target_phrase,
+        )
+
+    return collapse_nlu_spaces(cleaned)
+
+
+def build_language_normalization_report(
+    original_message: str,
+) -> dict:
+    normalized_message = normalize_nlu_text(
+        original_message,
+    )
+
+    return {
+        "original_message": original_message,
+        "normalized_message": normalized_message,
+        "changed": normalized_message != normalize_nlu_text(
+            str(original_message or "")
+            .lower()
+            .strip()
+        ),
+        "engine": "aisp2_nlu_language_normalizer",
+    }
 
 
 def nlu_contains_any(
@@ -74,8 +241,6 @@ def nlu_contains_any(
         normalize_nlu_text(phrase) in cleaned_message
         for phrase in phrases
     )
-
-
 # ============================================================
 # SECTION 04 - QUESTION TYPE DETECTION
 # ============================================================
@@ -398,6 +563,8 @@ def detect_missing_information(
 
 # ============================================================
 # SECTION 10 - FULL NLU REPORT
+# PURPOSE: build complete normalized NLU diagnostics for
+# routing, learning, fuzzy matching, and response generation
 # ============================================================
 
 def build_nlu_report(
@@ -405,6 +572,10 @@ def build_nlu_report(
     entity_report: dict | None = None,
 ) -> dict:
     entity_report = entity_report or {}
+
+    language_report = build_language_normalization_report(
+        message,
+    )
 
     cleaned_message = normalize_nlu_text(
         message,
@@ -430,24 +601,27 @@ def build_nlu_report(
         outcome=outcome,
     )
 
+    confidence = calculate_nlu_confidence(
+        task=task,
+        scope=scope,
+        outcome=outcome,
+        entity_report=entity_report,
+    )
+
     return {
         "message": message,
         "cleaned_message": cleaned_message,
+        "normalized_message": cleaned_message,
+        "language": language_report,
         "question_type": detect_nlu_question_type(cleaned_message),
         "task": task,
         "scope": scope,
         "outcome": outcome,
         "best_probability_goal": detect_best_probability_goal(cleaned_message),
         "missing": missing,
-        "confidence": calculate_nlu_confidence(
-            task=task,
-            scope=scope,
-            outcome=outcome,
-            entity_report=entity_report,
-        ),
+        "confidence": confidence,
+        "routing_ready": task != NLU_TASK_GENERAL or outcome is not None,
     }
-
-
 # ============================================================
 # SECTION 11 - CONFIDENCE SCORING
 # ============================================================
@@ -485,14 +659,16 @@ def calculate_nlu_confidence(
 # ============================================================
 
 """
-12.01 Add fuzzy phrase matching.
-12.02 Add typo recovery.
-12.03 Add LLM-backed classification.
-12.04 Add embedding similarity routing.
-12.05 Add multi-turn context memory.
-12.06 Add follow-up resolution.
-12.07 Add sportsbook language normalization.
-12.08 Add live lineup context extraction.
-12.09 Add time/date/game context extraction.
-12.10 Add NLG response-planning layer.
+12.01 Connect fuzzy_matching.py directly into NLU reports.
+12.02 Add database-backed learned typo normalization.
+12.03 Add EntityAlias table lookup before entity detection.
+12.04 Add player nickname normalization.
+12.05 Add team nickname normalization.
+12.06 Add follow-up resolution: him, that player, that team.
+12.07 Add matchup parsing: Yankees vs Red Sox.
+12.08 Add time parsing: tonight, tomorrow, next game.
+12.09 Add stat-category parsing: OPS, ERA, WHIP, barrel rate.
+12.10 Add LLM-backed fallback classifier for unknown questions.
+12.11 Add training export from normalized NLU records.
+12.12 Add semantic embedding routing.
 """
