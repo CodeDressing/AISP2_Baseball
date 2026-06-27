@@ -306,6 +306,8 @@ Tablet Layout
 
 /* ============================================================
 SECTION 16 - MOBILE TOPBAR OVERRIDES
+PURPOSE: remove default white mobile button styling, create
+clean compact mobile header, and preserve horizontal nav pills
 ============================================================ */
 
 @media (max-width:900px){
@@ -314,17 +316,50 @@ SECTION 16 - MOBILE TOPBAR OVERRIDES
         position:sticky;
         top:0;
         z-index:8000;
-        height:auto;
         min-height:64px;
+        height:auto;
         padding:12px 14px;
+        display:flex;
         flex-direction:column;
         align-items:stretch;
         gap:12px;
+        background:rgba(2,6,23,.86);
+        backdrop-filter:blur(22px);
+        border-bottom:1px solid rgba(255,255,255,.08);
     }
 
     .brand-mark{
         width:100%;
+        min-height:44px;
+        display:flex;
+        align-items:center;
         justify-content:space-between;
+    }
+
+    .mobile-menu-button{
+        width:44px;
+        min-width:44px;
+        height:44px;
+        min-height:44px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.10);
+        background:rgba(15,23,42,.86);
+        color:#e5edf8;
+        font-size:20px;
+        font-weight:900;
+        line-height:1;
+        cursor:pointer;
+        appearance:none;
+        -webkit-appearance:none;
+        box-shadow:none;
+    }
+
+    .mobile-menu-button:hover{
+        background:rgba(30,41,59,.95);
+        color:#ffffff;
     }
 
     .nav-links{
@@ -334,6 +369,7 @@ SECTION 16 - MOBILE TOPBAR OVERRIDES
         gap:8px;
         padding-bottom:4px;
         scrollbar-width:none;
+        background:transparent;
     }
 
     .nav-links::-webkit-scrollbar{
@@ -347,13 +383,13 @@ SECTION 16 - MOBILE TOPBAR OVERRIDES
         align-items:center;
         justify-content:center;
         padding:10px 14px;
-        background:rgba(255,255,255,.04);
-        border:1px solid rgba(255,255,255,.06);
+        border-radius:999px;
+        color:#cbd5e1;
+        background:rgba(15,23,42,.74);
+        border:1px solid rgba(255,255,255,.08);
     }
 
 }
-
-
 /* ============================================================
 SECTION 17 - MOBILE HERO OVERRIDES
 ============================================================ */
