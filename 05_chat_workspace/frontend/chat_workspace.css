@@ -289,27 +289,171 @@ SECTION 09 - COLLAPSED AND FULLSCREEN STATES
 
 /* ============================================================
 SECTION 10 - MOBILE RESPONSIVE RULES
+PURPOSE: transform floating desktop assistant into a polished
+mobile-first AI command center
 ============================================================ */
 
 @media (max-width: 720px) {
     .aisp2-floating-chat-panel {
-        right: 12px;
-        bottom: 12px;
-        left: 12px;
+        position: fixed;
+        inset: auto 10px 10px 10px;
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+        z-index: 9500;
     }
 
     .aisp2-chat-window {
         width: 100%;
-        height: min(720px, calc(100vh - 24px));
+        height: min(760px, calc(100dvh - 20px));
         min-width: 0;
+        min-height: 0;
         max-width: none;
+        max-height: none;
+        border-radius: 22px;
+    }
+
+    .aisp2-chat-header {
+        min-height: 58px;
+        padding: 12px 12px 12px 14px;
+        gap: 10px;
+    }
+
+    .aisp2-chat-title-block {
+        min-width: 0;
+        gap: 10px;
+    }
+
+    .aisp2-chat-title-block h2 {
+        font-size: 0.92rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .aisp2-chat-title-block p {
         display: none;
     }
 
+    .aisp2-chat-actions {
+        gap: 6px;
+    }
+
+    .aisp2-chat-action {
+        width: 38px;
+        height: 38px;
+        border-radius: 13px;
+        font-size: 0.95rem;
+    }
+
+    .aisp2-chat-body {
+        padding: 10px;
+    }
+
+    .aisp2-chat-messages {
+        gap: 10px;
+        padding-right: 0;
+    }
+
+    .aisp2-chat-message {
+        max-width: 94%;
+        padding: 11px 12px;
+        border-radius: 16px;
+        font-size: 0.88rem;
+        line-height: 1.48;
+        overflow-wrap: anywhere;
+    }
+
+    .aisp2-chat-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .aisp2-chat-input {
+        min-height: 46px;
+        max-height: 110px;
+        border-radius: 15px;
+        padding: 11px 12px;
+        font-size: 16px;
+    }
+
     .aisp2-chat-send {
+        min-width: 64px;
+        min-height: 46px;
         padding: 0 14px;
+        border-radius: 15px;
+        font-size: 0.86rem;
+    }
+
+    .aisp2-chat-resize-handle {
+        display: none;
+    }
+
+    .aisp2-chat-launcher {
+        width: 62px;
+        height: 62px;
+        margin-left: auto;
+        box-shadow: 0 20px 56px rgba(2, 6, 23, 0.62);
+    }
+
+    .aisp2-floating-chat-panel.is-collapsed .aisp2-chat-window {
+        height: auto;
+        border-radius: 20px;
+    }
+
+    .aisp2-floating-chat-panel.is-fullscreen {
+        inset: 8px;
+        right: 8px;
+        bottom: 8px;
+        left: 8px;
+    }
+
+    .aisp2-floating-chat-panel.is-fullscreen .aisp2-chat-window {
+        width: calc(100vw - 16px);
+        height: calc(100dvh - 16px);
+        border-radius: 20px;
+    }
+}
+
+@media (max-width: 420px) {
+    .aisp2-floating-chat-panel {
+        inset: auto 6px 6px 6px;
+        right: 6px;
+        bottom: 6px;
+        left: 6px;
+    }
+
+    .aisp2-chat-window {
+        height: calc(100dvh - 12px);
+        border-radius: 18px;
+    }
+
+    .aisp2-chat-header {
+        padding: 10px;
+    }
+
+    .aisp2-chat-status-dot {
+        width: 8px;
+        height: 8px;
+    }
+
+    .aisp2-chat-action {
+        width: 36px;
+        height: 36px;
+    }
+
+    .aisp2-chat-body {
+        padding: 8px;
+    }
+
+    .aisp2-chat-form {
+        padding: 8px;
+    }
+
+    .aisp2-chat-message {
+        max-width: 96%;
+        font-size: 0.86rem;
     }
 }
