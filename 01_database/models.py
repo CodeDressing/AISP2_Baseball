@@ -155,15 +155,29 @@ class Player(Base):
     """
     Stores one MLB player.
 
-    This table is the foundation for:
-        - player search
-        - roster membership
-        - player statistics
-        - player outcome prediction
-        - future Statcast profile linking
+    This table serves as the central player record used by every
+    subsystem throughout AISP2 Baseball.
+
+    Current Consumers
+    -----------------
+    • Team Rosters
+    • Schedule Engine
+    • Game Engine
+    • Season Statistics
+    • Advanced Statistics
+    • Prediction Engine
+    • AI Chatbot
+    • Semantic Search
+    • Future Statcast Integration
+    • Future Betting Models
+    • Future Machine Learning Pipelines
     """
 
     __tablename__ = "players"
+
+    # --------------------------------------------------------
+    # PRIMARY KEY
+    # --------------------------------------------------------
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -177,6 +191,10 @@ class Player(Base):
         nullable=False,
         index=True,
     )
+
+    # --------------------------------------------------------
+    # PLAYER IDENTITY
+    # --------------------------------------------------------
 
     full_name: Mapped[str] = mapped_column(
         String(120),
@@ -199,6 +217,10 @@ class Player(Base):
         nullable=True,
     )
 
+    # --------------------------------------------------------
+    # POSITION
+    # --------------------------------------------------------
+
     position: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
@@ -209,6 +231,10 @@ class Player(Base):
         String(20),
         nullable=True,
     )
+
+    # --------------------------------------------------------
+    # PLAYER ATTRIBUTES
+    # --------------------------------------------------------
 
     bats: Mapped[str | None] = mapped_column(
         String(10),
@@ -229,6 +255,10 @@ class Player(Base):
         Integer,
         nullable=True,
     )
+
+    # --------------------------------------------------------
+    # BIRTH INFORMATION
+    # --------------------------------------------------------
 
     birth_date: Mapped[str | None] = mapped_column(
         String(30),
@@ -262,13 +292,21 @@ class Player(Base):
         index=True,
     )
 
+    # --------------------------------------------------------
+    # TEAM RELATIONSHIP
+    # --------------------------------------------------------
+
     current_team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id"),
         nullable=True,
         index=True,
     )
 
-    team: Mapped[Team | None] = relationship(
+    # --------------------------------------------------------
+    # RELATIONSHIPS
+    # --------------------------------------------------------
+
+    team: Mapped["Team" | None] = relationship(
         back_populates="players",
     )
 
@@ -280,7 +318,31 @@ class Player(Base):
         back_populates="player",
     )
 
+    advanced_batting_stats: Mapped[list["PlayerAdvancedBattingStat"]] = relationship(
+        back_populates="player",
+    )
 
+    # Reserved for upcoming phases
+
+    game_stats: Mapped[list["PlayerGameStat"]] = relationship(
+        back_populates="player",
+    )
+
+    pitch_events: Mapped[list["PitchEvent"]] = relationship(
+        back_populates="player",
+    )
+
+    plate_appearances: Mapped[list["PlateAppearance"]] = relationship(
+        back_populates="player",
+    )
+
+    statcast_events: Mapped[list["StatcastEvent"]] = relationship(
+        back_populates="player",
+    )
+
+    prediction_results: Mapped[list["PredictionResult"]] = relationship(
+        back_populates="player",
+    )
 # ============================================================
 # SECTION 04 - ROSTER ENTRY MODEL
 # ============================================================
@@ -797,4 +859,128 @@ class Game(Base):
 
     away_team: Mapped[Team | None] = relationship(
         foreign_keys=[away_team_id],
+    )
+
+
+# ============================================================
+# SECTION 12 - PLAYER ADVANCED BATTING STAT MODEL
+# ============================================================
+
+class PlayerAdvancedBattingStat(Base):
+    """
+    Stores advanced player hitting metrics from Joe's stats CSV.
+
+    This table powers:
+        - chatbot player stat lookup
+        - home run prediction
+        - hit probability
+        - strikeout risk
+        - walk probability
+        - contact quality scoring
+        - matchup analysis
+        - future ML feature generation
+    """
+
+    __tablename__ = "player_advanced_batting_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    mlb_player_id: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
+
+    season: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        index=True,
+    )
+
+    plate_appearances: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    strikeout_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    walk_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    woba: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    expected_woba: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    barrel_batted_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    hard_hit_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    whiff_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    swing_percent: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    source: Mapped[str | None] = mapped_column(
+        String(120),
+        default="joe_stats_csv",
+        nullable=True,
+        index=True,
+    )
+
+    raw_stat_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    updated_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    player: Mapped[Player | None] = relationship(
+        back_populates="advanced_batting_stats",
     )

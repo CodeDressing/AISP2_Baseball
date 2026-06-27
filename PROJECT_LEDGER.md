@@ -4,6 +4,47 @@
 # MASTER PROJECT LEDGER
 # ============================================================
 
+
+================================================================================
+PHASE 8 PART 2
+Date: June 27, 2026
+Time: 3:10 PM EDT (UTC-04:00)
+================================================================================
+
+TITLE
+Enterprise MLB Schedule Intelligence Foundation
+
+OBJECTIVE
+Begin construction of the enterprise schedule intelligence layer that will
+become the foundation for game-specific AI predictions, matchup analysis,
+chatbot routing, and downstream live-game ingestion.
+
+COMPLETED
+• Expanded database architecture for schedule-driven workflows.
+• Added bidirectional Team ↔ Game relationship architecture.
+• Prepared ORM structure for Game entity integration.
+• Designed Enterprise Schedule Ingestion Engine architecture.
+• Established support for monthly and full-season MLB schedule ingestion.
+• Standardized game identity using official MLB gamePk identifiers.
+• Prepared ingestion workflow for April–September 2026 schedule windows.
+• Designed normalization, validation, and database upsert pipeline.
+• Established foundation for game-specific chatbot context resolution.
+
+SYSTEM IMPACT
+• Team schedule relationships
+• Home/Away matchup architecture
+• Schedule lookup foundation
+• Game-centric prediction workflow
+• Official MLB Schedule API integration planning
+• AI chatbot schedule awareness
+
+NEXT PHASE
+PHASE 8 PART 3
+Enterprise Schedule Ingestion Engine
+- Implement complete schedule_ingestion.py
+- Populate games table from MLB Schedule API
+- Validate monthly and full-season synchronization
+- Prepare game feed, box score, and player-game statistics ingestion
 Last Updated: 2026-06-22
 
 Project Status:
