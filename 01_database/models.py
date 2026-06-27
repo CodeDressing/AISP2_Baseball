@@ -509,60 +509,239 @@ class PlayerSeasonStat(Base):
     )
 
 
-# ============================================================
-# SECTION 06 - FUTURE MODEL ROADMAP
-# ============================================================
-
-"""
-Future Database Models
-
-Phase 1.01:
-    Game
-
-Phase 1.02:
-    TeamSeasonStat
-
-Phase 1.03:
-    StatcastEvent
-
-Phase 1.04:
-    PlayerGameLog
-
-Phase 1.05:
-    PitcherGameLog
-
-Phase 1.06:
-    PlayerPrediction
-
-Phase 1.07:
-    GamePrediction
-
-Phase 1.08:
-    FeatureSnapshot
-
-Phase 1.09:
-    ModelRun
-
-Phase 1.10:
-    SimulationRun
-
-Long-Term Warehouse Targets
-
-- MLB teams
-- MLB rosters
-- MLB players
-- Player season stats
-- Team season stats
-- Game schedules
-- Game results
-- Box scores
-- Line scores
-- Statcast pitch events
-- Batter-vs-pitcher history
-- Ballpark factors
-- Weather context
-- Injury context
-- Transaction history
-- Prediction outputs
-- Simulation outputs
-"""
+# =# ============================================================
+# # SECTION 06 - CHAT MEMORY MODEL
+# # ============================================================
+#
+# class ChatMemory(Base):
+#     """
+#     Stores every user question and assistant response.
+#
+#     This table is the permanent memory foundation for:
+#         - conversation history
+#         - NLP learning
+#         - future RAG retrieval
+#         - training dataset generation
+#         - chatbot improvement analysis
+#     """
+#
+#     __tablename__ = "chat_memory"
+#
+#     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+#
+#     conversation_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     session_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#
+#     user_message: Mapped[str] = mapped_column(Text, nullable=False)
+#     assistant_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+#
+#     detected_intent: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     detected_task: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     detected_team: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     detected_player: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     detected_outcome: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#
+#     nlu_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     importance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+#
+#     raw_context_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+#     raw_nlu_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+#     raw_semantic_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+#
+#     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+#
+#     learning_signals: Mapped[list["LearningSignal"]] = relationship(
+#         back_populates="chat_memory",
+#     )
+#
+#     training_examples: Mapped[list["TrainingExample"]] = relationship(
+#         back_populates="chat_memory",
+#     )
+#
+#
+# # ============================================================
+# # SECTION 07 - LEARNING SIGNAL MODEL
+# # ============================================================
+#
+# class LearningSignal(Base):
+#     """
+#     Stores structured learning signals extracted from chatbot interactions.
+#     """
+#
+#     __tablename__ = "learning_signals"
+#
+#     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+#
+#     chat_memory_id: Mapped[int | None] = mapped_column(
+#         ForeignKey("chat_memory.id"),
+#         nullable=True,
+#         index=True,
+#     )
+#
+#     signal_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+#     signal_status: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+#
+#     intent: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     task: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     entity_type: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+#     entity_value: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+#     outcome: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#
+#     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     review_needed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+#
+#     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+#     raw_signal_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+#
+#     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+#
+#     chat_memory: Mapped[ChatMemory | None] = relationship(
+#         back_populates="learning_signals",
+#     )
+#
+#
+# # ============================================================
+# # SECTION 08 - TRAINING EXAMPLE MODEL
+# # ============================================================
+#
+# class TrainingExample(Base):
+#     """
+#     Stores supervised NLP training examples generated from real user questions.
+#     """
+#
+#     __tablename__ = "training_examples"
+#
+#     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+#
+#     chat_memory_id: Mapped[int | None] = mapped_column(
+#         ForeignKey("chat_memory.id"),
+#         nullable=True,
+#         index=True,
+#     )
+#
+#     input_text: Mapped[str] = mapped_column(Text, nullable=False)
+#
+#     target_intent: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     target_task: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     target_team: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     target_player: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     target_outcome: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#
+#     correction_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+#     target_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+#
+#     quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+#     review_needed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+#     approved_for_training: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+#
+#     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+#
+#     chat_memory: Mapped[ChatMemory | None] = relationship(
+#         back_populates="training_examples",
+#     )
+#
+#
+# # ============================================================
+# # SECTION 09 - ENTITY ALIAS MODEL
+# # ============================================================
+#
+# class EntityAlias(Base):
+#     """
+#     Stores aliases, misspellings, nicknames, abbreviations, and learned phrases.
+#     """
+#
+#     __tablename__ = "entity_aliases"
+#
+#     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+#
+#     entity_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+#     canonical_value: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+#     alias_value: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+#
+#     source: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+#     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+#
+#     usage_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+#     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+#     review_needed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+#
+#     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+#     updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+#
+#
+# # ============================================================
+# # SECTION 10 - USER FEEDBACK MODEL
+# # ============================================================
+#
+# class UserFeedback(Base):
+#     """
+#     Stores user feedback about chatbot answers.
+#     """
+#
+#     __tablename__ = "user_feedback"
+#
+#     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+#
+#     chat_memory_id: Mapped[int | None] = mapped_column(
+#         ForeignKey("chat_memory.id"),
+#         nullable=True,
+#         index=True,
+#     )
+#
+#     feedback_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+#     feedback_value: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+#     feedback_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+#
+#     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+#
+#
+# # ============================================================
+# # SECTION 11 - FUTURE MODEL ROADMAP
+# # ============================================================
+#
+# """
+# Future Database Models
+#
+# Phase 6.01:
+#     ChatMemory persistence service
+#
+# Phase 6.02:
+#     LearningSignal persistence service
+#
+# Phase 6.03:
+#     TrainingExample export service
+#
+# Phase 6.04:
+#     EntityAlias promotion engine
+#
+# Phase 6.05:
+#     UserFeedback UI controls
+#
+# Phase 6.06:
+#     SemanticEmbedding table
+#
+# Phase 6.07:
+#     ConversationSummary table
+#
+# Phase 6.08:
+#     KnowledgeGraphNode table
+#
+# Phase 6.09:
+#     KnowledgeGraphEdge table
+#
+# Phase 6.10:
+#     ModelTrainingRun table
+#
+# Long-Term AI Memory Targets
+#
+# - every raw user question
+# - every assistant response
+# - every detected intent
+# - every detected entity
+# - every fuzzy correction
+# - every failed response
+# - every learned alias
+# - every training example
+# - every user feedback event
+# - every future embedding record
+# """
