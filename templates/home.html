@@ -42,8 +42,12 @@
         href="/static/css/chat.css"
     >
 
-</head>
+    <link
+        rel="stylesheet"
+        href="/static/css/mobile.css"
+    >
 
+</head>
 
 <!-- ============================================================
      SECTION 02 - PAGE BODY
@@ -54,54 +58,35 @@
     <div class="app-shell">
 
 
-        <!-- ====================================================
-             SECTION 03 - TOP NAVIGATION
-             ==================================================== -->
+     <!-- ====================================================
+     SECTION 03 - TOP NAVIGATION
+     ==================================================== -->
 
-        <header class="topbar">
+<header class="topbar">
 
-            <a
-                class="brand-mark"
-                href="/"
-                aria-label="AISP2 homepage"
-            >
-                <span class="brand-icon">
-                    ⚾
-                </span>
+    <a class="brand-mark" href="/" aria-label="AISP2 homepage">
+        <span class="brand-icon">⚾</span>
+        <span>AISP2</span>
+    </a>
 
-                <span>
-                    AISP2
-                </span>
-            </a>
+    <button
+        class="mobile-only mobile-menu-button"
+        type="button"
+        data-mobile-menu-open
+        aria-label="Open mobile navigation"
+    >
+        ☰
+    </button>
 
-            <nav
-                class="nav-links"
-                aria-label="Primary navigation"
-            >
-                <a href="/">
-                    Chat
-                </a>
+    <nav class="nav-links" aria-label="Primary navigation">
+        <a href="/">Chat</a>
+        <a href="/tools/prediction">Predictions</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/project/data-sources">Sources</a>
+        <a href="/docs">API</a>
+    </nav>
 
-                <a href="/tools/prediction">
-                    Predictions
-                </a>
-
-                <a href="/dashboard">
-                    Dashboard
-                </a>
-
-                <a href="/project/data-sources">
-                    Sources
-                </a>
-
-                <a href="/docs">
-                    API
-                </a>
-            </nav>
-
-        </header>
-
-
+</header>
         <!-- ====================================================
              SECTION 04 - MAIN HERO
              ==================================================== -->
@@ -567,19 +552,63 @@
     </div>
 
 
-    <!-- ========================================================
-         SECTION 08 - SCRIPT LOADING
-         ======================================================== -->
+ <!-- ========================================================
+     SECTION 08 - SCRIPT LOADING
+     ======================================================== -->
 
-    <script src="/static/js/aisp2.js"></script>
+<script src="/static/js/aisp2.js"></script>
 
-    <script src="/static/js/chat.js"></script>
-
-</body>
-
-</html>
+<script src="/static/js/chat.js"></script>
 
 
+<!-- ========================================================
+     SECTION 08.01 - MOBILE NAVIGATION SCRIPT
+     PURPOSE: controls mobile drawer open, close, backdrop,
+     escape key, and accessibility state
+     ======================================================== -->
+
+<script>
+    const mobileDrawer = document.querySelector("[data-mobile-drawer]");
+    const openMobileMenu = document.querySelector("[data-mobile-menu-open]");
+    const closeMobileMenu = document.querySelector("[data-mobile-menu-close]");
+
+    function openAisp2MobileDrawer() {
+        if (!mobileDrawer) {
+            return;
+        }
+
+        mobileDrawer.classList.add("is-open");
+        mobileDrawer.setAttribute("aria-hidden", "false");
+        document.body.classList.add("mobile-drawer-open");
+    }
+
+    function closeAisp2MobileDrawer() {
+        if (!mobileDrawer) {
+            return;
+        }
+
+        mobileDrawer.classList.remove("is-open");
+        mobileDrawer.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("mobile-drawer-open");
+    }
+
+    if (mobileDrawer && openMobileMenu && closeMobileMenu) {
+        openMobileMenu.addEventListener("click", openAisp2MobileDrawer);
+        closeMobileMenu.addEventListener("click", closeAisp2MobileDrawer);
+
+        mobileDrawer.addEventListener("click", (event) => {
+            if (event.target === mobileDrawer) {
+                closeAisp2MobileDrawer();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeAisp2MobileDrawer();
+            }
+        });
+    }
+</script>
 <!-- ============================================================
      SECTION 09 - FUTURE HOME TEMPLATE ROADMAP
 
