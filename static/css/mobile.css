@@ -427,9 +427,10 @@ SECTION 17 - MOBILE HERO OVERRIDES
 
 }
 
-
 /* ============================================================
 SECTION 18 - MOBILE ENTERPRISE WORKSPACE
+PURPOSE: mobile app load state shows only the primary chat
+experience while hiding secondary workspace panels
 ============================================================ */
 
 @media (max-width:900px){
@@ -437,50 +438,22 @@ SECTION 18 - MOBILE ENTERPRISE WORKSPACE
     .workspace-layout{
         display:grid;
         grid-template-columns:1fr;
-        gap:14px;
+        gap:0;
         width:100%;
         min-height:auto;
         margin-top:18px;
     }
 
-    .workspace-sidebar,
-    .workspace-main,
-    .workspace-details{
+    .workspace-main{
+        order:1;
         width:100%;
         min-height:auto;
         border-radius:22px;
     }
 
-    .workspace-sidebar{
-        order:2;
-    }
-
-    .workspace-main{
-        order:1;
-    }
-
+    .workspace-sidebar,
     .workspace-details{
-        order:3;
-    }
-
-    .workspace-nav{
-        padding:14px;
-        display:grid;
-        grid-template-columns:repeat(2,minmax(0,1fr));
-        gap:10px;
-    }
-
-    .workspace-nav-title{
-        grid-column:1 / -1;
-        margin-bottom:2px;
-    }
-
-    .workspace-nav-button{
-        min-height:48px;
-        justify-content:flex-start;
-        padding:12px 13px;
-        border-radius:15px;
-        font-size:.9rem;
+        display:none;
     }
 
     .workspace-card{
@@ -494,8 +467,6 @@ SECTION 18 - MOBILE ENTERPRISE WORKSPACE
     }
 
 }
-
-
 /* ============================================================
 SECTION 19 - MOBILE CHAT PANEL OVERRIDES
 ============================================================ */
