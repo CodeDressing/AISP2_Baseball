@@ -38,6 +38,7 @@ class Team(Base):
     This table is the foundation for:
         - roster ownership
         - player-team relationships
+        - home/away game relationships
         - team statistics
         - matchup analysis
         - future win probability models
@@ -137,7 +138,15 @@ class Team(Base):
         back_populates="team",
     )
 
+    home_games: Mapped[list["Game"]] = relationship(
+        foreign_keys="Game.home_team_id",
+        back_populates="home_team",
+    )
 
+    away_games: Mapped[list["Game"]] = relationship(
+        foreign_keys="Game.away_team_id",
+        back_populates="away_team",
+    )
 # ============================================================
 # SECTION 03 - PLAYER MODEL
 # ============================================================
@@ -701,49 +710,91 @@ class UserFeedback(Base):
 
 
 # ============================================================
-# SECTION 11 - FUTURE MODEL ROADMAP
+# SECTION 11 - GAME MODEL
 # ============================================================
 
-"""
-Future Database Models
+class Game(Base):
+    """
+    Stores one MLB scheduled game.
 
-Phase 8.02:
-    Activate AI memory tables during database initialization.
+    This table powers:
+        - schedule lookup
+        - game-specific chatbot questions
+        - team matchup prediction
+        - player-in-game prediction
+        - gamePk-based boxscore/feed ingestion
+    """
 
-Phase 8.03:
-    Persist every chatbot exchange into ChatMemory.
+    __tablename__ = "games"
 
-Phase 8.04:
-    Persist LearningSignal and TrainingExample records.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-Phase 8.05:
-    Query EntityAlias during entity detection.
+    game_pk: Mapped[int] = mapped_column(
+        Integer,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
 
-Phase 8.06:
-    Promote repeated aliases into trusted aliases.
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
-Phase 8.07:
-    Add SemanticEmbedding table.
+    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    official_date: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
 
-Phase 8.08:
-    Add ConversationSummary table.
+    game_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    series_description: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
-Phase 8.09:
-    Add KnowledgeGraphNode and KnowledgeGraphEdge tables.
+    status_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    status_description: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    abstract_game_state: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    coded_game_state: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    detailed_state: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
-Phase 8.10:
-    Add ModelTrainingRun table.
+    venue_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
 
-Long-Term AI Memory Targets
+    home_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
 
-- every raw user question
-- every assistant response
-- every detected intent
-- every detected entity
-- every fuzzy correction
-- every failed response
-- every learned alias
-- every training example
-- every user feedback event
-- every future embedding record
-"""
+    away_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    home_mlb_team_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    away_mlb_team_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    home_team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    away_team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    home_probable_pitcher_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    away_probable_pitcher_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    home_probable_pitcher_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    away_probable_pitcher_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    double_header: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    game_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    day_night: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    scheduled_innings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    is_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_postponed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    raw_schedule_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    home_team: Mapped[Team | None] = relationship(
+        foreign_keys=[home_team_id],
+    )
+
+    away_team: Mapped[Team | None] = relationship(
+        foreign_keys=[away_team_id],
+    )

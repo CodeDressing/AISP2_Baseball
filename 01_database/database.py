@@ -1,11 +1,11 @@
 # ============================================================
 # AISP2 BASEBALL
-# PHASE 1.00 PART 1
-# ENTERPRISE DATABASE CONNECTION LAYER
-# FILE: 01_database/database.py
-# PURPOSE: centralized SQLAlchemy database engine, session
-# factory, declarative base, database dependency helper,
-# direct session helper, health checks, and local SQLite setup
+# PHASE 1.01 PART 1
+# ENTERPRISE DATABASE MODELS
+# FILE: 01_database/models.py
+# PURPOSE: core database entities for MLB teams, players,
+# rosters, season statistics, MLB schedule games, and future
+# prediction foundation
 # ============================================================
 
 
@@ -15,253 +15,368 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
-from contextlib import contextmanager
+from sqlalchemy import Boolean
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import Text
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
-from sqlalchemy import create_engine
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-
-# ============================================================
-# SECTION 02 - DATABASE CONFIGURATION
-# ============================================================
-
-DATABASE_URL = "sqlite:///aisp2_baseball.db"
-
-IS_SQLITE = DATABASE_URL.startswith(
-    "sqlite"
-)
+from database import Base
 
 
 # ============================================================
-# SECTION 03 - DATABASE ENGINE OPTIONS
+# SECTION 02 - TEAM MODEL
 # ============================================================
 
-ENGINE_OPTIONS: dict = {
-    "echo": False,
-    "future": True,
-    "pool_pre_ping": True,
-}
-
-if IS_SQLITE:
-    ENGINE_OPTIONS["connect_args"] = {
-        "check_same_thread": False,
-    }
-
-
-# ============================================================
-# SECTION 04 - PRIMARY DATABASE ENGINE
-# ============================================================
-
-engine: Engine = create_engine(
-    DATABASE_URL,
-    **ENGINE_OPTIONS,
-)
-
-
-# ============================================================
-# SECTION 05 - SESSION FACTORY
-# ============================================================
-
-SessionLocal = sessionmaker(
-    bind=engine,
-    autoflush=False,
-    autocommit=False,
-    future=True,
-)
-
-
-# ============================================================
-# SECTION 06 - DECLARATIVE BASE
-# ============================================================
-
-Base = declarative_base()
-
-
-# ============================================================
-# SECTION 07 - FASTAPI-STYLE DATABASE DEPENDENCY
-# ============================================================
-
-def get_database_session() -> Generator[Session, None, None]:
+class Team(Base):
     """
-    Creates a short-lived database session.
-
-    This function is designed to support future FastAPI routes.
-
-    Usage pattern:
-        db = Depends(get_database_session)
-
-    Responsibility:
-        - Open a database session.
-        - Yield that session to the caller.
-        - Close the session safely afterward.
+    Stores one MLB franchise/team.
     """
 
-    database_session = SessionLocal()
+    __tablename__ = "teams"
 
-    try:
-        yield database_session
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    finally:
-        database_session.close()
+    mlb_team_id: Mapped[int] = mapped_column(
+        Integer,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    abbreviation: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    team_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    file_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    franchise_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    club_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    short_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    location_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    league: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    division: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    venue: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    first_year_of_play: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        index=True,
+    )
+
+    players: Mapped[list["Player"]] = relationship(back_populates="team")
+    roster_entries: Mapped[list["RosterEntry"]] = relationship(back_populates="team")
+
+    home_games: Mapped[list["Game"]] = relationship(
+        foreign_keys="Game.home_team_id",
+        back_populates="home_team",
+    )
+
+    away_games: Mapped[list["Game"]] = relationship(
+        foreign_keys="Game.away_team_id",
+        back_populates="away_team",
+    )
 
 
 # ============================================================
-# SECTION 08 - DIRECT SESSION HELPER
+# SECTION 03 - PLAYER MODEL
 # ============================================================
 
-def create_database_session() -> Session:
+class Player(Base):
     """
-    Creates and returns a direct SQLAlchemy session.
-
-    This helper is intended for scripts, loaders, tests,
-    ingestion utilities, and command-line workflows.
-
-    Important:
-        The caller is responsible for closing the session.
-    """
-
-    return SessionLocal()
-
-
-# ============================================================
-# SECTION 09 - MANAGED SESSION HELPER
-# ============================================================
-
-@contextmanager
-def managed_database_session() -> Generator[Session, None, None]:
-    """
-    Creates a managed database session.
-
-    This helper automatically:
-        - Opens a session.
-        - Commits if no error occurs.
-        - Rolls back if an error occurs.
-        - Closes the session at the end.
-
-    This will be useful for future ingestion scripts.
-    """
-
-    database_session = SessionLocal()
-
-    try:
-        yield database_session
-        database_session.commit()
-
-    except Exception:
-        database_session.rollback()
-        raise
-
-    finally:
-        database_session.close()
-
-
-# ============================================================
-# SECTION 10 - DATABASE HEALTH CHECK
-# ============================================================
-
-def database_health_check() -> bool:
-    """
-    Verifies that the database engine can execute a simple query.
+    Stores one MLB player.
     """
 
-    try:
-        with engine.connect() as connection:
-            connection.execute(
-                text("SELECT 1")
-            )
+    __tablename__ = "players"
 
-        return True
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    except Exception:
-        return False
+    mlb_player_id: Mapped[int] = mapped_column(
+        Integer,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    first_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    primary_number: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    position: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    position_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    bats: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    throws: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    height: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    weight: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    birth_date: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    birth_city: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    birth_state_province: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    birth_country: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    mlb_debut_date: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+    active_status: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        index=True,
+    )
+
+    current_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    team: Mapped[Team | None] = relationship(back_populates="players")
+    roster_entries: Mapped[list["RosterEntry"]] = relationship(back_populates="player")
+    season_stats: Mapped[list["PlayerSeasonStat"]] = relationship(back_populates="player")
 
 
 # ============================================================
-# SECTION 11 - DATABASE HEALTH DETAILS
+# SECTION 04 - ROSTER ENTRY MODEL
 # ============================================================
 
-def database_health_details() -> dict:
+class RosterEntry(Base):
     """
-    Returns human-readable database health details.
-
-    This will later support:
-        - API health routes
-        - dashboard status panels
-        - deployment checks
-        - Render diagnostics
+    Stores one player-team-season roster relationship.
     """
 
-    return {
-        "database_url_configured": bool(DATABASE_URL),
-        "database_type": "sqlite" if IS_SQLITE else "external",
-        "database_url": DATABASE_URL,
-        "connection_ok": database_health_check(),
-        "engine_echo": ENGINE_OPTIONS.get("echo"),
-        "pool_pre_ping": ENGINE_OPTIONS.get("pool_pre_ping"),
-    }
+    __tablename__ = "roster_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    roster_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+
+    jersey_number: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    status_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    status_description: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=False,
+        index=True,
+    )
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=False,
+        index=True,
+    )
+
+    team: Mapped[Team] = relationship(back_populates="roster_entries")
+    player: Mapped[Player] = relationship(back_populates="roster_entries")
 
 
 # ============================================================
-# SECTION 12 - LOCAL FILE EXECUTION TEST
+# SECTION 05 - PLAYER SEASON STAT MODEL
 # ============================================================
 
-if __name__ == "__main__":
-    print("AISP2 database connection file loaded successfully.")
-    print(f"Database URL: {DATABASE_URL}")
-    print(f"Database healthy: {database_health_check()}")
-    print(database_health_details())
+class PlayerSeasonStat(Base):
+    """
+    Stores season-level player statistics.
+    """
+
+    __tablename__ = "player_season_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=False,
+        index=True,
+    )
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    stat_group: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+
+    games_played: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plate_appearances: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    at_bats: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    hits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    doubles: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    triples: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    home_runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rbi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    walks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    strikeouts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stolen_bases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    batting_average: Mapped[float | None] = mapped_column(Float, nullable=True)
+    on_base_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    slugging_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ops: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    wins: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    losses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    era: Mapped[float | None] = mapped_column(Float, nullable=True)
+    whip: Mapped[float | None] = mapped_column(Float, nullable=True)
+    saves: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    innings_pitched: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    raw_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    player: Mapped[Player] = relationship(back_populates="season_stats")
 
 
 # ============================================================
-# SECTION 13 - FUTURE DATABASE ROADMAP
+# SECTION 06 - GAME MODEL
+# ============================================================
+
+class Game(Base):
+    """
+    Stores one MLB scheduled game.
+
+    This table turns the MLB schedule endpoint into a permanent
+    database layer.
+
+    It supports:
+        - schedule display
+        - matchup analysis
+        - game result tracking
+        - probable pitcher tracking
+        - completed game stat ingestion
+        - prediction model feature generation
+    """
+
+    __tablename__ = "games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    game_pk: Mapped[int] = mapped_column(
+        Integer,
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    game_date: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    official_date: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+    )
+
+    game_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    series_description: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    status_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    status_description: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    abstract_game_state: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    coded_game_state: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    detailed_state: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    venue_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+
+    home_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    away_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    home_mlb_team_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    away_mlb_team_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    home_team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    away_team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    home_probable_pitcher_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    away_probable_pitcher_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    home_probable_pitcher_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    away_probable_pitcher_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    double_header: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    game_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    day_night: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    scheduled_innings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    is_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_postponed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    raw_schedule_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    home_team: Mapped[Team | None] = relationship(
+        foreign_keys=[home_team_id],
+        back_populates="home_games",
+    )
+
+    away_team: Mapped[Team | None] = relationship(
+        foreign_keys=[away_team_id],
+        back_populates="away_games",
+    )
+
+
+# ============================================================
+# SECTION 07 - FUTURE MODEL ROADMAP
 # ============================================================
 
 """
-Future Database Expansion
+Immediate Next Steps
 
-Phase 1.01:
-    Add init_db.py to create all database tables.
+Phase 1.01 Part 2:
+    Create/upgrade init_db.py so Base.metadata.create_all(engine)
+    creates the new games table.
 
-Phase 1.02:
-    Add Team, Player, and PlayerSeasonStat models.
+Phase 3.04 Part 1:
+    Create 03_ingestion/schedule_ingestion.py.
 
-Phase 1.03:
-    Add roster table.
+Phase 3.04 Part 2:
+    Pull MLB schedule data using:
+        MLBStatsAPIClient.get_schedule_games()
 
-Phase 1.04:
-    Add Statcast event table.
+Phase 3.04 Part 3:
+    Normalize schedule payloads into Game records.
 
-Phase 1.05:
-    Add game table.
+Phase 3.04 Part 4:
+    Upsert games by game_pk.
 
-Phase 1.06:
-    Add prediction result tables.
+Phase 3.05:
+    Use game_pk to load:
+        /game/{gamePk}/feed/live
+        /game/{gamePk}/boxscore
 
-Phase 2.00:
-    Add PostgreSQL support for Render production.
+Future Database Models
 
-Phase 3.00:
-    Add analytics warehouse support.
-
-Future Database Targets
-
-SQLite:
-    Local development and fast iteration.
-
-PostgreSQL:
-    Render production database.
-
-DuckDB:
-    Analytics warehouse for larger baseball datasets.
-
-Redis:
-    Caching, job state, and scheduled ingestion support.
-
-Vector Database:
-    Future AI analyst retrieval and player/team context search.
+- GameFeedSnapshot
+- GameBoxScore
+- PlayerGameStat
+- TeamGameStat
+- PitchEvent
+- PlateAppearance
+- ProbablePitcherSnapshot
+- LineupSnapshot
+- WeatherSnapshot
+- BettingMarketSnapshot
+- PredictionResult
 """

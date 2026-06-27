@@ -523,6 +523,13 @@ def build_entity_report(
 ) -> dict:
     player_profiles = player_profiles or {}
 
+    correction_report = apply_fuzzy_entity_corrections(
+        message=message,
+        player_profiles=player_profiles,
+    )
+
+    message = correction_report["corrected_message"]
+
     team_entities = detect_team_entities(
         message,
     )
@@ -561,20 +568,114 @@ def build_entity_report(
 
 
 # ============================================================
-# SECTION 09 - FUTURE ENTITY DETECTION ROADMAP
+# SECTION 09 - FUZZY ENTITY CORRECTION
 # FILE: 04_ai/entity_detection.py
-# PURPOSE: future aliasing, fuzzy matching, and learning ledger
+# PURPOSE: recover misspelled players, teams, and baseball
+# terminology before entity routing
 # ============================================================
 
-"""
-09.01 Add player nickname aliases.
-09.02 Add dynamic live roster name detection.
-09.03 Add fuzzy matching for misspellings.
-09.04 Add abbreviation conflict handling.
-09.05 Add ballpark detection.
-09.06 Add pitcher/batter role detection.
-09.07 Add opponent detection.
-09.08 Add phrase memory from past user inputs.
-09.09 Add vector-based entity similarity.
-09.10 Add confidence tuning from user corrections.
-"""
+from fuzzy_matching import (
+    build_fuzzy_nlp_report,
+)
+
+
+def apply_fuzzy_entity_corrections(
+    message: str,
+    player_profiles: dict | None = None,
+) -> dict:
+    player_profiles = player_profiles or {}
+
+    player_names = sorted(
+        player_profiles.keys(),
+    )
+
+    team_names = sorted(
+        MLB_TEAM_ALIASES.keys(),
+    )
+
+    fuzzy_report = build_fuzzy_nlp_report(
+        message=message,
+        player_names=player_names,
+        team_names=team_names,
+    )
+
+    corrected_message = message
+
+    corrections = []
+
+    player_match = fuzzy_report.get(
+        "player_match",
+    )
+
+    if (
+        player_match
+        and player_match.get("matched")
+        and player_match.get("observed_phrase")
+    ):
+        corrected_message = corrected_message.replace(
+            player_match["observed_phrase"],
+            player_match["best_match"],
+        )
+
+        corrections.append(
+            {
+                "entity_type": "player",
+                "original": player_match["observed_phrase"],
+                "corrected": player_match["best_match"],
+                "confidence": player_match["score"],
+            }
+        )
+
+    team_match = fuzzy_report.get(
+        "team_match",
+    )
+
+    if (
+        team_match
+        and team_match.get("matched")
+        and team_match.get("observed_phrase")
+    ):
+        corrected_message = corrected_message.replace(
+            team_match["observed_phrase"],
+            team_match["best_match"],
+        )
+
+        corrections.append(
+            {
+                "entity_type": "team",
+                "original": team_match["observed_phrase"],
+                "corrected": team_match["best_match"],
+                "confidence": team_match["score"],
+            }
+        )
+
+    term_match = fuzzy_report.get(
+        "term_match",
+    )
+
+    if (
+        term_match
+        and term_match.get("matched")
+        and term_match.get("observed_phrase")
+    ):
+        corrected_message = corrected_message.replace(
+            term_match["observed_phrase"],
+            term_match["canonical_value"],
+        )
+
+        corrections.append(
+            {
+                "entity_type": "baseball_term",
+                "original": term_match["observed_phrase"],
+                "corrected": term_match["canonical_value"],
+                "confidence": term_match["score"],
+            }
+        )
+
+    return {
+        "original_message": message,
+        "corrected_message": corrected_message,
+        "corrections": corrections,
+        "fuzzy_report": fuzzy_report,
+        "has_corrections": bool(corrections),
+    }

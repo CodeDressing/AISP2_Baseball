@@ -1,11 +1,11 @@
 # ============================================================
 # AISP2 BASEBALL
-# PHASE 6 PART 4
+# PHASE 1.01 PART 2
 # ENTERPRISE DATABASE INITIALIZATION ENGINE
 # FILE: 01_database/init_db.py
-# PURPOSE: create database tables, validate schema creation,
-# verify AI learning infrastructure, provide startup diagnostics,
-# and prepare future migration workflows
+# PURPOSE: create database tables, validate schema readiness,
+# prepare schedule/game ingestion, and support future MLB
+# prediction data expansion
 # ============================================================
 
 
@@ -24,7 +24,7 @@ import models
 
 
 # ============================================================
-# SECTION 02 - REGISTERED TABLE GROUPS
+# SECTION 02 - CORE BASEBALL TABLE REGISTRY
 # ============================================================
 
 CORE_BASEBALL_TABLES = [
@@ -32,26 +32,97 @@ CORE_BASEBALL_TABLES = [
     "players",
     "roster_entries",
     "player_season_stats",
+    "games",
 ]
 
 
-AI_MEMORY_TABLES = [
-    "chat_memory",
-    "learning_signals",
-    "training_examples",
-    "entity_aliases",
-    "user_feedback",
+SCHEDULE_READY_TABLES = [
+    "teams",
+    "games",
+]
+
+
+PLAYER_READY_TABLES = [
+    "teams",
+    "players",
+    "roster_entries",
+    "player_season_stats",
+]
+
+
+PREDICTION_FOUNDATION_TABLES = [
+    "teams",
+    "players",
+    "roster_entries",
+    "player_season_stats",
+    "games",
 ]
 
 
 REGISTERED_TABLES = [
     *CORE_BASEBALL_TABLES,
-    *AI_MEMORY_TABLES,
 ]
 
 
 # ============================================================
-# SECTION 03 - CREATE DATABASE TABLES
+# SECTION 03 - SCHEDULE INGESTION WINDOWS
+# ============================================================
+
+MLB_2026_SCHEDULE_WINDOWS = [
+    {
+        "label": "entire_2026_regular_season",
+        "season": 2026,
+        "start_date": None,
+        "end_date": None,
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026",
+    },
+    {
+        "label": "april_2026",
+        "season": 2026,
+        "start_date": "2026-04-01",
+        "end_date": "2026-04-30",
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&startDate=2026-04-01&endDate=2026-04-30",
+    },
+    {
+        "label": "may_2026",
+        "season": 2026,
+        "start_date": "2026-05-01",
+        "end_date": "2026-05-31",
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&startDate=2026-05-01&endDate=2026-05-31",
+    },
+    {
+        "label": "june_2026",
+        "season": 2026,
+        "start_date": "2026-06-01",
+        "end_date": "2026-06-30",
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&startDate=2026-06-01&endDate=2026-06-30",
+    },
+    {
+        "label": "july_2026",
+        "season": 2026,
+        "start_date": "2026-07-01",
+        "end_date": "2026-07-31",
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&startDate=2026-07-01&endDate=2026-07-31",
+    },
+    {
+        "label": "august_2026",
+        "season": 2026,
+        "start_date": "2026-08-01",
+        "end_date": "2026-08-31",
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&startDate=2026-08-01&endDate=2026-08-31",
+    },
+    {
+        "label": "september_2026",
+        "season": 2026,
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-30",
+        "endpoint": "https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026&startDate=2026-09-01&endDate=2026-09-30",
+    },
+]
+
+
+# ============================================================
+# SECTION 04 - CREATE DATABASE TABLES
 # ============================================================
 
 def create_database_tables() -> None:
@@ -65,7 +136,7 @@ def create_database_tables() -> None:
 
 
 # ============================================================
-# SECTION 04 - DROP DATABASE TABLES
+# SECTION 05 - DROP DATABASE TABLES
 # ============================================================
 
 def drop_database_tables() -> None:
@@ -81,10 +152,15 @@ def drop_database_tables() -> None:
 
 
 # ============================================================
-# SECTION 05 - TABLE DETECTION HELPERS
+# SECTION 06 - TABLE DETECTION HELPERS
 # ============================================================
 
 def get_metadata_tables() -> list[str]:
+    """
+    Returns all SQLAlchemy metadata table names currently
+    registered by imported model classes.
+    """
+
     return sorted(
         Base.metadata.tables.keys()
     )
@@ -94,6 +170,10 @@ def get_missing_tables(
     expected_tables: list[str],
     detected_tables: list[str],
 ) -> list[str]:
+    """
+    Returns expected tables that are not detected.
+    """
+
     return sorted(
         table_name
         for table_name in expected_tables
@@ -105,6 +185,10 @@ def get_detected_tables(
     expected_tables: list[str],
     detected_tables: list[str],
 ) -> list[str]:
+    """
+    Returns expected tables that are detected.
+    """
+
     return sorted(
         table_name
         for table_name in expected_tables
@@ -113,70 +197,136 @@ def get_detected_tables(
 
 
 # ============================================================
-# SECTION 06 - BUILD SCHEMA REPORT
+# SECTION 07 - SCHEMA READINESS REPORT
 # ============================================================
 
 def build_schema_report() -> dict:
     """
-    Returns a full database schema report for startup diagnostics.
+    Returns database schema readiness information.
+
+    Important:
+        This checks SQLAlchemy registered models, not row counts.
     """
 
     metadata_tables = get_metadata_tables()
-
-    missing_registered_tables = get_missing_tables(
-        expected_tables=REGISTERED_TABLES,
-        detected_tables=metadata_tables,
-    )
 
     missing_core_tables = get_missing_tables(
         expected_tables=CORE_BASEBALL_TABLES,
         detected_tables=metadata_tables,
     )
 
-    missing_ai_tables = get_missing_tables(
-        expected_tables=AI_MEMORY_TABLES,
+    missing_schedule_tables = get_missing_tables(
+        expected_tables=SCHEDULE_READY_TABLES,
         detected_tables=metadata_tables,
     )
 
-    detected_core_tables = get_detected_tables(
-        expected_tables=CORE_BASEBALL_TABLES,
+    missing_player_tables = get_missing_tables(
+        expected_tables=PLAYER_READY_TABLES,
         detected_tables=metadata_tables,
     )
 
-    detected_ai_tables = get_detected_tables(
-        expected_tables=AI_MEMORY_TABLES,
+    missing_prediction_tables = get_missing_tables(
+        expected_tables=PREDICTION_FOUNDATION_TABLES,
         detected_tables=metadata_tables,
     )
 
     return {
         "database_url": str(engine.url),
+        "metadata_tables": metadata_tables,
         "registered_tables": REGISTERED_TABLES,
         "core_baseball_tables": CORE_BASEBALL_TABLES,
-        "ai_memory_tables": AI_MEMORY_TABLES,
-        "metadata_tables": metadata_tables,
-        "registered_table_count": len(REGISTERED_TABLES),
+        "schedule_ready_tables": SCHEDULE_READY_TABLES,
+        "player_ready_tables": PLAYER_READY_TABLES,
+        "prediction_foundation_tables": PREDICTION_FOUNDATION_TABLES,
         "metadata_table_count": len(metadata_tables),
-        "core_table_count": len(CORE_BASEBALL_TABLES),
-        "ai_memory_table_count": len(AI_MEMORY_TABLES),
-        "detected_core_tables": detected_core_tables,
-        "detected_ai_tables": detected_ai_tables,
-        "missing_registered_tables": missing_registered_tables,
+        "registered_table_count": len(REGISTERED_TABLES),
+        "detected_core_tables": get_detected_tables(
+            CORE_BASEBALL_TABLES,
+            metadata_tables,
+        ),
+        "detected_schedule_tables": get_detected_tables(
+            SCHEDULE_READY_TABLES,
+            metadata_tables,
+        ),
+        "detected_player_tables": get_detected_tables(
+            PLAYER_READY_TABLES,
+            metadata_tables,
+        ),
+        "detected_prediction_tables": get_detected_tables(
+            PREDICTION_FOUNDATION_TABLES,
+            metadata_tables,
+        ),
         "missing_core_tables": missing_core_tables,
-        "missing_ai_tables": missing_ai_tables,
-        "all_registered_tables_detected": len(missing_registered_tables) == 0,
+        "missing_schedule_tables": missing_schedule_tables,
+        "missing_player_tables": missing_player_tables,
+        "missing_prediction_tables": missing_prediction_tables,
         "core_baseball_ready": len(missing_core_tables) == 0,
-        "ai_learning_ready": len(missing_ai_tables) == 0,
+        "schedule_ingestion_ready": len(missing_schedule_tables) == 0,
+        "player_ingestion_ready": len(missing_player_tables) == 0,
+        "prediction_foundation_ready": len(missing_prediction_tables) == 0,
     }
 
 
 # ============================================================
-# SECTION 07 - INITIALIZE DATABASE
+# SECTION 08 - SCHEDULE PLAN REPORT
+# ============================================================
+
+def build_schedule_ingestion_plan() -> dict:
+    """
+    Returns the schedule ingestion plan for the 2026 MLB season.
+    """
+
+    monthly_windows = [
+        window
+        for window in MLB_2026_SCHEDULE_WINDOWS
+        if window["start_date"] is not None
+    ]
+
+    entire_season_window = [
+        window
+        for window in MLB_2026_SCHEDULE_WINDOWS
+        if window["start_date"] is None
+    ]
+
+    return {
+        "season": 2026,
+        "source": "MLB Stats API",
+        "target_table": "games",
+        "primary_key": "game_pk",
+        "recommended_ingestion_mode": "monthly_windows_first",
+        "why_monthly_first": (
+            "Monthly ingestion is easier to debug, easier to retry, "
+            "and safer before loading the entire season at once."
+        ),
+        "entire_season_window": entire_season_window,
+        "monthly_windows": monthly_windows,
+        "window_count": len(MLB_2026_SCHEDULE_WINDOWS),
+        "monthly_window_count": len(monthly_windows),
+        "requires_tables": SCHEDULE_READY_TABLES,
+        "future_downstream_endpoints": [
+            "/game/{gamePk}/feed/live",
+            "/game/{gamePk}/boxscore",
+            "/game/{gamePk}/linescore",
+        ],
+        "future_prediction_uses": [
+            "team matchup lookup",
+            "specific game prediction",
+            "specific player in specific game prediction",
+            "probable pitcher context",
+            "completed-game stat ingestion",
+            "chatbot game intent routing",
+        ],
+    }
+
+
+# ============================================================
+# SECTION 09 - INITIALIZE DATABASE
 # ============================================================
 
 def initialize_database() -> dict:
     """
-    Creates every registered SQLAlchemy table, validates the
-    resulting schema, and returns a comprehensive startup report.
+    Creates all registered database tables and returns a startup
+    report for baseball, schedule, player, and prediction readiness.
     """
 
     create_database_tables()
@@ -184,102 +334,89 @@ def initialize_database() -> dict:
     schema_report = build_schema_report()
 
     return {
-        "success": schema_report["all_registered_tables_detected"],
+        "success": schema_report["core_baseball_ready"],
         "operation": "initialize_database",
         "engine": str(engine.url),
-        "tables_created_or_verified": len(Base.metadata.tables.keys()),
-        "registered_tables": len(REGISTERED_TABLES),
-        "metadata_tables": schema_report["metadata_table_count"],
+        "tables_created_or_verified": schema_report["metadata_table_count"],
         "core_baseball_ready": schema_report["core_baseball_ready"],
-        "ai_learning_ready": schema_report["ai_learning_ready"],
-        "missing_tables": schema_report["missing_registered_tables"],
+        "schedule_ingestion_ready": schema_report["schedule_ingestion_ready"],
+        "player_ingestion_ready": schema_report["player_ingestion_ready"],
+        "prediction_foundation_ready": schema_report[
+            "prediction_foundation_ready"
+        ],
+        "missing_core_tables": schema_report["missing_core_tables"],
+        "missing_schedule_tables": schema_report["missing_schedule_tables"],
+        "missing_player_tables": schema_report["missing_player_tables"],
+        "missing_prediction_tables": schema_report[
+            "missing_prediction_tables"
+        ],
         "schema_report": schema_report,
+        "schedule_ingestion_plan": build_schedule_ingestion_plan(),
         "database_health": database_health_details(),
     }
 
 
 # ============================================================
-# SECTION 08 - DATABASE STARTUP CHECK
+# SECTION 10 - DATABASE STARTUP CHECK
 # ============================================================
 
 def database_startup_check() -> dict:
     """
-    Performs a complete startup validation of the database,
-    including baseball warehouse readiness and AI learning
-    infrastructure readiness.
+    Performs startup validation without creating or dropping tables.
     """
 
     schema_report = build_schema_report()
 
     return {
         "database_initialized": database_health_check(),
-        "registered_tables_detected": schema_report[
-            "all_registered_tables_detected"
-        ],
-        "core_baseball_ready": schema_report["core_baseball_ready"],
-        "ai_learning_ready": schema_report["ai_learning_ready"],
-        "registered_tables": REGISTERED_TABLES,
         "metadata_tables": schema_report["metadata_tables"],
         "table_count": schema_report["metadata_table_count"],
-        "missing_registered_tables": schema_report["missing_registered_tables"],
+        "core_baseball_ready": schema_report["core_baseball_ready"],
+        "schedule_ingestion_ready": schema_report["schedule_ingestion_ready"],
+        "player_ingestion_ready": schema_report["player_ingestion_ready"],
+        "prediction_foundation_ready": schema_report[
+            "prediction_foundation_ready"
+        ],
         "missing_core_tables": schema_report["missing_core_tables"],
-        "missing_ai_tables": schema_report["missing_ai_tables"],
+        "missing_schedule_tables": schema_report["missing_schedule_tables"],
+        "missing_player_tables": schema_report["missing_player_tables"],
+        "missing_prediction_tables": schema_report[
+            "missing_prediction_tables"
+        ],
     }
 
 
 # ============================================================
-# SECTION 09 - AI MEMORY READINESS CHECK
+# SECTION 11 - HUMAN-READABLE STARTUP SUMMARY
 # ============================================================
 
-def ai_memory_startup_check() -> dict:
+def build_startup_summary() -> str:
     """
-    Verifies that permanent AI memory tables exist.
-
-    These tables are required before AISP2 can permanently store:
-        - every user question
-        - every assistant response
-        - every NLU report
-        - every learning signal
-        - every training example
-        - every learned alias
-        - every user feedback event
+    Returns a short readable startup summary for terminal logs.
     """
 
-    schema_report = build_schema_report()
+    startup_report = database_startup_check()
 
-    return {
-        "ai_learning_ready": schema_report["ai_learning_ready"],
-        "required_ai_tables": AI_MEMORY_TABLES,
-        "detected_ai_tables": schema_report["detected_ai_tables"],
-        "missing_ai_tables": schema_report["missing_ai_tables"],
-        "ready_for_permanent_chat_memory": (
-            "chat_memory" in schema_report["metadata_tables"]
-        ),
-        "ready_for_learning_signals": (
-            "learning_signals" in schema_report["metadata_tables"]
-        ),
-        "ready_for_training_examples": (
-            "training_examples" in schema_report["metadata_tables"]
-        ),
-        "ready_for_entity_alias_learning": (
-            "entity_aliases" in schema_report["metadata_tables"]
-        ),
-        "ready_for_user_feedback": (
-            "user_feedback" in schema_report["metadata_tables"]
-        ),
-    }
+    return (
+        "AISP2 Database Startup | "
+        f"Tables: {startup_report['table_count']} | "
+        f"Core Ready: {startup_report['core_baseball_ready']} | "
+        f"Schedule Ready: {startup_report['schedule_ingestion_ready']} | "
+        f"Players Ready: {startup_report['player_ingestion_ready']} | "
+        f"Prediction Ready: {startup_report['prediction_foundation_ready']}"
+    )
 
 
 # ============================================================
-# SECTION 10 - COMMAND LINE EXECUTION
+# SECTION 12 - COMMAND LINE EXECUTION
 # ============================================================
 
 if __name__ == "__main__":
 
     print()
-    print("=" * 60)
+    print("=" * 70)
     print("AISP2 DATABASE INITIALIZATION")
-    print("=" * 60)
+    print("=" * 70)
 
     result = initialize_database()
 
@@ -288,16 +425,20 @@ if __name__ == "__main__":
     print(result)
 
     print()
+    print("Startup Summary")
+    print(build_startup_summary())
+
+    print()
     print("Schema Report")
     print(build_schema_report())
 
     print()
-    print("Startup Check")
-    print(database_startup_check())
+    print("Schedule Ingestion Plan")
+    print(build_schedule_ingestion_plan())
 
     print()
-    print("AI Memory Check")
-    print(ai_memory_startup_check())
+    print("Startup Check")
+    print(database_startup_check())
 
     print()
     print("Database initialization completed.")
@@ -305,40 +446,61 @@ if __name__ == "__main__":
 
 
 # ============================================================
-# SECTION 11 - FUTURE ROADMAP
+# SECTION 13 - FUTURE ROADMAP
 # ============================================================
 
 """
-Phase 6.04
-    Database initialization upgraded for AI memory readiness.
+Immediate Next Step
 
-Phase 6.05
-    interaction_memory.py database-backed persistence.
+Phase 3.04 Part 1:
+    Create 03_ingestion/schedule_ingestion.py.
 
-Phase 6.06
-    learning_engine.py permanent LearningSignal persistence.
+Phase 3.04 Part 2:
+    Ingest monthly schedule windows:
+        - April 2026
+        - May 2026
+        - June 2026
+        - July 2026
+        - August 2026
+        - September 2026
 
-Phase 6.07
-    training example export service.
+Phase 3.04 Part 3:
+    Add entire-season ingestion mode after monthly mode is verified.
 
-Phase 6.08
-    entity alias promotion engine.
+Phase 3.04 Part 4:
+    Upsert every game into the games table by game_pk.
 
-Phase 6.09
-    semantic embedding table and vector search.
+Phase 3.05:
+    Add completed-game detail ingestion:
+        - /game/{gamePk}/feed/live
+        - /game/{gamePk}/boxscore
+        - /game/{gamePk}/linescore
 
-Phase 6.10
-    migration system with Alembic.
+Phase 3.06:
+    Add PlayerGameStat table.
+
+Phase 3.07:
+    Add TeamGameStat table.
+
+Phase 3.08:
+    Add chatbot game lookup service.
+
+Phase 3.09:
+    Add prediction-ready matchup resolver.
+
+Phase 3.10:
+    Add player-in-game prediction context builder.
 
 Long-Term Database Initialization Targets
 
 - create all core baseball warehouse tables
-- create all AI memory tables
-- validate schema readiness
-- validate AI learning readiness
-- validate permanent chat storage readiness
-- validate training dataset readiness
-- report missing tables clearly
-- prepare future migrations
+- create schedule and game lookup tables
+- validate prediction foundation readiness
+- validate permanent game_pk lookup readiness
+- prepare game feed ingestion
+- prepare box score ingestion
+- prepare player game stat ingestion
+- prepare team game stat ingestion
 - support local SQLite and production PostgreSQL
+- support future Alembic migrations
 """

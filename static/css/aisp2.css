@@ -548,48 +548,22 @@ h1 {
 
 /* ============================================================
    SECTION 12 - RESPONSIVE DESIGN
+   PURPOSE: mobile command-center layout, thumb navigation,
+   compact hero, stacked workspace, and touch-safe controls
    ============================================================ */
 
-@media (max-width: 760px) {
-    .topbar {
-        height: auto;
-
-        padding: 16px 18px;
-
-        align-items: flex-start;
-        gap: 12px;
-        flex-direction: column;
-    }
-
-    .nav-links {
+@media (max-width: 900px) {
+    .workspace-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
         width: 100%;
-
-        overflow-x: auto;
-        padding-bottom: 2px;
+        min-height: auto;
+        margin-top: 20px;
     }
 
-    .hero {
-        width: min(100% - 24px, 1120px);
-        padding-top: 26px;
-    }
+    .workspace-sidebar,
 
-    .chat-header {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .message {
-        max-width: 94%;
-    }
-
-    .input-area {
-        flex-direction: column;
-    }
-
-    .send-button {
-        width: 100%;
-    }
-}
 
 
 /* ============================================================
