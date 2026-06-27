@@ -1,0 +1,1012 @@
+/* ============================================================
+AISP2 BASEBALL
+PHASE 7 PART 3
+FILE: static/css/mobile.css
+PURPOSE:
+Enterprise mobile override layer.
+
+This file is loaded LAST so that all mobile-specific behavior
+is centralized instead of scattered across multiple CSS files.
+============================================================ */
+
+
+/* ============================================================
+SECTION 01 - MOBILE DESIGN TOKENS
+============================================================ */
+
+:root {
+
+    --mobile-breakpoint: 900px;
+    --tablet-breakpoint: 1200px;
+
+    --mobile-radius-sm: 12px;
+    --mobile-radius-md: 18px;
+    --mobile-radius-lg: 24px;
+
+    --mobile-padding-xs: 8px;
+    --mobile-padding-sm: 12px;
+    --mobile-padding-md: 16px;
+    --mobile-padding-lg: 20px;
+
+    --mobile-header-height: 64px;
+    --mobile-bottom-nav-height: 72px;
+
+}
+
+
+/* ============================================================
+SECTION 02 - SAFE AREA SUPPORT
+============================================================ */
+
+body {
+
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+
+}
+
+.safe-bottom {
+
+    padding-bottom: env(safe-area-inset-bottom);
+
+}
+
+
+/* ============================================================
+SECTION 03 - VIEWPORT FIXES
+============================================================ */
+
+html {
+
+    -webkit-text-size-adjust: 100%;
+
+}
+
+body {
+
+    min-height: 100dvh;
+    overflow-x: hidden;
+
+}
+
+
+/* ============================================================
+SECTION 04 - TOUCH TARGETS
+============================================================ */
+
+button,
+input,
+textarea,
+select,
+a {
+
+    min-height: 44px;
+
+}
+
+button {
+
+    touch-action: manipulation;
+
+}
+
+
+/* ============================================================
+SECTION 05 - MOBILE TYPOGRAPHY
+============================================================ */
+
+@media (max-width:900px){
+
+    h1{
+
+        line-height:1;
+        letter-spacing:-0.05em;
+
+    }
+
+    h2{
+
+        font-size:1.7rem;
+
+    }
+
+    h3{
+
+        font-size:1.3rem;
+
+    }
+
+    p{
+
+        line-height:1.65;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 06 - GLOBAL CONTAINERS
+============================================================ */
+
+@media (max-width:900px){
+
+    .container,
+    .page,
+    .page-container,
+    .hero{
+
+        width:min(100% - 20px,1200px);
+        margin-inline:auto;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 07 - MOBILE NAVIGATION
+============================================================ */
+
+.mobile-hidden{
+
+    display:none !important;
+
+}
+
+.mobile-only{
+
+    display:none;
+
+}
+
+@media (max-width:900px){
+
+    .mobile-only{
+
+        display:block;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 08 - MOBILE CARDS
+============================================================ */
+
+@media (max-width:900px){
+
+    .card{
+
+        border-radius:18px;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 09 - MOBILE TABLES
+============================================================ */
+
+@media (max-width:900px){
+
+    table{
+
+        display:block;
+        overflow-x:auto;
+        white-space:nowrap;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 10 - MOBILE IMAGES
+============================================================ */
+
+img{
+
+    max-width:100%;
+    height:auto;
+
+}
+
+
+/* ============================================================
+SECTION 11 - MOBILE SCROLLBARS
+============================================================ */
+
+@media (max-width:900px){
+
+    ::-webkit-scrollbar{
+
+        width:6px;
+        height:6px;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 12 - LANDSCAPE SUPPORT
+============================================================ */
+
+@media (max-width:900px) and (orientation:landscape){
+
+    body{
+
+        min-height:100vh;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 13 - ACCESSIBILITY
+============================================================ */
+
+@media (prefers-reduced-motion:reduce){
+
+    *{
+
+        animation:none !important;
+        transition:none !important;
+        scroll-behavior:auto !important;
+
+    }
+
+}
+
+
+/* ============================================================
+SECTION 14 - PERFORMANCE UTILITIES
+============================================================ */
+
+.mobile-gpu{
+
+    will-change:transform;
+    transform:translateZ(0);
+
+}
+
+
+/* ============================================================
+SECTION 15 - ROADMAP
+============================================================ */
+
+/*
+
+PHASE 7.4
+Bottom Navigation
+
+PHASE 7.5
+Hamburger Navigation
+
+PHASE 7.6
+Player Explorer Mobile
+
+PHASE 7.7
+Prediction Workbench Mobile
+
+PHASE 7.8
+Dashboard Mobile
+
+PHASE 7.9
+Foldable Device Support
+
+PHASE 8.0
+Tablet Layout
+
+*/
+
+/* ============================================================
+SECTION 16 - MOBILE TOPBAR OVERRIDES
+============================================================ */
+
+@media (max-width:900px){
+
+    .topbar{
+        position:sticky;
+        top:0;
+        z-index:8000;
+        height:auto;
+        min-height:64px;
+        padding:12px 14px;
+        flex-direction:column;
+        align-items:stretch;
+        gap:12px;
+    }
+
+    .brand-mark{
+        width:100%;
+        justify-content:space-between;
+    }
+
+    .nav-links{
+        width:100%;
+        display:flex;
+        overflow-x:auto;
+        gap:8px;
+        padding-bottom:4px;
+        scrollbar-width:none;
+    }
+
+    .nav-links::-webkit-scrollbar{
+        display:none;
+    }
+
+    .nav-links a{
+        flex:0 0 auto;
+        min-height:42px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:10px 14px;
+        background:rgba(255,255,255,.04);
+        border:1px solid rgba(255,255,255,.06);
+    }
+
+}
+
+
+/* ============================================================
+SECTION 17 - MOBILE HERO OVERRIDES
+============================================================ */
+
+@media (max-width:900px){
+
+    .hero{
+        width:min(100% - 18px,1120px);
+        padding:22px 0 96px;
+        display:block;
+    }
+
+    .center-stack{
+        align-items:stretch;
+        text-align:left;
+    }
+
+    .eyebrow{
+        align-self:flex-start;
+        font-size:10px;
+        padding:7px 11px;
+    }
+
+    h1{
+        font-size:clamp(3rem,18vw,5.2rem);
+        line-height:.88;
+        letter-spacing:-.075em;
+    }
+
+    .subtitle{
+        width:100%;
+        margin:14px 0 18px;
+        font-size:.98rem;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 18 - MOBILE ENTERPRISE WORKSPACE
+============================================================ */
+
+@media (max-width:900px){
+
+    .workspace-layout{
+        display:grid;
+        grid-template-columns:1fr;
+        gap:14px;
+        width:100%;
+        min-height:auto;
+        margin-top:18px;
+    }
+
+    .workspace-sidebar,
+    .workspace-main,
+    .workspace-details{
+        width:100%;
+        min-height:auto;
+        border-radius:22px;
+    }
+
+    .workspace-sidebar{
+        order:2;
+    }
+
+    .workspace-main{
+        order:1;
+    }
+
+    .workspace-details{
+        order:3;
+    }
+
+    .workspace-nav{
+        padding:14px;
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:10px;
+    }
+
+    .workspace-nav-title{
+        grid-column:1 / -1;
+        margin-bottom:2px;
+    }
+
+    .workspace-nav-button{
+        min-height:48px;
+        justify-content:flex-start;
+        padding:12px 13px;
+        border-radius:15px;
+        font-size:.9rem;
+    }
+
+    .workspace-card{
+        margin:12px;
+        padding:14px;
+        border-radius:18px;
+    }
+
+    .workspace-card-value{
+        font-size:24px;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 19 - MOBILE CHAT PANEL OVERRIDES
+============================================================ */
+
+@media (max-width:900px){
+
+    .chat-panel{
+        width:100%;
+        border-radius:22px;
+    }
+
+    .chat-header{
+        min-height:58px;
+        padding:13px 14px;
+        flex-direction:row;
+        align-items:center;
+    }
+
+    .chat-title{
+        min-width:0;
+    }
+
+    .chat-title strong{
+        font-size:14px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+
+    .chat-title span{
+        display:none;
+    }
+
+    .assistant-avatar{
+        width:34px;
+        height:34px;
+        border-radius:12px;
+        flex:0 0 auto;
+    }
+
+    .mode-pill{
+        padding:7px 9px;
+        font-size:10px;
+    }
+
+    .messages{
+        height:min(430px,48dvh);
+        padding:12px;
+    }
+
+    .message{
+        max-width:96%;
+        padding:12px 13px;
+        font-size:13.5px;
+        line-height:1.55;
+        overflow-wrap:anywhere;
+    }
+
+    .suggestions{
+        display:flex;
+        flex-wrap:nowrap;
+        overflow-x:auto;
+        padding:0 12px 12px;
+        gap:8px;
+        scrollbar-width:none;
+    }
+
+    .suggestions::-webkit-scrollbar{
+        display:none;
+    }
+
+    .suggestion{
+        flex:0 0 auto;
+        min-height:42px;
+        padding:9px 12px;
+        font-size:11px;
+    }
+
+    .input-area{
+        padding:12px;
+        gap:10px;
+        flex-direction:column;
+    }
+
+    .input-area input,
+    .chat-input{
+        min-height:50px;
+        font-size:16px;
+        border-radius:16px;
+    }
+
+    .send-button{
+        width:100%;
+        min-height:50px;
+        border-radius:16px;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 20 - MOBILE FLOATING WORKSPACE SAFETY
+============================================================ */
+
+@media (max-width:900px){
+
+    .aisp2-floating-chat-panel{
+        max-width:none;
+    }
+
+    .aisp2-chat-window{
+        touch-action:manipulation;
+    }
+
+    .aisp2-chat-header{
+        touch-action:none;
+    }
+
+    .aisp2-chat-messages{
+        -webkit-overflow-scrolling:touch;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 21 - MOBILE DASHBOARD GENERIC SUPPORT
+============================================================ */
+
+@media (max-width:900px){
+
+    .dashboard-container,
+    .prediction-container{
+        width:min(100% - 18px,1200px);
+        margin-inline:auto;
+        padding-bottom:96px;
+    }
+
+    .dashboard-header,
+    .prediction-header{
+        text-align:left;
+        padding-top:22px;
+    }
+
+    .dashboard-title,
+    .prediction-title{
+        font-size:clamp(2.4rem,13vw,4.8rem);
+        line-height:.92;
+    }
+
+    .dashboard-subtitle,
+    .prediction-subtitle,
+    .panel-subtitle{
+        font-size:.96rem;
+        line-height:1.6;
+    }
+
+    .kpi-grid,
+    .analytics-grid,
+    .probability-grid,
+    .prediction-result-grid,
+    .prediction-stat-grid,
+    .prop-grid,
+    .system-status,
+    .player-grid{
+        grid-template-columns:1fr !important;
+        gap:12px;
+    }
+
+    .kpi-card,
+    .analytics-panel,
+    .probability-card,
+    .prediction-explanation-panel,
+    .main-probability-card,
+    .prop-card,
+    .system-tile,
+    .player-card{
+        border-radius:20px;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 22 - MOBILE FORM CONTROLS
+============================================================ */
+
+@media (max-width:900px){
+
+    .prediction-form-grid{
+        grid-template-columns:1fr !important;
+        gap:12px;
+    }
+
+    .prediction-field label{
+        font-size:12px;
+    }
+
+    select,
+    textarea,
+    input{
+        font-size:16px;
+    }
+
+    .prediction-action-row{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .prediction-primary-button,
+    .prediction-secondary-button{
+        width:100%;
+        min-height:50px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 23 - MOBILE BOTTOM NAVIGATION FOUNDATION
+============================================================ */
+
+.mobile-bottom-nav{
+    display:none;
+}
+
+@media (max-width:900px){
+
+    .mobile-bottom-nav{
+        position:fixed;
+        left:10px;
+        right:10px;
+        bottom:10px;
+        z-index:8500;
+        min-height:64px;
+        display:grid;
+        grid-template-columns:repeat(5,1fr);
+        gap:6px;
+        padding:8px;
+        border-radius:22px;
+        border:1px solid rgba(255,255,255,.10);
+        background:rgba(2,6,23,.84);
+        backdrop-filter:blur(22px);
+        box-shadow:0 24px 70px rgba(0,0,0,.55);
+    }
+
+    .mobile-bottom-nav a,
+    .mobile-bottom-nav button{
+        min-height:48px;
+        border:0;
+        border-radius:16px;
+        background:rgba(255,255,255,.04);
+        color:#cbd5e1;
+        font-size:11px;
+        font-weight:900;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:3px;
+    }
+
+    .mobile-bottom-nav a.is-active,
+    .mobile-bottom-nav button.is-active{
+        color:#ffffff;
+        background:linear-gradient(135deg,rgba(37,99,235,.78),rgba(14,165,233,.58));
+    }
+
+}
+
+
+/* ============================================================
+SECTION 24 - MOBILE DRAWER FOUNDATION
+============================================================ */
+
+.mobile-drawer{
+    display:none;
+}
+
+@media (max-width:900px){
+
+    .mobile-drawer{
+        position:fixed;
+        inset:0;
+        z-index:9200;
+        display:none;
+        background:rgba(2,6,23,.72);
+        backdrop-filter:blur(16px);
+    }
+
+    .mobile-drawer.is-open{
+        display:block;
+    }
+
+    .mobile-drawer-panel{
+        position:absolute;
+        top:10px;
+        left:10px;
+        right:10px;
+        border-radius:24px;
+        border:1px solid rgba(255,255,255,.10);
+        background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(2,6,23,.98));
+        box-shadow:0 28px 90px rgba(0,0,0,.62);
+        padding:16px;
+    }
+
+    .mobile-drawer-header{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom:14px;
+    }
+
+    .mobile-drawer-links{
+        display:grid;
+        grid-template-columns:1fr;
+        gap:8px;
+    }
+
+    .mobile-drawer-links a{
+        min-height:50px;
+        display:flex;
+        align-items:center;
+        padding:12px 14px;
+        border-radius:16px;
+        background:rgba(255,255,255,.045);
+        border:1px solid rgba(255,255,255,.07);
+        color:#e2e8f0;
+        font-weight:850;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 25 - MOBILE ACCORDION UTILITIES
+============================================================ */
+
+@media (max-width:900px){
+
+    .mobile-accordion{
+        border-radius:20px;
+        overflow:hidden;
+        border:1px solid rgba(255,255,255,.08);
+        background:rgba(15,23,42,.74);
+    }
+
+    .mobile-accordion-header{
+        min-height:52px;
+        padding:14px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        cursor:pointer;
+        font-weight:900;
+    }
+
+    .mobile-accordion-body{
+        padding:0 14px 14px;
+    }
+
+    .mobile-accordion:not(.is-open) .mobile-accordion-body{
+        display:none;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 26 - MOBILE PREDICTION VIEW
+============================================================ */
+
+@media (max-width:900px){
+
+    .main-probability-card{
+        padding:20px;
+    }
+
+    .prediction-big-number,
+    .probability-value{
+        font-size:clamp(2.6rem,18vw,5rem);
+        line-height:1;
+    }
+
+    .prediction-stat-chip{
+        min-height:72px;
+        border-radius:16px;
+        padding:14px;
+    }
+
+    .prediction-explanation-text{
+        font-size:.94rem;
+        line-height:1.7;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 27 - MOBILE PLAYER EXPLORER
+============================================================ */
+
+@media (max-width:900px){
+
+    .player-hero-grid{
+        grid-template-columns:1fr !important;
+        gap:16px;
+        text-align:left;
+    }
+
+    .player-headshot,
+    .headshot-placeholder{
+        width:88px;
+        height:88px;
+    }
+
+    .player-hero-name{
+        font-size:clamp(2rem,10vw,3rem);
+        line-height:1;
+    }
+
+    .team-table{
+        font-size:.88rem;
+    }
+
+    .team-table th,
+    .team-table td{
+        padding:12px;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 28 - MOBILE READABILITY AND WRAPPING
+============================================================ */
+
+@media (max-width:900px){
+
+    .panel-title,
+    .workspace-card-title,
+    .prediction-explanation-title,
+    .player-name,
+    .insight-title{
+        overflow-wrap:anywhere;
+    }
+
+    .panel-subtitle,
+    .insight-text,
+    .player-meta,
+    .workspace-card-label,
+    .disclaimer{
+        overflow-wrap:anywhere;
+    }
+
+    pre,
+    code{
+        white-space:pre-wrap;
+        overflow-wrap:anywhere;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 29 - SMALL PHONE REFINEMENTS
+============================================================ */
+
+@media (max-width:420px){
+
+    .topbar{
+        padding:10px;
+    }
+
+    .brand-icon{
+        width:32px;
+        height:32px;
+    }
+
+    .hero{
+        width:min(100% - 12px,1120px);
+        padding-top:16px;
+    }
+
+    .workspace-nav{
+        grid-template-columns:1fr;
+    }
+
+    .chat-header,
+    .input-area{
+        padding:10px;
+    }
+
+    .messages{
+        height:min(380px,46dvh);
+        padding:10px;
+    }
+
+    .quiet-row{
+        justify-content:flex-start;
+    }
+
+    .quiet-link{
+        flex:1 1 auto;
+        text-align:center;
+    }
+
+}
+
+
+/* ============================================================
+SECTION 30 - MOBILE FINAL ROADMAP
+============================================================ */
+
+/*
+
+Completed Mobile Foundation:
+- Global mobile tokens
+- Safe area support
+- Touch target rules
+- Mobile typography
+- Mobile navigation foundation
+- Mobile workspace stacking
+- Mobile chat refinements
+- Mobile dashboard support
+- Mobile prediction workbench support
+- Mobile player explorer support
+- Bottom navigation foundation
+- Drawer foundation
+- Accordion utilities
+- Small phone refinements
+
+Next:
+30.01 Add actual mobile drawer markup to templates.
+30.02 Add actual mobile bottom nav markup to templates.
+30.03 Add mobile drawer JavaScript.
+30.04 Add dashboard-specific mobile CSS if needed.
+30.05 Add prediction-specific bottom sheet workflow.
+30.06 Add player explorer mobile search UX.
+30.07 Add tablet breakpoint system.
+30.08 Add iOS keyboard avoidance refinements.
+30.09 Add PWA install layout refinements.
+30.10 Add mobile performance audit.
+
+*/
