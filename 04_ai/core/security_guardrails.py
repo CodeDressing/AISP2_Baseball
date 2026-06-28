@@ -8,39 +8,214 @@
 
 
 # ============================================================
-# SECTION 01 - SECURITY CONSTANTS
-# FILE: 04_ai/security_guardrails.py
-# PURPOSE: define message limits and blocked request language
+# SECTION 01 - ENTERPRISE SECURITY CONFIGURATION
+# FILE: 04_ai/core/security_guardrails.py
+# PURPOSE: central security configuration for AISP2 chat,
+# NLP pipeline, prediction engine, public API endpoints,
+# future authentication, abuse detection, and enterprise
+# request validation.
 # ============================================================
 
-MAX_CHAT_MESSAGE_LENGTH = 600
+from __future__ import annotations
+
+import re
+
+# ============================================================
+# SECTION 01.01 - CHAT LIMITS
+# ============================================================
+
+MAX_CHAT_MESSAGE_LENGTH = 750
+
+MAX_PLAYER_NAME_LENGTH = 100
+
+MAX_TEAM_NAME_LENGTH = 100
+
+MAX_SEARCH_RESULTS = 25
+
+MAX_CONVERSATION_DEPTH = 100
+
+
+# ============================================================
+# SECTION 01.02 - REQUEST CLASSIFICATION
+# ============================================================
+
+REQUEST_TYPE_CHAT = "chat"
+
+REQUEST_TYPE_PLAYER = "player_lookup"
+
+REQUEST_TYPE_TEAM = "team_lookup"
+
+REQUEST_TYPE_PREDICTION = "prediction"
+
+REQUEST_TYPE_DATABASE = "database"
+
+REQUEST_TYPE_ADMIN = "admin"
+
+REQUEST_TYPE_UNKNOWN = "unknown"
+
+
+# ============================================================
+# SECTION 01.03 - HIGH RISK PROMPT PATTERNS
+# ============================================================
 
 BLOCKED_CHAT_PHRASES = [
+
     "ignore previous instructions",
+
     "ignore all previous instructions",
+
+    "ignore system",
+
+    "ignore developer",
+
     "system prompt",
+
+    "developer prompt",
+
     "developer message",
-    "show me your hidden",
+
+    "hidden prompt",
+
+    "hidden instructions",
+
     "reveal your instructions",
+
     "reveal your system",
+
+    "show system prompt",
+
     "jailbreak",
+
     "bypass safety",
+
     "disable safety",
+
+    "override safety",
+
     "drop database",
+
     "delete database",
-    "delete all files",
+
+    "delete table",
+
+    "truncate table",
+
     "erase files",
-    "run shell",
+
+    "delete all files",
+
     "execute command",
-    "run powershell",
+
+    "run shell",
+
     "run terminal",
-    "steal",
-    "password",
+
+    "run powershell",
+
+    "cmd.exe",
+
+    "bash -c",
+
+    "python -c",
+
     "api key",
+
     "secret key",
+
+    "private key",
+
+    "password",
+
+    "token",
+
+    "session cookie",
+
 ]
 
 
+# ============================================================
+# SECTION 01.04 - SAFE BASEBALL DOMAINS
+# ============================================================
+
+BASEBALL_TOPICS = {
+
+    "players",
+
+    "teams",
+
+    "games",
+
+    "matchups",
+
+    "probability",
+
+    "prediction",
+
+    "statistics",
+
+    "rosters",
+
+    "pitchers",
+
+    "batters",
+
+    "stadiums",
+
+    "schedule",
+
+    "standings",
+
+    "statcast",
+
+    "sabermetrics",
+
+    "fantasy",
+
+    "injuries",
+
+    "transactions",
+
+}
+
+
+# ============================================================
+# SECTION 01.05 - NORMALIZATION EXPRESSIONS
+# ============================================================
+
+MULTI_SPACE_PATTERN = re.compile(r"\s+")
+
+NON_PRINTABLE_PATTERN = re.compile(
+    r"[\x00-\x08\x0B\x0C\x0E-\x1F]"
+)
+
+
+# ============================================================
+# SECTION 01.06 - SECURITY CONFIGURATION
+# ============================================================
+
+SECURITY_CONFIGURATION = {
+
+    "public_chat_enabled": True,
+
+    "persistent_memory_enabled": True,
+
+    "continuous_learning_enabled": True,
+
+    "prediction_requests_enabled": True,
+
+    "database_lookup_enabled": True,
+
+    "warehouse_lookup_enabled": True,
+
+    "allow_fallback_profiles": True,
+
+    "allow_live_api": True,
+
+    "strict_prompt_injection_detection": True,
+
+    "strict_secret_detection": True,
+
+}
 # ============================================================
 # SECTION 02 - MESSAGE CLEANING
 # FILE: 04_ai/security_guardrails.py
