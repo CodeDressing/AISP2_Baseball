@@ -8,25 +8,146 @@
 
 
 # ============================================================
-# SECTION 01 - LEARNING CONSTANTS
+# SECTION 01 - ENTERPRISE LEARNING CONFIGURATION
+# FILE: 04_ai/core/learning_engine.py
+# PURPOSE: centralize continuous-learning configuration,
+# signal types, review thresholds, storage controls, training
+# quality standards, and long-term improvement settings for
+# AISP2 chatbot intelligence, NLP correction, alias learning,
+# and future model-training pipelines.
 # ============================================================
 
-LEARNING_ENGINE_VERSION = "phase_6_part_1"
+from __future__ import annotations
+
+import re
+
+
+# ============================================================
+# SECTION 01.01 - ENGINE VERSION
+# ============================================================
+
+LEARNING_ENGINE_VERSION = "phase_10_part_5_enterprise_learning_engine"
+
+
+# ============================================================
+# SECTION 01.02 - LEARNING STATUSES
+# ============================================================
 
 LEARNING_STATUS_READY = "ready"
+LEARNING_STATUS_STORED = "stored"
 LEARNING_STATUS_SKIPPED = "skipped"
+LEARNING_STATUS_FAILED = "failed"
 LEARNING_STATUS_REVIEW_NEEDED = "review_needed"
+LEARNING_STATUS_LOW_CONFIDENCE = "low_confidence"
+LEARNING_STATUS_DATA_MISSING = "data_missing"
+
+
+# ============================================================
+# SECTION 01.03 - LEARNING SIGNAL TYPES
+# ============================================================
 
 SIGNAL_TYPE_INTENT = "intent_signal"
+SIGNAL_TYPE_TASK = "task_signal"
 SIGNAL_TYPE_ENTITY = "entity_signal"
 SIGNAL_TYPE_OUTCOME = "outcome_signal"
 SIGNAL_TYPE_FAILURE = "failure_signal"
 SIGNAL_TYPE_ALIAS = "alias_candidate"
 SIGNAL_TYPE_TRAINING = "training_example"
+SIGNAL_TYPE_SECURITY = "security_signal"
+SIGNAL_TYPE_DATA_GAP = "data_gap_signal"
+SIGNAL_TYPE_RESPONSE_QUALITY = "response_quality_signal"
 
-MAX_LEARNING_TEXT_LENGTH = 3000
+
+# ============================================================
+# SECTION 01.04 - ENTITY TYPES
+# ============================================================
+
+ENTITY_TYPE_PLAYER = "player"
+ENTITY_TYPE_TEAM = "team"
+ENTITY_TYPE_OUTCOME = "outcome"
+ENTITY_TYPE_STAT = "stat"
+ENTITY_TYPE_GAME = "game"
+ENTITY_TYPE_UNKNOWN = "unknown"
 
 
+# ============================================================
+# SECTION 01.05 - TEXT LIMITS
+# ============================================================
+
+MAX_LEARNING_TEXT_LENGTH = 3500
+MAX_LEARNING_SUMMARY_LENGTH = 900
+MAX_ALIAS_TEXT_LENGTH = 160
+MAX_SIGNAL_COUNT_PER_INTERACTION = 25
+MAX_IN_MEMORY_LEARNING_REPORTS = 500
+
+
+# ============================================================
+# SECTION 01.06 - QUALITY THRESHOLDS
+# ============================================================
+
+NLU_REVIEW_CONFIDENCE_THRESHOLD = 55
+NLU_GOOD_CONFIDENCE_THRESHOLD = 75
+TRAINING_EXAMPLE_REVIEW_THRESHOLD = 60
+TRAINING_EXAMPLE_APPROVAL_THRESHOLD = 80
+FAILURE_SIGNAL_WEIGHT = 25
+ENTITY_SIGNAL_WEIGHT = 15
+INTENT_SIGNAL_WEIGHT = 15
+OUTCOME_SIGNAL_WEIGHT = 10
+
+
+# ============================================================
+# SECTION 01.07 - FAILURE PHRASES
+# ============================================================
+
+LEARNING_FAILURE_PHRASES = [
+    "need a little more structure",
+    "could not find",
+    "not available",
+    "try asking",
+    "i do not have enough",
+    "i could not complete",
+    "endpoint may be missing",
+    "warehouse still needs",
+    "future upgrade",
+    "future versions",
+    "planned",
+    "coming soon",
+]
+
+
+# ============================================================
+# SECTION 01.08 - NORMALIZATION PATTERNS
+# ============================================================
+
+LEARNING_MULTI_SPACE_PATTERN = re.compile(r"\s+")
+
+LEARNING_CONTROL_CHARACTER_PATTERN = re.compile(
+    r"[\x00-\x08\x0B\x0C\x0E-\x1F]"
+)
+
+LEARNING_PUNCTUATION_PATTERN = re.compile(
+    r"[?!.,;:\"'`~()\[\]{}<>|\\]"
+)
+
+
+# ============================================================
+# SECTION 01.09 - LEARNING ENGINE CONFIGURATION
+# ============================================================
+
+LEARNING_ENGINE_CONFIGURATION = {
+    "enabled": True,
+    "store_in_memory": True,
+    "database_storage_enabled": False,
+    "build_training_examples": True,
+    "build_alias_candidates": True,
+    "build_failure_signals": True,
+    "build_data_gap_signals": True,
+    "build_response_quality_signals": True,
+    "review_low_confidence_examples": True,
+    "review_failed_responses": True,
+    "auto_promote_aliases": False,
+    "approved_for_training_default": False,
+}
 # ============================================================
 # SECTION 02 - TEXT NORMALIZATION
 # ============================================================

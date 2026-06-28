@@ -9,10 +9,48 @@
 
 
 # ============================================================
-# SECTION 01 - MLB TEAM ALIAS MAP
-# FILE: 04_ai/entity_detection.py
-# PURPOSE: recognize all 30 MLB teams through names,
-# abbreviations, cities, nicknames, and common fan language
+# SECTION 01 - ENTERPRISE MLB ENTITY CONFIGURATION
+# FILE: 04_ai/nlp/entity_detection.py
+# PURPOSE: recognize MLB teams through official names,
+# abbreviations, cities, nicknames, fan language, common
+# misspellings, and future alias-learning expansion.
+# ============================================================
+
+from __future__ import annotations
+
+# ============================================================
+# SECTION 01.01 - ENTITY ENGINE VERSION
+# ============================================================
+
+ENTITY_DETECTION_VERSION = "phase_10_part_6_enterprise_entity_detection"
+
+
+# ============================================================
+# SECTION 01.02 - ENTITY TYPES
+# ============================================================
+
+ENTITY_TYPE_TEAM = "team"
+ENTITY_TYPE_PLAYER = "player"
+ENTITY_TYPE_SUBJECT = "subject"
+ENTITY_TYPE_OUTCOME = "outcome"
+ENTITY_TYPE_STAT = "stat"
+ENTITY_TYPE_GAME = "game"
+ENTITY_TYPE_UNKNOWN = "unknown"
+
+
+# ============================================================
+# SECTION 01.03 - ENTITY CONFIDENCE THRESHOLDS
+# ============================================================
+
+ENTITY_CONFIDENCE_EXACT = 98
+ENTITY_CONFIDENCE_STRONG = 90
+ENTITY_CONFIDENCE_STANDARD = 82
+ENTITY_CONFIDENCE_WEAK = 70
+ENTITY_CONFIDENCE_REVIEW = 60
+
+
+# ============================================================
+# SECTION 01.04 - MLB TEAM ALIAS MAP
 # ============================================================
 
 MLB_TEAM_ALIASES = {
@@ -20,6 +58,7 @@ MLB_TEAM_ALIASES = {
         "arizona diamondbacks",
         "diamondbacks",
         "dbacks",
+        "d backs",
         "d-backs",
         "ari",
         "arizona",
@@ -35,6 +74,7 @@ MLB_TEAM_ALIASES = {
         "orioles",
         "o's",
         "os",
+        "orioles",
         "bal",
         "baltimore",
     ],
@@ -50,6 +90,7 @@ MLB_TEAM_ALIASES = {
         "cubs",
         "chc",
         "north siders",
+        "northsiders",
     ],
     "Chicago White Sox": [
         "chicago white sox",
@@ -57,6 +98,7 @@ MLB_TEAM_ALIASES = {
         "chisox",
         "chi sox",
         "south siders",
+        "southsiders",
         "cws",
         "chicago sox",
     ],
@@ -101,6 +143,7 @@ MLB_TEAM_ALIASES = {
         "los angeles angels",
         "angels",
         "la angels",
+        "anaheim angels",
         "anaheim",
         "laa",
     ],
@@ -132,6 +175,7 @@ MLB_TEAM_ALIASES = {
         "new york mets",
         "mets",
         "nym",
+        "ny mets",
     ],
     "New York Yankees": [
         "new york yankees",
@@ -139,6 +183,7 @@ MLB_TEAM_ALIASES = {
         "nyy",
         "bronx bombers",
         "new york yanks",
+        "ny yanks",
         "yanks",
     ],
     "Oakland Athletics": [
@@ -148,6 +193,7 @@ MLB_TEAM_ALIASES = {
         "as",
         "oakland",
         "oak",
+        "athletics baseball",
     ],
     "Philadelphia Phillies": [
         "philadelphia phillies",
@@ -187,11 +233,13 @@ MLB_TEAM_ALIASES = {
     "St. Louis Cardinals": [
         "st louis cardinals",
         "st. louis cardinals",
+        "saint louis cardinals",
         "cardinals",
         "cards",
         "stl",
         "st louis",
         "st. louis",
+        "saint louis",
     ],
     "Tampa Bay Rays": [
         "tampa bay rays",
@@ -199,6 +247,7 @@ MLB_TEAM_ALIASES = {
         "tb",
         "tbr",
         "tampa bay",
+        "tampa",
     ],
     "Texas Rangers": [
         "texas rangers",
@@ -223,6 +272,31 @@ MLB_TEAM_ALIASES = {
     ],
 }
 
+
+# ============================================================
+# SECTION 01.05 - TEAM ABBREVIATION LOOKUP
+# ============================================================
+
+MLB_TEAM_ABBREVIATIONS = {
+    team_name: aliases[0]
+    for team_name, aliases in MLB_TEAM_ALIASES.items()
+}
+
+
+# ============================================================
+# SECTION 01.06 - ENTITY DETECTION CONFIGURATION
+# ============================================================
+
+ENTITY_DETECTION_CONFIGURATION = {
+    "team_alias_detection_enabled": True,
+    "player_profile_detection_enabled": True,
+    "subject_detection_enabled": True,
+    "fuzzy_correction_enabled": True,
+    "deduplication_enabled": True,
+    "return_primary_entities": True,
+    "return_all_entities": True,
+    "minimum_confidence": ENTITY_CONFIDENCE_REVIEW,
+}
 
 # ============================================================
 # SECTION 02 - BASEBALL SUBJECT KEYWORDS

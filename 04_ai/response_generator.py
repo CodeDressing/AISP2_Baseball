@@ -8,18 +8,107 @@
 
 
 # ============================================================
-# SECTION 01 - RESPONSE CONSTANTS
+# SECTION 01 - ENTERPRISE RESPONSE CONFIGURATION
 # FILE: 04_ai/response_generator.py
-# PURPOSE: response labels and fallback messages
+# PURPOSE: centralize response modes, disclaimers, quality
+# standards, fallback language, formatting limits, model labels,
+# and user-facing truthfulness rules for AISP2 chatbot output.
 # ============================================================
 
-DEFAULT_RESPONSE_MODE = "demo"
+from __future__ import annotations
 
-DEMO_DISCLAIMER = (
-    "This is a demo baseball intelligence response, not betting advice."
+
+# ============================================================
+# SECTION 01.01 - RESPONSE MODES
+# ============================================================
+
+RESPONSE_MODE_LIVE = "live"
+RESPONSE_MODE_DATABASE = "database"
+RESPONSE_MODE_WAREHOUSE = "warehouse"
+RESPONSE_MODE_FALLBACK = "fallback"
+RESPONSE_MODE_DEMO = "demo"
+RESPONSE_MODE_ERROR = "error"
+
+DEFAULT_RESPONSE_MODE = RESPONSE_MODE_FALLBACK
+
+
+# ============================================================
+# SECTION 01.02 - RESPONSE QUALITY LIMITS
+# ============================================================
+
+MAX_RESPONSE_BULLET_ITEMS = 80
+MAX_RESPONSE_COMPARISON_ITEMS = 6
+MAX_RESPONSE_RANKING_ITEMS = 10
+MAX_RESPONSE_EXPLANATION_LINES = 8
+
+
+# ============================================================
+# SECTION 01.03 - USER-FACING DISCLAIMERS
+# ============================================================
+
+PROBABILITY_DISCLAIMER = (
+    "AISP2 predictions are statistical estimates only. They are not guarantees, "
+    "gambling advice, financial advice, or recommendations."
 )
 
+FALLBACK_DATA_DISCLOSURE = (
+    "This response used fallback profile data because complete live warehouse "
+    "features are not fully connected yet."
+)
 
+LIVE_DATA_DISCLOSURE = (
+    "This response used live MLB/API or database-connected data where available."
+)
+
+MISSING_DATA_DISCLOSURE = (
+    "Some stronger prediction inputs are still missing, including full Statcast "
+    "history, matchup context, park factors, weather, lineups, injuries, and "
+    "verified recent-form calculations."
+)
+
+DEMO_DISCLAIMER = PROBABILITY_DISCLAIMER
+
+
+# ============================================================
+# SECTION 01.04 - STANDARD RESPONSE HEADERS
+# ============================================================
+
+HEADER_TEAM_LIST = "MLB Teams"
+HEADER_TEAM_PROFILE = "Team Profile"
+HEADER_ROSTER = "Roster"
+HEADER_PLAYER_PROFILE = "Player Profile"
+HEADER_PLAYER_LIST = "Player Profiles"
+HEADER_PROBABILITY = "AISP2 Probability Estimate"
+HEADER_COMPARISON = "Comparison"
+HEADER_HELP = "AISP2 Help"
+HEADER_DATA_STATUS = "AISP2 Data Status"
+
+
+# ============================================================
+# SECTION 01.05 - RESPONSE STATUS LABELS
+# ============================================================
+
+STATUS_READY = "ready"
+STATUS_PARTIAL = "partial"
+STATUS_MISSING_DATA = "missing_data"
+STATUS_FALLBACK_USED = "fallback_used"
+STATUS_UNAVAILABLE = "unavailable"
+
+
+# ============================================================
+# SECTION 01.06 - RESPONSE CONFIGURATION
+# ============================================================
+
+RESPONSE_GENERATOR_CONFIGURATION = {
+    "prefer_live_data": True,
+    "allow_fallback_profiles": True,
+    "include_disclaimers": True,
+    "include_missing_data_notes": True,
+    "include_source_mode": True,
+    "max_bullets": MAX_RESPONSE_BULLET_ITEMS,
+    "max_rankings": MAX_RESPONSE_RANKING_ITEMS,
+    "default_mode": DEFAULT_RESPONSE_MODE,
+}
 # ============================================================
 # SECTION 02 - SAFE TEXT HELPERS
 # FILE: 04_ai/response_generator.py
