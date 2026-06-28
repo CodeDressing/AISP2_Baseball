@@ -297,7 +297,6 @@ ENTITY_DETECTION_CONFIGURATION = {
     "return_all_entities": True,
     "minimum_confidence": ENTITY_CONFIDENCE_REVIEW,
 }
-
 # ============================================================
 # SECTION 02 - BASEBALL SUBJECT KEYWORDS
 # FILE: 04_ai/entity_detection.py

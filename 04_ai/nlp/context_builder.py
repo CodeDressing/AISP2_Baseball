@@ -8,22 +8,166 @@
 
 
 # ============================================================
-# SECTION 01 - CONTEXT CONSTANTS
-# FILE: 04_ai/context_builder.py
-# PURPOSE: define supported context task categories
+# SECTION 01 - ENTERPRISE CONTEXT CONFIGURATION
+# FILE: 04_ai/nlp/context_builder.py
+# PURPOSE: define enterprise routing tasks, confidence
+# thresholds, context engine configuration, supported
+# semantic states, and future multi-turn conversation
+# capabilities for the AISP2 Baseball Intelligence Platform.
+# ============================================================
+
+from __future__ import annotations
+
+# ============================================================
+# SECTION 01.01 - CONTEXT ENGINE VERSION
+# ============================================================
+
+CONTEXT_ENGINE_VERSION = "phase_10_part_8_enterprise_context_builder"
+
+
+# ============================================================
+# SECTION 01.02 - CONTEXT TASK TYPES
 # ============================================================
 
 TASK_GENERAL_CHAT = "general_chat"
-TASK_TEAM_LOOKUP = "team_lookup"
-TASK_PLAYER_LOOKUP = "player_lookup"
-TASK_ROSTER_LOOKUP = "roster_lookup"
-TASK_PLAYER_PROBABILITY = "player_probability"
-TASK_BEST_TEAM_PROBABILITY = "best_team_probability"
-TASK_PLAYER_COMPARISON = "player_comparison"
-TASK_TEAM_COMPARISON = "team_comparison"
+
 TASK_HELP = "help"
 
+TASK_TEAM_LOOKUP = "team_lookup"
 
+TASK_PLAYER_LOOKUP = "player_lookup"
+
+TASK_ROSTER_LOOKUP = "roster_lookup"
+
+TASK_PLAYER_PROBABILITY = "player_probability"
+
+TASK_BEST_TEAM_PROBABILITY = "best_team_probability"
+
+TASK_PLAYER_COMPARISON = "player_comparison"
+
+TASK_TEAM_COMPARISON = "team_comparison"
+
+TASK_MATCHUP_ANALYSIS = "matchup_analysis"
+
+TASK_STAT_REQUEST = "stat_request"
+
+TASK_DATABASE_STATUS = "database_status"
+
+TASK_WAREHOUSE_STATUS = "warehouse_status"
+
+TASK_MODEL_STATUS = "model_status"
+
+TASK_UNKNOWN = "unknown"
+
+
+# ============================================================
+# SECTION 01.03 - CONTEXT CONFIDENCE LEVELS
+# ============================================================
+
+CONTEXT_CONFIDENCE_MINIMUM = 35
+
+CONTEXT_CONFIDENCE_WEAK = 50
+
+CONTEXT_CONFIDENCE_STANDARD = 65
+
+CONTEXT_CONFIDENCE_STRONG = 80
+
+CONTEXT_CONFIDENCE_HIGH = 90
+
+CONTEXT_CONFIDENCE_MAXIMUM = 96
+
+
+# ============================================================
+# SECTION 01.04 - CONTEXT COMPLETENESS LEVELS
+# ============================================================
+
+CONTEXT_EMPTY = "empty"
+
+CONTEXT_PARTIAL = "partial"
+
+CONTEXT_COMPLETE = "complete"
+
+CONTEXT_MULTI_ENTITY = "multi_entity"
+
+CONTEXT_AMBIGUOUS = "ambiguous"
+
+
+# ============================================================
+# SECTION 01.05 - CONTEXT PRIORITY
+# ============================================================
+
+HIGH_PRIORITY_TASKS = {
+
+    TASK_PLAYER_PROBABILITY,
+
+    TASK_MATCHUP_ANALYSIS,
+
+    TASK_PLAYER_COMPARISON,
+
+    TASK_TEAM_COMPARISON,
+
+}
+
+LOOKUP_TASKS = {
+
+    TASK_TEAM_LOOKUP,
+
+    TASK_PLAYER_LOOKUP,
+
+    TASK_ROSTER_LOOKUP,
+
+}
+
+SYSTEM_TASKS = {
+
+    TASK_HELP,
+
+    TASK_DATABASE_STATUS,
+
+    TASK_WAREHOUSE_STATUS,
+
+    TASK_MODEL_STATUS,
+
+}
+
+
+# ============================================================
+# SECTION 01.06 - CONTEXT ENGINE CONFIGURATION
+# ============================================================
+
+CONTEXT_ENGINE_CONFIGURATION = {
+
+    "entity_context_enabled": True,
+
+    "intent_context_enabled": True,
+
+    "semantic_context_enabled": True,
+
+    "multi_entity_enabled": True,
+
+    "conversation_memory_enabled": True,
+
+    "probability_context_enabled": True,
+
+    "database_context_enabled": True,
+
+    "warehouse_context_enabled": True,
+
+    "future_game_context_enabled": True,
+
+    "future_schedule_context_enabled": True,
+
+    "future_weather_context_enabled": True,
+
+    "future_ballpark_context_enabled": True,
+
+    "future_pitcher_context_enabled": True,
+
+    "future_lineup_context_enabled": True,
+
+    "minimum_confidence": CONTEXT_CONFIDENCE_MINIMUM,
+
+}
 # ============================================================
 # SECTION 02 - CONTEXT TEXT HELPERS
 # FILE: 04_ai/context_builder.py

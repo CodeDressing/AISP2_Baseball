@@ -8,9 +8,25 @@
 
 
 # ============================================================
-# SECTION 01 - INTENT CONSTANTS
-# FILE: 04_ai/intent_detection.py
-# PURPOSE: define supported user intent categories
+# SECTION 01 - ENTERPRISE INTENT CONFIGURATION
+# FILE: 04_ai/nlp/intent_detection.py
+# PURPOSE: define supported user intent categories, confidence
+# thresholds, routing groups, and intent engine settings for
+# AISP2 chat understanding, semantic routing, prediction
+# requests, comparisons, team/player lookup, and future NLP.
+# ============================================================
+
+from __future__ import annotations
+
+# ============================================================
+# SECTION 01.01 - INTENT ENGINE VERSION
+# ============================================================
+
+INTENT_DETECTION_VERSION = "phase_10_part_7_enterprise_intent_detection"
+
+
+# ============================================================
+# SECTION 01.02 - CORE INTENT CONSTANTS
 # ============================================================
 
 INTENT_LIST_TEAMS = "list_teams"
@@ -27,6 +43,83 @@ INTENT_EXPLAIN_MODEL = "explain_model"
 INTENT_HELP = "help"
 INTENT_GENERAL_BASEBALL = "general_baseball_question"
 
+
+# ============================================================
+# SECTION 01.03 - EXTENDED FUTURE INTENTS
+# ============================================================
+
+INTENT_ROSTER_LOOKUP = "roster_lookup"
+INTENT_SCHEDULE_LOOKUP = "schedule_lookup"
+INTENT_GAME_LOOKUP = "game_lookup"
+INTENT_WAREHOUSE_STATUS = "warehouse_status"
+INTENT_DATABASE_STATUS = "database_status"
+INTENT_MODEL_STATUS = "model_status"
+INTENT_DATA_SOURCE_STATUS = "data_source_status"
+
+
+# ============================================================
+# SECTION 01.04 - INTENT CONFIDENCE THRESHOLDS
+# ============================================================
+
+INTENT_CONFIDENCE_MINIMUM = 35
+INTENT_CONFIDENCE_WEAK = 50
+INTENT_CONFIDENCE_STANDARD = 65
+INTENT_CONFIDENCE_STRONG = 80
+INTENT_CONFIDENCE_MAXIMUM = 95
+
+
+# ============================================================
+# SECTION 01.05 - INTENT ROUTING GROUPS
+# ============================================================
+
+LOOKUP_INTENTS = {
+    INTENT_LIST_TEAMS,
+    INTENT_LIST_PLAYERS,
+    INTENT_TEAM_INFO,
+    INTENT_PLAYER_INFO,
+    INTENT_ROSTER_LOOKUP,
+    INTENT_SCHEDULE_LOOKUP,
+    INTENT_GAME_LOOKUP,
+}
+
+PREDICTION_INTENTS = {
+    INTENT_PLAYER_PROBABILITY,
+    INTENT_GENERAL_PROBABILITY,
+    INTENT_MATCHUP_ANALYSIS,
+    INTENT_COMPARE_PLAYERS,
+    INTENT_COMPARE_TEAMS,
+}
+
+SYSTEM_INTENTS = {
+    INTENT_HELP,
+    INTENT_EXPLAIN_MODEL,
+    INTENT_WAREHOUSE_STATUS,
+    INTENT_DATABASE_STATUS,
+    INTENT_MODEL_STATUS,
+    INTENT_DATA_SOURCE_STATUS,
+}
+
+ANALYSIS_INTENTS = {
+    INTENT_STAT_REQUEST,
+    INTENT_MATCHUP_ANALYSIS,
+    INTENT_COMPARE_PLAYERS,
+    INTENT_COMPARE_TEAMS,
+}
+
+
+# ============================================================
+# SECTION 01.06 - INTENT ENGINE CONFIGURATION
+# ============================================================
+
+INTENT_DETECTION_CONFIGURATION = {
+    "keyword_detection_enabled": True,
+    "entity_upgrade_enabled": True,
+    "question_type_detection_enabled": True,
+    "confidence_scoring_enabled": True,
+    "multi_intent_reporting_enabled": True,
+    "fallback_to_general_baseball": True,
+    "minimum_confidence": INTENT_CONFIDENCE_MINIMUM,
+}
 
 # ============================================================
 # SECTION 02 - INTENT KEYWORD MAP
