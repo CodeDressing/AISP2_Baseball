@@ -106,24 +106,119 @@ MEMORY_ENGINE_CONFIGURATION = {
     "review_uncertain_examples": True,
 }
 
-# ============================================================
-# SECTION 02 - MEMORY TEXT CLEANING
-# FILE: 04_ai/interaction_memory.py
-# PURPOSE: safely trim and normalize stored text
-# ============================================================
-
-def clean_memory_text(value: str | None) -> str:
-    if not value:
-        return ""
-
-    cleaned_value = str(value).strip()
-
-    if len(cleaned_value) > MAX_MEMORY_TEXT_LENGTH:
-        cleaned_value = cleaned_value[:MAX_MEMORY_TEXT_LENGTH]
-
-    return cleaned_value
-
-
+# ==# ============================================================
+# # SECTION 02 - ENTERPRISE MEMORY TEXT NORMALIZATION
+# # FILE: 04_ai/core/interaction_memory.py
+# # PURPOSE: safely normalize, trim, classify, and prepare stored
+# # text so every remembered conversation becomes useful for
+# # retrieval, learning signals, training examples, alias learning,
+# # and future model improvement.
+# # ============================================================
+#
+# import re
+#
+#
+# MEMORY_MULTI_SPACE_PATTERN = re.compile(r"\s+")
+# MEMORY_CONTROL_CHARACTER_PATTERN = re.compile(
+#     r"[\x00-\x08\x0B\x0C\x0E-\x1F]"
+# )
+#
+#
+# def normalize_memory_whitespace(value: str) -> str:
+#     cleaned_value = MEMORY_CONTROL_CHARACTER_PATTERN.sub(
+#         "",
+#         value,
+#     )
+#
+#     cleaned_value = MEMORY_MULTI_SPACE_PATTERN.sub(
+#         " ",
+#         cleaned_value,
+#     )
+#
+#     return cleaned_value.strip()
+#
+#
+# def trim_memory_text(
+#     value: str,
+#     max_length: int = MAX_MEMORY_TEXT_LENGTH,
+# ) -> str:
+#     if len(value) <= max_length:
+#         return value
+#
+#     return value[:max_length].rstrip()
+#
+#
+# def clean_memory_text(value: str | None) -> str:
+#     if value is None:
+#         return ""
+#
+#     cleaned_value = str(value)
+#
+#     cleaned_value = normalize_memory_whitespace(
+#         cleaned_value,
+#     )
+#
+#     cleaned_value = trim_memory_text(
+#         cleaned_value,
+#         max_length=MAX_MEMORY_TEXT_LENGTH,
+#     )
+#
+#     return cleaned_value
+#
+#
+# def clean_memory_entity(value: str | None) -> str | None:
+#     cleaned_value = clean_memory_text(value)
+#
+#     if not cleaned_value:
+#         return None
+#
+#     cleaned_value = trim_memory_text(
+#         cleaned_value,
+#         max_length=MAX_MEMORY_ENTITY_LENGTH,
+#     )
+#
+#     return cleaned_value
+#
+#
+# def clean_memory_summary(value: str | None) -> str:
+#     cleaned_value = clean_memory_text(value)
+#
+#     return trim_memory_text(
+#         cleaned_value,
+#         max_length=MAX_MEMORY_SUMMARY_LENGTH,
+#     )
+#
+#
+# def classify_memory_category(
+#     intent: str | None = None,
+#     semantic: dict | None = None,
+# ) -> str:
+#     semantic = semantic or {}
+#
+#     task = semantic.get("task")
+#     outcome = semantic.get("outcome")
+#     team = semantic.get("team")
+#     player = semantic.get("player")
+#
+#     intent_text = str(intent or "").lower()
+#     task_text = str(task or "").lower()
+#
+#     if "prediction" in intent_text or "probability" in intent_text or outcome:
+#         return MEMORY_CATEGORY_PREDICTION
+#
+#     if "compare" in intent_text or "compare" in task_text:
+#         return MEMORY_CATEGORY_COMPARISON
+#
+#     if "stat" in intent_text or "stat" in task_text:
+#         return MEMORY_CATEGORY_STAT_REQUEST
+#
+#     if player:
+#         return MEMORY_CATEGORY_PLAYER_SEARCH
+#
+#     if team:
+#         return MEMORY_CATEGORY_TEAM_SEARCH
+#
+#     return DEFAULT_MEMORY_CATEGORY
 # ============================================================
 # SECTION 03 - MEMORY SUMMARY BUILDER
 # FILE: 04_ai/interaction_memory.py
