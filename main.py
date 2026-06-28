@@ -179,181 +179,362 @@ DEVELOPMENT_RULE = "One file or one directory at a time."
 
 
 # ============================================================
-# SECTION 03 - DEMO DATA
+# SECTION 03 - ENTERPRISE APPLICATION DATA STATE
 # FILE: main.py
-# PURPOSE: expanded demo MLB team, player, outcome, and profile
-# data for Player Explorer, Prediction Workbench, and chat
+# PURPOSE: centralize fallback baseball knowledge, supported
+# outcomes, and transition-safe compatibility data while AISP2
+# moves from demo behavior into live database-backed behavior
 # ============================================================
 
-DEMO_TEAMS = {
+SUPPORTED_OUTCOMES = {
+    "home_run": {
+        "label": "Hits a Home Run",
+        "category": "batting",
+        "requires": [
+            "player identity",
+            "power profile",
+            "exit velocity",
+            "barrel rate",
+            "launch angle",
+            "pitcher matchup",
+        ],
+    },
+    "hit": {
+        "label": "Gets at least 1 Hit",
+        "category": "batting",
+        "requires": [
+            "player identity",
+            "contact profile",
+            "season batting profile",
+            "recent form",
+            "opponent pitcher",
+        ],
+    },
+    "single": {
+        "label": "Hits a Single",
+        "category": "batting",
+        "requires": [
+            "contact profile",
+            "batted-ball profile",
+            "spray tendency",
+        ],
+    },
+    "double": {
+        "label": "Hits a Double",
+        "category": "batting",
+        "requires": [
+            "gap power",
+            "exit velocity",
+            "park factor",
+        ],
+    },
+    "triple": {
+        "label": "Hits a Triple",
+        "category": "batting",
+        "requires": [
+            "speed profile",
+            "park factor",
+            "batted-ball profile",
+        ],
+    },
+    "rbi": {
+        "label": "Records an RBI",
+        "category": "run_production",
+        "requires": [
+            "lineup context",
+            "team offense",
+            "base-runner probability",
+            "player run production",
+        ],
+    },
+    "run": {
+        "label": "Scores a Run",
+        "category": "run_production",
+        "requires": [
+            "on-base profile",
+            "lineup context",
+            "team offense",
+        ],
+    },
+    "walk": {
+        "label": "Draws a Walk",
+        "category": "plate_discipline",
+        "requires": [
+            "walk rate",
+            "chase rate",
+            "zone swing rate",
+            "pitcher command",
+        ],
+    },
+    "strikeout": {
+        "label": "Strikes Out",
+        "category": "plate_discipline",
+        "requires": [
+            "strikeout rate",
+            "whiff rate",
+            "chase rate",
+            "pitch arsenal",
+        ],
+    },
+    "total_bases": {
+        "label": "Over 1.5 Total Bases",
+        "category": "batting",
+        "requires": [
+            "hit probability",
+            "slugging profile",
+            "extra-base-hit probability",
+        ],
+    },
+}
+
+
+FALLBACK_TEAM_PROFILES = {
     "New York Yankees": {
         "abbreviation": "NYY",
         "league": "American League",
         "division": "AL East",
         "ballpark": "Yankee Stadium",
-        "players": ["Aaron Judge", "Giancarlo Stanton", "Gerrit Cole"],
+        "players": [
+            "Aaron Judge",
+            "Giancarlo Stanton",
+            "Gerrit Cole",
+        ],
     },
     "Boston Red Sox": {
         "abbreviation": "BOS",
         "league": "American League",
         "division": "AL East",
         "ballpark": "Fenway Park",
-        "players": ["Rafael Devers", "Jarren Duran", "Garrett Crochet"],
+        "players": [
+            "Rafael Devers",
+            "Jarren Duran",
+            "Garrett Crochet",
+        ],
     },
     "Baltimore Orioles": {
         "abbreviation": "BAL",
         "league": "American League",
         "division": "AL East",
         "ballpark": "Oriole Park at Camden Yards",
-        "players": ["Gunnar Henderson", "Adley Rutschman", "Grayson Rodriguez"],
+        "players": [
+            "Gunnar Henderson",
+            "Adley Rutschman",
+            "Grayson Rodriguez",
+        ],
     },
     "Cleveland Guardians": {
         "abbreviation": "CLE",
         "league": "American League",
         "division": "AL Central",
         "ballpark": "Progressive Field",
-        "players": ["Jose Ramirez", "Steven Kwan", "Tanner Bibee"],
+        "players": [
+            "Jose Ramirez",
+            "Steven Kwan",
+            "Tanner Bibee",
+        ],
     },
     "Detroit Tigers": {
         "abbreviation": "DET",
         "league": "American League",
         "division": "AL Central",
         "ballpark": "Comerica Park",
-        "players": ["Riley Greene", "Tarik Skubal", "Spencer Torkelson"],
+        "players": [
+            "Riley Greene",
+            "Tarik Skubal",
+            "Spencer Torkelson",
+        ],
     },
     "Houston Astros": {
         "abbreviation": "HOU",
         "league": "American League",
         "division": "AL West",
         "ballpark": "Daikin Park",
-        "players": ["Yordan Alvarez", "Jose Altuve", "Framber Valdez"],
+        "players": [
+            "Yordan Alvarez",
+            "Jose Altuve",
+            "Framber Valdez",
+        ],
     },
     "Texas Rangers": {
         "abbreviation": "TEX",
         "league": "American League",
         "division": "AL West",
         "ballpark": "Globe Life Field",
-        "players": ["Corey Seager", "Marcus Semien", "Jacob deGrom"],
+        "players": [
+            "Corey Seager",
+            "Marcus Semien",
+            "Jacob deGrom",
+        ],
     },
     "Seattle Mariners": {
         "abbreviation": "SEA",
         "league": "American League",
         "division": "AL West",
         "ballpark": "T-Mobile Park",
-        "players": ["Julio Rodriguez", "Cal Raleigh", "Luis Castillo"],
+        "players": [
+            "Julio Rodriguez",
+            "Cal Raleigh",
+            "Luis Castillo",
+        ],
     },
     "New York Mets": {
         "abbreviation": "NYM",
         "league": "National League",
         "division": "NL East",
         "ballpark": "Citi Field",
-        "players": ["Juan Soto", "Francisco Lindor", "Pete Alonso"],
+        "players": [
+            "Juan Soto",
+            "Francisco Lindor",
+            "Pete Alonso",
+        ],
     },
     "Atlanta Braves": {
         "abbreviation": "ATL",
         "league": "National League",
         "division": "NL East",
         "ballpark": "Truist Park",
-        "players": ["Ronald Acuna Jr.", "Matt Olson", "Austin Riley"],
+        "players": [
+            "Ronald Acuna Jr.",
+            "Matt Olson",
+            "Austin Riley",
+        ],
     },
     "Philadelphia Phillies": {
         "abbreviation": "PHI",
         "league": "National League",
         "division": "NL East",
         "ballpark": "Citizens Bank Park",
-        "players": ["Bryce Harper", "Trea Turner", "Zack Wheeler"],
+        "players": [
+            "Bryce Harper",
+            "Trea Turner",
+            "Zack Wheeler",
+        ],
     },
     "Los Angeles Dodgers": {
         "abbreviation": "LAD",
         "league": "National League",
         "division": "NL West",
         "ballpark": "Dodger Stadium",
-        "players": ["Shohei Ohtani", "Mookie Betts", "Freddie Freeman"],
+        "players": [
+            "Shohei Ohtani",
+            "Mookie Betts",
+            "Freddie Freeman",
+        ],
     },
     "San Diego Padres": {
         "abbreviation": "SD",
         "league": "National League",
         "division": "NL West",
         "ballpark": "Petco Park",
-        "players": ["Fernando Tatis Jr.", "Manny Machado", "Dylan Cease"],
+        "players": [
+            "Fernando Tatis Jr.",
+            "Manny Machado",
+            "Dylan Cease",
+        ],
     },
     "Chicago Cubs": {
         "abbreviation": "CHC",
         "league": "National League",
         "division": "NL Central",
         "ballpark": "Wrigley Field",
-        "players": ["Kyle Tucker", "Seiya Suzuki", "Shota Imanaga"],
+        "players": [
+            "Kyle Tucker",
+            "Seiya Suzuki",
+            "Shota Imanaga",
+        ],
     },
 }
 
 
+FALLBACK_PLAYER_PROFILES = {
+    "Aaron Judge": {
+        "team": "New York Yankees",
+        "style": "Elite power hitter",
+        "recent_form": "Strong hard-hit profile",
+        "primary_metric": "Barrel rate",
+        "base_probability": 28,
+        "confidence": 74,
+    },
+    "Shohei Ohtani": {
+        "team": "Los Angeles Dodgers",
+        "style": "Elite two-way offensive force",
+        "recent_form": "High-impact contact profile",
+        "primary_metric": "Exit velocity",
+        "base_probability": 31,
+        "confidence": 77,
+    },
+    "Juan Soto": {
+        "team": "New York Mets",
+        "style": "Elite plate discipline hitter",
+        "recent_form": "Excellent on-base profile",
+        "primary_metric": "OBP and walk rate",
+        "base_probability": 66,
+        "confidence": 81,
+    },
+    "Mookie Betts": {
+        "team": "Los Angeles Dodgers",
+        "style": "Contact and power blend",
+        "recent_form": "Stable all-around production",
+        "primary_metric": "OPS",
+        "base_probability": 61,
+        "confidence": 76,
+    },
+    "Bryce Harper": {
+        "team": "Philadelphia Phillies",
+        "style": "Elite left-handed run producer",
+        "recent_form": "Strong power and OBP profile",
+        "primary_metric": "OPS",
+        "base_probability": 29,
+        "confidence": 77,
+    },
+    "Ronald Acuna Jr.": {
+        "team": "Atlanta Braves",
+        "style": "Power-speed superstar",
+        "recent_form": "Dynamic offensive profile",
+        "primary_metric": "OPS and stolen-base threat",
+        "base_probability": 58,
+        "confidence": 73,
+    },
+    "Pete Alonso": {
+        "team": "New York Mets",
+        "style": "Power-first slugger",
+        "recent_form": "Strong home run profile",
+        "primary_metric": "HR rate",
+        "base_probability": 24,
+        "confidence": 68,
+    },
+    "Gerrit Cole": {
+        "team": "New York Yankees",
+        "style": "Ace starting pitcher",
+        "recent_form": "High strikeout profile",
+        "primary_metric": "K rate",
+        "base_probability": 57,
+        "confidence": 75,
+    },
+}
+
+
+APPLICATION_DATA_STATE = {
+    "mode": "transition_to_live_data",
+    "primary_goal": "Use live MLB/database data first and fallback data only when required.",
+    "fallback_enabled": True,
+    "database_required": False,
+    "live_mlb_api_enabled": True,
+    "supported_outcomes": SUPPORTED_OUTCOMES,
+    "fallback_team_count": len(FALLBACK_TEAM_PROFILES),
+    "fallback_player_count": len(FALLBACK_PLAYER_PROFILES),
+}
+
+
+# Backward-compatible names used by older sections.
+# These stay temporarily so the app does not break while we upgrade
+# section by section away from demo-first behavior.
+DEMO_TEAMS = FALLBACK_TEAM_PROFILES
 DEMO_OUTCOMES = {
-    "home_run": "Hits a Home Run",
-    "hit": "Gets at least 1 Hit",
-    "rbi": "Records an RBI",
-    "total_bases": "Over 1.5 Total Bases",
-    "strikeout": "Pitcher Records 6+ Strikeouts",
+    outcome_key: outcome_data["label"]
+    for outcome_key, outcome_data in SUPPORTED_OUTCOMES.items()
 }
-
-
-DEMO_PLAYER_PROFILES = {
-    "Aaron Judge": {"style": "Elite power hitter", "recent_form": "Strong hard-hit profile", "primary_metric": "Barrel rate", "base_probability": 28, "confidence": 74},
-    "Giancarlo Stanton": {"style": "Extreme power hitter", "recent_form": "High variance, high upside", "primary_metric": "Exit velocity", "base_probability": 22, "confidence": 62},
-    "Gerrit Cole": {"style": "Ace starting pitcher", "recent_form": "High strikeout profile", "primary_metric": "K rate", "base_probability": 57, "confidence": 75},
-
-    "Rafael Devers": {"style": "Left-handed power bat", "recent_form": "Strong run production profile", "primary_metric": "SLG", "base_probability": 26, "confidence": 71},
-    "Jarren Duran": {"style": "Speed and contact profile", "recent_form": "Dynamic table-setter", "primary_metric": "OBP and speed", "base_probability": 59, "confidence": 72},
-    "Garrett Crochet": {"style": "Power left-handed starter", "recent_form": "High strikeout arm", "primary_metric": "K rate", "base_probability": 55, "confidence": 74},
-
-    "Gunnar Henderson": {"style": "Young power shortstop", "recent_form": "High-impact offensive profile", "primary_metric": "OPS", "base_probability": 27, "confidence": 73},
-    "Adley Rutschman": {"style": "Switch-hitting catcher", "recent_form": "Stable contact and OBP", "primary_metric": "OBP", "base_probability": 60, "confidence": 75},
-    "Grayson Rodriguez": {"style": "Power starting pitcher", "recent_form": "Strikeout upside profile", "primary_metric": "Whiff rate", "base_probability": 53, "confidence": 70},
-
-    "Jose Ramirez": {"style": "Switch-hitting run producer", "recent_form": "Elite all-around production", "primary_metric": "OPS and RBI", "base_probability": 62, "confidence": 79},
-    "Steven Kwan": {"style": "High-contact hitter", "recent_form": "Strong bat-to-ball profile", "primary_metric": "Contact rate", "base_probability": 67, "confidence": 80},
-    "Tanner Bibee": {"style": "Command-oriented starter", "recent_form": "Stable strikeout profile", "primary_metric": "K-BB rate", "base_probability": 51, "confidence": 71},
-
-    "Riley Greene": {"style": "Left-handed impact bat", "recent_form": "Growing power profile", "primary_metric": "Hard-hit rate", "base_probability": 24, "confidence": 68},
-    "Tarik Skubal": {"style": "Ace left-handed starter", "recent_form": "Elite strikeout and command profile", "primary_metric": "K rate", "base_probability": 60, "confidence": 82},
-    "Spencer Torkelson": {"style": "Power-first corner bat", "recent_form": "Home run upside profile", "primary_metric": "HR rate", "base_probability": 23, "confidence": 66},
-
-    "Yordan Alvarez": {"style": "Elite left-handed slugger", "recent_form": "Premium power profile", "primary_metric": "Exit velocity", "base_probability": 30, "confidence": 78},
-    "Jose Altuve": {"style": "Veteran contact-power blend", "recent_form": "Strong top-order production", "primary_metric": "AVG and OPS", "base_probability": 63, "confidence": 76},
-    "Framber Valdez": {"style": "Ground-ball left-handed starter", "recent_form": "Run prevention profile", "primary_metric": "Ground-ball rate", "base_probability": 49, "confidence": 70},
-
-    "Corey Seager": {"style": "Elite left-handed shortstop bat", "recent_form": "Strong power and contact blend", "primary_metric": "OPS", "base_probability": 27, "confidence": 75},
-    "Marcus Semien": {"style": "Durable run producer", "recent_form": "Stable lineup engine", "primary_metric": "Runs and OPS", "base_probability": 58, "confidence": 73},
-    "Jacob deGrom": {"style": "Elite power pitcher", "recent_form": "Ace upside when active", "primary_metric": "K rate", "base_probability": 61, "confidence": 72},
-
-    "Julio Rodriguez": {"style": "Power-speed center fielder", "recent_form": "Dynamic offensive profile", "primary_metric": "OPS and speed", "base_probability": 56, "confidence": 72},
-    "Cal Raleigh": {"style": "Switch-hitting power catcher", "recent_form": "Home run upside", "primary_metric": "Barrel rate", "base_probability": 24, "confidence": 67},
-    "Luis Castillo": {"style": "Power starting pitcher", "recent_form": "Strong strikeout foundation", "primary_metric": "Whiff rate", "base_probability": 54, "confidence": 73},
-
-    "Juan Soto": {"style": "Elite plate discipline hitter", "recent_form": "Excellent on-base profile", "primary_metric": "OBP and walk rate", "base_probability": 66, "confidence": 81},
-    "Francisco Lindor": {"style": "Switch-hitting shortstop star", "recent_form": "Power and speed blend", "primary_metric": "OPS", "base_probability": 57, "confidence": 74},
-    "Pete Alonso": {"style": "Power-first slugger", "recent_form": "Strong home run profile", "primary_metric": "HR rate", "base_probability": 24, "confidence": 68},
-
-    "Ronald Acuna Jr.": {"style": "Power-speed superstar", "recent_form": "Dynamic offensive profile", "primary_metric": "OPS and stolen-base threat", "base_probability": 58, "confidence": 73},
-    "Matt Olson": {"style": "Left-handed power hitter", "recent_form": "Strong pull-side power", "primary_metric": "Hard-hit rate", "base_probability": 25, "confidence": 70},
-    "Austin Riley": {"style": "Middle-order power bat", "recent_form": "Strong contact authority", "primary_metric": "SLG", "base_probability": 23, "confidence": 69},
-
-    "Bryce Harper": {"style": "Elite left-handed run producer", "recent_form": "Strong power and OBP profile", "primary_metric": "OPS", "base_probability": 29, "confidence": 77},
-    "Trea Turner": {"style": "Speed and contact shortstop", "recent_form": "Multi-category offensive profile", "primary_metric": "AVG and speed", "base_probability": 62, "confidence": 76},
-    "Zack Wheeler": {"style": "Ace right-handed starter", "recent_form": "High command and strikeout profile", "primary_metric": "K-BB rate", "base_probability": 56, "confidence": 80},
-
-    "Shohei Ohtani": {"style": "Elite two-way offensive force", "recent_form": "High-impact contact profile", "primary_metric": "Exit velocity", "base_probability": 31, "confidence": 77},
-    "Mookie Betts": {"style": "Contact and power blend", "recent_form": "Stable all-around production", "primary_metric": "OPS", "base_probability": 61, "confidence": 76},
-    "Freddie Freeman": {"style": "High-contact run producer", "recent_form": "Reliable hit profile", "primary_metric": "AVG and hard contact", "base_probability": 64, "confidence": 79},
-
-    "Fernando Tatis Jr.": {"style": "Power-speed superstar", "recent_form": "Explosive offensive upside", "primary_metric": "Barrel rate and speed", "base_probability": 27, "confidence": 73},
-    "Manny Machado": {"style": "Veteran middle-order bat", "recent_form": "Stable power production", "primary_metric": "SLG", "base_probability": 24, "confidence": 71},
-    "Dylan Cease": {"style": "High-strikeout starting pitcher", "recent_form": "Whiff-heavy profile", "primary_metric": "K rate", "base_probability": 58, "confidence": 76},
-
-    "Kyle Tucker": {"style": "Left-handed power and contact star", "recent_form": "Strong all-around hitter", "primary_metric": "OPS", "base_probability": 28, "confidence": 76},
-    "Seiya Suzuki": {"style": "Right-handed impact bat", "recent_form": "Power and patience profile", "primary_metric": "Hard-hit rate", "base_probability": 25, "confidence": 70},
-    "Shota Imanaga": {"style": "Left-handed starter", "recent_form": "Command and deception profile", "primary_metric": "K-BB rate", "base_probability": 52, "confidence": 72},
-}
-
+DEMO_PLAYER_PROFILES = FALLBACK_PLAYER_PROFILES
 # ============================================================
 # SECTION 04 - REQUEST MODELS
 # ============================================================
