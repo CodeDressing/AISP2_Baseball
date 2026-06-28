@@ -50,29 +50,41 @@ from models import PlayerHomeRunProfile
 from models import TeamPlateDiscipline
 
 
-# ============================================================
-# SECTION 02 - IMPORT CONFIGURATION
-# ============================================================
-
-RAW_DATA_DIR = PROJECT_ROOT / "00_raw_data"
-
-DEFAULT_IMPORT_FILES = [
-    "percentile_rankings.csv",
-    "percentile_rankings2025.csv",
-    "pitch_arsenals.csv",
-    "2025-pitch_arsenals.csv",
-    "pitch_tempo.csv",
-    "2025historicalpitchtempo (1).csv",
-    "pitcherstats.csv",
-    "stats.csv",
-    "batting-stance.csv",
-    "2025-batting-stance.csv",
-    "exit_velocity.csv",
-    "2025exitvolicity.csv",
-    "homeruns.csv",
-    "homeruns2025.csv",
-]
-
+# # ============================================================
+# # SECTION 02 - IMPORT CONFIGURATION
+# # ============================================================
+#
+# RAW_DATA_DIR = PROJECT_ROOT / "00_raw_data"
+#
+# DEFAULT_IMPORT_FILES = [
+#     "percentile_rankings.csv",
+#     "percentile_rankings2025.csv",
+#     "pitch_arsenals.csv",
+#     "2025-pitch_arsenals.csv",
+#     "pitch_tempo.csv",
+#     "2025historicalpitchtempo (1).csv",
+#     "pitcherstats.csv",
+#     "stats.csv",
+#     "batting-stance.csv",
+#     "2025-batting-stance.csv",
+#     "exit_velocity.csv",
+#     "2025exitvolicity.csv",
+#     "homeruns.csv",
+#     "homeruns2025.csv",
+#     "plate_discipline.csv",
+# ]
+#
+# SUPPORTED_IMPORT_CATEGORIES = [
+#     "percentile_rankings",
+#     "pitch_arsenal",
+#     "pitch_tempo",
+#     "batted_ball_profile",
+#     "batting_stance",
+#     "home_run_profile",
+#     "advanced_batting_stats",
+#     "advanced_batting_or_pitcher_stats",
+#     "team_plate_discipline",
+# ]
 
 # ============================================================
 # SECTION 03 - SAFE VALUE HELPERS
@@ -231,25 +243,28 @@ def load_csv_rows(file_path: Path) -> list[dict]:
 # ============================================================
 
 def detect_import_category(file_path: Path) -> str:
-    name = file_path.name.lower()
+    name = file_path.name.lower().replace("-", "_").replace(" ", "_")
 
     if "percentile" in name:
         return "percentile_rankings"
 
-    if "pitch_arsenal" in name or "pitch-arsenal" in name:
+    if "pitch_arsenal" in name or "pitcharsenal" in name:
         return "pitch_arsenal"
 
-    if "pitch_tempo" in name or "pitchtempo" in name:
+    if "pitch_tempo" in name or "pitchtempo" in name or "historicalpitchtempo" in name:
         return "pitch_tempo"
 
-    if "exit" in name:
+    if "exit" in name or "volicity" in name or "velocity" in name:
         return "batted_ball_profile"
 
     if "stance" in name:
         return "batting_stance"
 
-    if "homerun" in name or "home_run" in name:
+    if "homerun" in name or "home_run" in name or "home_runs" in name:
         return "home_run_profile"
+
+    if "plate_discipline" in name or "plate" in name and "discipline" in name:
+        return "team_plate_discipline"
 
     if "pitcherstats" in name:
         return "advanced_batting_or_pitcher_stats"
@@ -258,8 +273,6 @@ def detect_import_category(file_path: Path) -> str:
         return "advanced_batting_stats"
 
     return "unknown"
-
-
 # ============================================================
 # SECTION 07 - IMPORT LOG HELPERS
 # ============================================================
@@ -856,14 +869,36 @@ def import_statcast_file(file_path: Path) -> dict:
 # SECTION 18 - BULK IMPORT
 # ============================================================
 
+def discover_csv_files(
+    raw_data_dir: Path = RAW_DATA_DIR,
+) -> list[Path]:
+    if not raw_data_dir.exists():
+        return []
+
+    return sorted(
+        raw_data_dir.glob("*.csv"),
+        key=lambda file_path: file_path.name.lower(),
+    )
+
+
 def import_default_statcast_files(
     raw_data_dir: Path = RAW_DATA_DIR,
 ) -> dict:
     results = []
 
-    for file_name in DEFAULT_IMPORT_FILES:
-        file_path = raw_data_dir / file_name
+    discovered_files = discover_csv_files(
+        raw_data_dir=raw_data_dir,
+    )
 
+    if discovered_files:
+        import_files = discovered_files
+    else:
+        import_files = [
+            raw_data_dir / file_name
+            for file_name in DEFAULT_IMPORT_FILES
+        ]
+
+    for file_path in import_files:
         results.append(
             import_statcast_file(file_path)
         )
@@ -876,8 +911,8 @@ def import_default_statcast_files(
         "total_inserted": sum(item.get("inserted", 0) for item in results),
         "total_updated": sum(item.get("updated", 0) for item in results),
         "total_skipped": sum(item.get("skipped", 0) for item in results),
+        "completed_at": utc_now_string(),
     }
-
 
 # ============================================================
 # SECTION 19 - COMMAND LINE EXECUTION
