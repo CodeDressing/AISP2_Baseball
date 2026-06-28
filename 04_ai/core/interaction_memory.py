@@ -8,18 +8,103 @@
 
 
 # ============================================================
-# SECTION 01 - MEMORY CONSTANTS
-# FILE: 04_ai/interaction_memory.py
-# PURPOSE: define memory defaults and categories
+# SECTION 01 - ENTERPRISE MEMORY CONFIGURATION
+# FILE: 04_ai/core/interaction_memory.py
+# PURPOSE: define persistent memory categories, storage status,
+# quality thresholds, text limits, learning signal defaults,
+# fallback behavior, and long-term self-improvement controls
+# for the AISP2 chatbot and future model-training pipeline.
+# ============================================================
+
+from __future__ import annotations
+
+# ============================================================
+# SECTION 01.01 - MEMORY CATEGORIES
 # ============================================================
 
 DEFAULT_MEMORY_CATEGORY = "baseball_chat"
 
+MEMORY_CATEGORY_CHAT = "baseball_chat"
+MEMORY_CATEGORY_PLAYER_SEARCH = "player_search"
+MEMORY_CATEGORY_TEAM_SEARCH = "team_search"
+MEMORY_CATEGORY_PREDICTION = "prediction"
+MEMORY_CATEGORY_STAT_REQUEST = "stat_request"
+MEMORY_CATEGORY_COMPARISON = "comparison"
+MEMORY_CATEGORY_SYSTEM = "system"
+MEMORY_CATEGORY_SECURITY = "security"
+
+
+# ============================================================
+# SECTION 01.02 - MEMORY STORAGE STATUSES
+# ============================================================
+
 MEMORY_STATUS_STORED = "stored"
 MEMORY_STATUS_SKIPPED = "skipped"
+MEMORY_STATUS_FALLBACK_STORED = "fallback_stored"
+MEMORY_STATUS_FAILED = "failed"
 
-MAX_MEMORY_TEXT_LENGTH = 2000
 
+# ============================================================
+# SECTION 01.03 - MEMORY TEXT LIMITS
+# ============================================================
+
+MAX_MEMORY_TEXT_LENGTH = 2500
+MAX_MEMORY_SUMMARY_LENGTH = 700
+MAX_MEMORY_ENTITY_LENGTH = 160
+MAX_FALLBACK_MEMORY_RECORDS = 500
+
+
+# ============================================================
+# SECTION 01.04 - LEARNING QUALITY THRESHOLDS
+# ============================================================
+
+MEMORY_IMPORTANCE_MINIMUM = 20
+MEMORY_IMPORTANCE_DEFAULT = 35
+MEMORY_IMPORTANCE_REVIEW_THRESHOLD = 60
+MEMORY_IMPORTANCE_TRAINING_THRESHOLD = 75
+MEMORY_IMPORTANCE_MAXIMUM = 100
+
+
+# ============================================================
+# SECTION 01.05 - LEARNING SIGNAL TYPES
+# ============================================================
+
+SIGNAL_TYPE_INTENT = "intent_signal"
+SIGNAL_TYPE_TASK = "task_signal"
+SIGNAL_TYPE_ENTITY = "entity_signal"
+SIGNAL_TYPE_OUTCOME = "outcome_signal"
+SIGNAL_TYPE_CORRECTION = "correction_signal"
+SIGNAL_TYPE_REVIEW = "review_signal"
+SIGNAL_TYPE_SECURITY = "security_signal"
+
+
+# ============================================================
+# SECTION 01.06 - ENTITY TYPES
+# ============================================================
+
+ENTITY_TYPE_PLAYER = "player"
+ENTITY_TYPE_TEAM = "team"
+ENTITY_TYPE_OUTCOME = "outcome"
+ENTITY_TYPE_STAT = "stat"
+ENTITY_TYPE_GAME = "game"
+ENTITY_TYPE_UNKNOWN = "unknown"
+
+
+# ============================================================
+# SECTION 01.07 - MEMORY ENGINE CONFIGURATION
+# ============================================================
+
+MEMORY_ENGINE_CONFIGURATION = {
+    "database_storage_enabled": True,
+    "fallback_storage_enabled": True,
+    "learning_signals_enabled": True,
+    "training_examples_enabled": True,
+    "alias_learning_enabled": True,
+    "security_event_memory_enabled": True,
+    "auto_trust_alias_usage_threshold": 5,
+    "approved_for_training_default": False,
+    "review_uncertain_examples": True,
+}
 
 # ============================================================
 # SECTION 02 - MEMORY TEXT CLEANING
