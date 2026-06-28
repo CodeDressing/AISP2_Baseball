@@ -9,7 +9,26 @@
 
 
 # ============================================================
-# SECTION 01 - NLU TASK CONSTANTS
+# SECTION 01 - ENTERPRISE NLU CONFIGURATION
+# FILE: 04_ai/nlp/nlu_engine.py
+# PURPOSE: define Natural Language Understanding task routing,
+# scope routing, confidence thresholds, normalization controls,
+# and enterprise NLU settings for converting messy baseball
+# questions into structured chatbot intelligence.
+# ============================================================
+
+from __future__ import annotations
+
+
+# ============================================================
+# SECTION 01.01 - NLU ENGINE VERSION
+# ============================================================
+
+NLU_ENGINE_VERSION = "phase_10_part_10_enterprise_nlu_engine"
+
+
+# ============================================================
+# SECTION 01.02 - NLU TASK CONSTANTS
 # ============================================================
 
 NLU_TASK_GENERAL = "general_baseball_question"
@@ -24,8 +43,82 @@ NLU_TASK_BEST_TEAM_PROBABILITY = "best_team_probability"
 NLU_TASK_BEST_OVERALL_PROBABILITY = "best_overall_probability"
 NLU_TASK_COMPARE_PLAYERS = "compare_players"
 NLU_TASK_COMPARE_TEAMS = "compare_teams"
+NLU_TASK_MATCHUP_ANALYSIS = "matchup_analysis"
+NLU_TASK_STAT_REQUEST = "stat_request"
 NLU_TASK_MODEL_EXPLANATION = "model_explanation"
+NLU_TASK_DATABASE_STATUS = "database_status"
+NLU_TASK_WAREHOUSE_STATUS = "warehouse_status"
+NLU_TASK_MODEL_STATUS = "model_status"
 
+
+# ============================================================
+# SECTION 01.03 - NLU TASK GROUPS
+# ============================================================
+
+NLU_LOOKUP_TASKS = {
+    NLU_TASK_LIST_TEAMS,
+    NLU_TASK_LIST_PLAYERS,
+    NLU_TASK_TEAM_LOOKUP,
+    NLU_TASK_PLAYER_LOOKUP,
+    NLU_TASK_ROSTER_LOOKUP,
+}
+
+NLU_PREDICTION_TASKS = {
+    NLU_TASK_PLAYER_PROBABILITY,
+    NLU_TASK_BEST_TEAM_PROBABILITY,
+    NLU_TASK_BEST_OVERALL_PROBABILITY,
+    NLU_TASK_COMPARE_PLAYERS,
+    NLU_TASK_COMPARE_TEAMS,
+    NLU_TASK_MATCHUP_ANALYSIS,
+}
+
+NLU_SYSTEM_TASKS = {
+    NLU_TASK_HELP,
+    NLU_TASK_MODEL_EXPLANATION,
+    NLU_TASK_DATABASE_STATUS,
+    NLU_TASK_WAREHOUSE_STATUS,
+    NLU_TASK_MODEL_STATUS,
+}
+
+NLU_ANALYTIC_TASKS = {
+    NLU_TASK_STAT_REQUEST,
+    NLU_TASK_MATCHUP_ANALYSIS,
+    NLU_TASK_COMPARE_PLAYERS,
+    NLU_TASK_COMPARE_TEAMS,
+}
+
+
+# ============================================================
+# SECTION 01.04 - NLU CONFIDENCE THRESHOLDS
+# ============================================================
+
+NLU_CONFIDENCE_MINIMUM = 35
+NLU_CONFIDENCE_WEAK = 50
+NLU_CONFIDENCE_STANDARD = 65
+NLU_CONFIDENCE_STRONG = 80
+NLU_CONFIDENCE_HIGH = 90
+NLU_CONFIDENCE_MAXIMUM = 96
+
+
+# ============================================================
+# SECTION 01.05 - NLU ENGINE CONFIGURATION
+# ============================================================
+
+NLU_ENGINE_CONFIGURATION = {
+    "language_normalization_enabled": True,
+    "typo_recovery_enabled": True,
+    "baseball_slang_normalization_enabled": True,
+    "probability_language_normalization_enabled": True,
+    "question_type_detection_enabled": True,
+    "outcome_detection_enabled": True,
+    "goal_detection_enabled": True,
+    "scope_detection_enabled": True,
+    "missing_information_detection_enabled": True,
+    "confidence_scoring_enabled": True,
+    "entity_report_required": False,
+    "routing_ready_detection_enabled": True,
+    "minimum_confidence": NLU_CONFIDENCE_MINIMUM,
+}
 
 # ============================================================
 # SECTION 02 - NLU SCOPE CONSTANTS

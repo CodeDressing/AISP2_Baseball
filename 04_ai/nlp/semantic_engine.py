@@ -8,40 +8,202 @@
 
 
 # ============================================================
-# SECTION 01 - OUTCOME KEYWORDS
-# FILE: 04_ai/semantic_engine.py
-# PURPOSE: map baseball outcome language to prediction outcomes
+# SECTION 01 - ENTERPRISE SEMANTIC CONFIGURATION
+# FILE: 04_ai/nlp/semantic_engine.py
+# PURPOSE: define enterprise semantic engine configuration,
+# baseball outcome vocabulary, semantic confidence thresholds,
+# routing groups, and future NLP expansion settings.
+# ============================================================
+
+from __future__ import annotations
+
+# ============================================================
+# SECTION 01.01 - SEMANTIC ENGINE VERSION
+# ============================================================
+
+SEMANTIC_ENGINE_VERSION = "phase_10_part_9_enterprise_semantic_engine"
+
+
+# ============================================================
+# SECTION 01.02 - SEMANTIC CONFIDENCE LEVELS
+# ============================================================
+
+SEMANTIC_CONFIDENCE_MINIMUM = 35
+
+SEMANTIC_CONFIDENCE_WEAK = 50
+
+SEMANTIC_CONFIDENCE_STANDARD = 65
+
+SEMANTIC_CONFIDENCE_STRONG = 80
+
+SEMANTIC_CONFIDENCE_HIGH = 90
+
+SEMANTIC_CONFIDENCE_MAXIMUM = 95
+
+
+# ============================================================
+# SECTION 01.03 - BASEBALL OUTCOME VOCABULARY
 # ============================================================
 
 OUTCOME_KEYWORDS = {
+
     "home_run": [
-        "home run", "homer", "hr", "go deep", "yard",
-        "hit one out", "go yard", "dinger", "long ball",
-        "leave the park", "hit a bomb",
+        "home run",
+        "home runs",
+        "homer",
+        "homers",
+        "hr",
+        "go deep",
+        "go yard",
+        "yard",
+        "dinger",
+        "long ball",
+        "bomb",
+        "hit one out",
+        "leave the park",
+        "hit a bomb",
     ],
+
     "hit": [
-        "hit", "base hit", "single", "get a hit",
-        "record a hit", "safe hit", "batting hit",
+        "hit",
+        "hits",
+        "base hit",
+        "single",
+        "get a hit",
+        "record a hit",
+        "safe hit",
+        "batting hit",
     ],
+
+    "single": [
+        "single",
+        "base hit",
+    ],
+
+    "double": [
+        "double",
+        "two bagger",
+    ],
+
+    "triple": [
+        "triple",
+        "three bagger",
+    ],
+
     "rbi": [
-        "rbi", "run batted in", "runs batted in",
-        "drive in", "drive home", "knock in",
+        "rbi",
+        "rbis",
+        "run batted in",
+        "runs batted in",
+        "drive in",
+        "drive home",
+        "knock in",
     ],
-    "total_bases": [
-        "total bases", "bases", "over 1.5", "over one and a half",
-        "extra bases", "slugging", "tb",
-    ],
-    "strikeout": [
-        "strikeout", "strikeouts", "k", "ks", "punchout",
-        "punchouts", "whiff", "whiffs", "fan", "fans",
-    ],
+
     "run_scored": [
-        "run scored", "score a run", "scores", "run",
+        "run",
+        "runs",
+        "run scored",
+        "score",
+        "score a run",
+        "scores",
         "cross the plate",
     ],
+
+    "walk": [
+        "walk",
+        "walks",
+        "base on balls",
+        "bb",
+    ],
+
+    "strikeout": [
+        "strikeout",
+        "strikeouts",
+        "strike out",
+        "k",
+        "ks",
+        "punchout",
+        "punchouts",
+        "whiff",
+        "whiffs",
+        "fan",
+        "fans",
+    ],
+
+    "stolen_base": [
+        "stolen base",
+        "steal",
+        "steals",
+        "stolen bases",
+        "sb",
+    ],
+
+    "total_bases": [
+        "total bases",
+        "bases",
+        "tb",
+        "extra bases",
+        "slugging",
+        "over 1.5",
+        "over one and a half",
+    ],
+
 }
 
 
+# ============================================================
+# SECTION 01.04 - SEMANTIC ROUTING GROUPS
+# ============================================================
+
+HITTING_OUTCOMES = {
+    "home_run",
+    "hit",
+    "single",
+    "double",
+    "triple",
+    "rbi",
+    "run_scored",
+    "walk",
+    "total_bases",
+}
+
+PITCHING_OUTCOMES = {
+    "strikeout",
+}
+
+BASERUNNING_OUTCOMES = {
+    "stolen_base",
+}
+
+
+# ============================================================
+# SECTION 01.05 - SEMANTIC ENGINE CONFIGURATION
+# ============================================================
+
+SEMANTIC_ENGINE_CONFIGURATION = {
+
+    "team_detection_enabled": True,
+
+    "player_detection_enabled": True,
+
+    "outcome_detection_enabled": True,
+
+    "intent_detection_enabled": True,
+
+    "comparison_detection_enabled": True,
+
+    "multi_entity_detection_enabled": True,
+
+    "future_alias_learning_enabled": True,
+
+    "future_embedding_search_enabled": True,
+
+    "future_rag_enabled": True,
+
+    "minimum_confidence": SEMANTIC_CONFIDENCE_MINIMUM,
+
+}
 # ============================================================
 # SECTION 02 - TEAM ALIASES
 # FILE: 04_ai/semantic_engine.py
