@@ -9,17 +9,44 @@
 
 
 # ============================================================
-# SECTION 01 - IMPORTS
+# SECTION 01 - ENTERPRISE DATABASE IMPORTS
+# FILE: 01_database/models.py
+# PURPOSE:
+# Centralized imports for the AISP2 Enterprise Baseball
+# Warehouse.
+#
+# Every database model in the platform shares these imports.
+#
+# Supported Systems
+# -----------------
+# • MLB Teams
+# • Players
+# • Rosters
+# • Games
+# • Chat Memory
+# • Continuous Learning
+# • Prediction Engine
+# • NLP
+# • AI Chatbot
+# • Future ML Pipelines
+# • Data Warehouse
 # ============================================================
 
 from __future__ import annotations
 
+from datetime import UTC
+from datetime import datetime
+
 from sqlalchemy import Boolean
+from sqlalchemy import DateTime
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
+from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
+
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
@@ -27,6 +54,61 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
+# ============================================================
+# SECTION 01.01 - SHARED DATABASE DEFAULTS
+# ============================================================
+
+DEFAULT_STRING_LENGTH = 120
+
+SHORT_STRING_LENGTH = 40
+
+LONG_STRING_LENGTH = 255
+
+
+# ============================================================
+# SECTION 01.02 - SHARED TIMESTAMP FACTORY
+# ============================================================
+
+def utc_now() -> datetime:
+    """
+    Enterprise UTC timestamp.
+
+    Every future model should use the same timestamp source.
+
+    This replaces scattered timestamp generation throughout
+    the project and keeps warehouse records consistent.
+    """
+
+    return datetime.now(UTC)
+
+
+# ============================================================
+# SECTION 01.03 - COMMON INDEX NAMES
+# ============================================================
+
+IDX_PLAYER = "idx_player"
+
+IDX_TEAM = "idx_team"
+
+IDX_SEASON = "idx_season"
+
+IDX_GAME = "idx_game"
+
+IDX_CREATED = "idx_created"
+
+IDX_UPDATED = "idx_updated"
+
+
+# ============================================================
+# SECTION 01.04 - DATABASE VERSION
+# ============================================================
+
+DATABASE_MODEL_VERSION = "Phase_11_Part_1"
+
+DATABASE_MODEL_DESCRIPTION = (
+    "Enterprise Baseball Warehouse "
+    "Continuous Learning Schema"
+)
 # ============================================================
 # SECTION 02 - TEAM MODEL
 # ============================================================
