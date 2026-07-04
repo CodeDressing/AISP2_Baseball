@@ -166,6 +166,27 @@ from nlp.intent_detection import build_intent_report
 # ============================================================
 # SECTION 01.09 - WAREHOUSE INGESTION IMPORTS
 # FILE: main.py
+# PURPOSE: expose enterprise warehouse ingestion services for
+# teams, players, database inventory, warehouse setup, and
+# database-first player search
+# ============================================================
+
+from team_ingestion import (
+    ingest_mlb_teams,
+    build_team_inventory,
+    count_database_teams,
+)
+
+from player_ingestion import (
+    ingest_mlb_players,
+    build_player_inventory,
+    count_database_players,
+    search_database_players,
+)
+
+# ============================================================
+# SECTION 01.09 - WAREHOUSE INGESTION IMPORTS
+# FILE: main.py
 # PURPOSE: expose safe warehouse ingestion services through
 # administrative API routes
 # ============================================================
@@ -1975,22 +1996,54 @@ def prediction_outcomes():
 # ============================================================
 # SECTION 19 - ENTERPRISE WAREHOUSE INGESTION API
 # FILE: main.py
-# PURPOSE: administrative endpoints for initializing and
-# inspecting AISP2 warehouse team data
+# PURPOSE:
+# Administrative warehouse endpoints for importing, inspecting,
+# validating, and exposing database-backed MLB teams and players.
+# This begins the shift from live API-first behavior into a
+# true local AISP2 Baseball Warehouse.
 # ============================================================
+
 
 @app.post("/admin/setup/warehouse")
 def initialize_complete_warehouse() -> dict:
-    report = ingest_mlb_teams()
+    team_report = ingest_mlb_teams()
+    player_report = ingest_mlb_players()
 
     return {
-        "warehouse_ready": report["success"],
+        "warehouse_ready": (
+            team_report.get("success") is True
+            and player_report.get("success") is True
+        ),
         "message": "AISP2 warehouse setup completed.",
-        "database_teams": report["database_team_count_after_ingestion"],
-        "created": report["created"],
-        "updated": report["updated"],
-        "skipped": report["skipped"],
-        "errors": report["errors"],
+        "teams": {
+            "created": team_report.get("created", 0),
+            "updated": team_report.get("updated", 0),
+            "skipped": team_report.get("skipped", 0),
+            "database_count": team_report.get(
+                "database_team_count_after_ingestion",
+                0,
+            ),
+            "errors": team_report.get("errors", []),
+        },
+        "players": {
+            "created": player_report.get("created", 0),
+            "updated": player_report.get("updated", 0),
+            "skipped": player_report.get("skipped", 0),
+            "database_count": player_report.get(
+                "database_player_count_after_ingestion",
+                0,
+            ),
+            "errors": player_report.get("errors", []),
+        },
+        "next_required_ingestion": [
+            "rosters",
+            "schedule",
+            "games",
+            "player season stats",
+            "team season stats",
+            "Statcast",
+            "prediction features",
+        ],
     }
 
 
@@ -1999,8 +2052,33 @@ def admin_ingest_teams() -> dict:
     report = ingest_mlb_teams()
 
     return {
-        "success": report["success"],
+        "success": report.get("success"),
         "message": "MLB team ingestion completed.",
+        "created": report.get("created", 0),
+        "updated": report.get("updated", 0),
+        "skipped": report.get("skipped", 0),
+        "database_team_count": report.get(
+            "database_team_count_after_ingestion",
+            0,
+        ),
+        "report": report,
+    }
+
+
+@app.post("/admin/ingest/players")
+def admin_ingest_players() -> dict:
+    report = ingest_mlb_players()
+
+    return {
+        "success": report.get("success"),
+        "message": "MLB player ingestion completed.",
+        "created": report.get("created", 0),
+        "updated": report.get("updated", 0),
+        "skipped": report.get("skipped", 0),
+        "database_player_count": report.get(
+            "database_player_count_after_ingestion",
+            0,
+        ),
         "report": report,
     }
 
@@ -2010,13 +2088,109 @@ def admin_database_teams() -> dict:
     teams = build_team_inventory()
 
     return {
+        "source": "AISP2 Database Warehouse",
         "database_team_count": len(teams),
         "teams": teams,
+    }
+
+
+@app.get("/admin/database/players")
+def admin_database_players(
+    limit: int = 250,
+) -> dict:
+    players = build_player_inventory(
+        limit=limit,
+    )
+
+    return {
+        "source": "AISP2 Database Warehouse",
+        "database_player_count_returned": len(players),
+        "limit": limit,
+        "players": players,
+    }
+
+
+@app.get("/admin/database/players/search")
+def admin_database_player_search(
+    q: str,
+    limit: int = 25,
+) -> dict:
+    players = search_database_players(
+        query=q,
+        limit=limit,
+    )
+
+    return {
+        "source": "AISP2 Database Warehouse",
+        "query": q,
+        "matches": len(players),
+        "players": players,
     }
 
 
 @app.get("/admin/database/teams/count")
 def admin_database_team_count() -> dict:
     return {
+        "source": "AISP2 Database Warehouse",
         "team_count": count_database_teams(),
+    }
+
+
+@app.get("/admin/database/players/count")
+def admin_database_player_count() -> dict:
+    return {
+        "source": "AISP2 Database Warehouse",
+        "player_count": count_database_players(),
+    }
+
+
+@app.get("/admin/warehouse/status")
+def admin_warehouse_status() -> dict:
+    team_count = count_database_teams()
+    player_count = count_database_players()
+
+    warehouse_score = 0
+
+    if team_count >= 30:
+        warehouse_score += 30
+
+    if player_count >= 700:
+        warehouse_score += 35
+
+    if database_health_check():
+        warehouse_score += 20
+
+    if team_count > 0 and player_count > 0:
+        warehouse_score += 15
+
+    return {
+        "source": "AISP2 Database Warehouse",
+        "database_connected": database_health_check(),
+        "database_details": database_health_details(),
+        "warehouse_score": warehouse_score,
+        "teams": team_count,
+        "players": player_count,
+        "ready_for_team_explorer": team_count >= 30,
+        "ready_for_player_explorer": player_count > 0,
+        "ready_for_roster_ingestion": (
+            team_count >= 30
+            and player_count > 0
+        ),
+        "ready_for_predictions": False,
+        "completed_layers": [
+            "database connection",
+            "table initialization",
+            "team ingestion" if team_count > 0 else "team ingestion pending",
+            "player ingestion" if player_count > 0 else "player ingestion pending",
+        ],
+        "missing_layers": [
+            "roster ingestion",
+            "schedule ingestion",
+            "game ingestion",
+            "player season stats",
+            "team season stats",
+            "Statcast ingestion",
+            "feature engineering",
+            "trained prediction models",
+        ],
     }
