@@ -9,117 +9,106 @@
 
 
 # ============================================================
-# SECTION 01 - ENTERPRISE NLU CONFIGURATION
-# FILE: 04_ai/nlp/nlu_engine.py
-# PURPOSE: define Natural Language Understanding task routing,
-# scope routing, confidence thresholds, normalization controls,
-# and enterprise NLU settings for converting messy baseball
-# questions into structured chatbot intelligence.
+# SECTION 01 - ENTERPRISE DATABASE IMPORTS
+# FILE: 01_database/models.py
+# PURPOSE:
+# Centralized imports for the AISP2 Enterprise Baseball
+# Warehouse.
+#
+# Every database model in the platform shares these imports.
+#
+# Supported Systems
+# -----------------
+# • MLB Teams
+# • Players
+# • Rosters
+# • Games
+# • Chat Memory
+# • Continuous Learning
+# • Prediction Engine
+# • NLP
+# • AI Chatbot
+# • Future ML Pipelines
+# • Data Warehouse
 # ============================================================
 
 from __future__ import annotations
 
+from datetime import UTC
+from datetime import datetime
 
-# ============================================================
-# SECTION 01.01 - NLU ENGINE VERSION
-# ============================================================
+from sqlalchemy import Boolean
+from sqlalchemy import DateTime
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
 
-NLU_ENGINE_VERSION = "phase_10_part_10_enterprise_nlu_engine"
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
-
-# ============================================================
-# SECTION 01.02 - NLU TASK CONSTANTS
-# ============================================================
-
-NLU_TASK_GENERAL = "general_baseball_question"
-NLU_TASK_HELP = "help"
-NLU_TASK_LIST_TEAMS = "list_teams"
-NLU_TASK_LIST_PLAYERS = "list_players"
-NLU_TASK_TEAM_LOOKUP = "team_lookup"
-NLU_TASK_PLAYER_LOOKUP = "player_lookup"
-NLU_TASK_ROSTER_LOOKUP = "roster_lookup"
-NLU_TASK_PLAYER_PROBABILITY = "player_probability"
-NLU_TASK_BEST_TEAM_PROBABILITY = "best_team_probability"
-NLU_TASK_BEST_OVERALL_PROBABILITY = "best_overall_probability"
-NLU_TASK_COMPARE_PLAYERS = "compare_players"
-NLU_TASK_COMPARE_TEAMS = "compare_teams"
-NLU_TASK_MATCHUP_ANALYSIS = "matchup_analysis"
-NLU_TASK_STAT_REQUEST = "stat_request"
-NLU_TASK_MODEL_EXPLANATION = "model_explanation"
-NLU_TASK_DATABASE_STATUS = "database_status"
-NLU_TASK_WAREHOUSE_STATUS = "warehouse_status"
-NLU_TASK_MODEL_STATUS = "model_status"
+from database import Base
 
 
 # ============================================================
-# SECTION 01.03 - NLU TASK GROUPS
+# SECTION 01.01 - SHARED DATABASE DEFAULTS
 # ============================================================
 
-NLU_LOOKUP_TASKS = {
-    NLU_TASK_LIST_TEAMS,
-    NLU_TASK_LIST_PLAYERS,
-    NLU_TASK_TEAM_LOOKUP,
-    NLU_TASK_PLAYER_LOOKUP,
-    NLU_TASK_ROSTER_LOOKUP,
-}
+DEFAULT_STRING_LENGTH = 120
 
-NLU_PREDICTION_TASKS = {
-    NLU_TASK_PLAYER_PROBABILITY,
-    NLU_TASK_BEST_TEAM_PROBABILITY,
-    NLU_TASK_BEST_OVERALL_PROBABILITY,
-    NLU_TASK_COMPARE_PLAYERS,
-    NLU_TASK_COMPARE_TEAMS,
-    NLU_TASK_MATCHUP_ANALYSIS,
-}
+SHORT_STRING_LENGTH = 40
 
-NLU_SYSTEM_TASKS = {
-    NLU_TASK_HELP,
-    NLU_TASK_MODEL_EXPLANATION,
-    NLU_TASK_DATABASE_STATUS,
-    NLU_TASK_WAREHOUSE_STATUS,
-    NLU_TASK_MODEL_STATUS,
-}
-
-NLU_ANALYTIC_TASKS = {
-    NLU_TASK_STAT_REQUEST,
-    NLU_TASK_MATCHUP_ANALYSIS,
-    NLU_TASK_COMPARE_PLAYERS,
-    NLU_TASK_COMPARE_TEAMS,
-}
+LONG_STRING_LENGTH = 255
 
 
 # ============================================================
-# SECTION 01.04 - NLU CONFIDENCE THRESHOLDS
+# SECTION 01.02 - SHARED TIMESTAMP FACTORY
 # ============================================================
 
-NLU_CONFIDENCE_MINIMUM = 35
-NLU_CONFIDENCE_WEAK = 50
-NLU_CONFIDENCE_STANDARD = 65
-NLU_CONFIDENCE_STRONG = 80
-NLU_CONFIDENCE_HIGH = 90
-NLU_CONFIDENCE_MAXIMUM = 96
+def utc_now() -> datetime:
+    """
+    Enterprise UTC timestamp.
+
+    Every future model should use the same timestamp source.
+
+    This replaces scattered timestamp generation throughout
+    the project and keeps warehouse records consistent.
+    """
+
+    return datetime.now(UTC)
 
 
 # ============================================================
-# SECTION 01.05 - NLU ENGINE CONFIGURATION
+# SECTION 01.03 - COMMON INDEX NAMES
 # ============================================================
 
-NLU_ENGINE_CONFIGURATION = {
-    "language_normalization_enabled": True,
-    "typo_recovery_enabled": True,
-    "baseball_slang_normalization_enabled": True,
-    "probability_language_normalization_enabled": True,
-    "question_type_detection_enabled": True,
-    "outcome_detection_enabled": True,
-    "goal_detection_enabled": True,
-    "scope_detection_enabled": True,
-    "missing_information_detection_enabled": True,
-    "confidence_scoring_enabled": True,
-    "entity_report_required": False,
-    "routing_ready_detection_enabled": True,
-    "minimum_confidence": NLU_CONFIDENCE_MINIMUM,
-}
+IDX_PLAYER = "idx_player"
 
+IDX_TEAM = "idx_team"
+
+IDX_SEASON = "idx_season"
+
+IDX_GAME = "idx_game"
+
+IDX_CREATED = "idx_created"
+
+IDX_UPDATED = "idx_updated"
+
+
+# ============================================================
+# SECTION 01.04 - DATABASE VERSION
+# ============================================================
+
+DATABASE_MODEL_VERSION = "Phase_11_Part_1"
+
+DATABASE_MODEL_DESCRIPTION = (
+    "Enterprise Baseball Warehouse "
+    "Continuous Learning Schema"
+)
 # ============================================================
 # SECTION 02 - NLU SCOPE CONSTANTS
 # ============================================================

@@ -129,7 +129,7 @@
                 </p>
 
 
-            <!-- ============================================
+<!-- ============================================
      SECTION 05 - ENTERPRISE AI WORKSPACE
      ============================================ -->
 
@@ -139,7 +139,7 @@
 >
 
     <!-- ========================================
-         LEFT SIDEBAR
+         SECTION 05.01 - LEFT WORKSPACE SIDEBAR
          ======================================== -->
 
     <aside class="workspace-sidebar">
@@ -147,42 +147,42 @@
         <div class="workspace-nav">
 
             <div class="workspace-nav-title">
-                Workspace
+                AISP2 Workspace
             </div>
 
-            <button class="workspace-nav-button active">
+            <button class="workspace-nav-button active" type="button">
                 💬 Chat
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 🏟 Teams
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 👤 Players
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 📅 Games
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 📈 Predictions
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 ⚾ Statcast
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 🧠 Models
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 🗄 Warehouse
             </button>
 
-            <button class="workspace-nav-button">
+            <button class="workspace-nav-button" type="button">
                 ⚙ System
             </button>
 
@@ -192,10 +192,38 @@
 
 
     <!-- ========================================
-         MAIN CHAT
+         SECTION 05.02 - MAIN INTELLIGENCE PANEL
          ======================================== -->
 
     <section class="workspace-main">
+
+        <div class="workspace-toolbar">
+
+            <button class="toolbar-button active" type="button">
+                💬 Chat
+            </button>
+
+            <button class="toolbar-button" type="button">
+                🏟 Teams
+            </button>
+
+            <button class="toolbar-button" type="button">
+                👤 Players
+            </button>
+
+            <button class="toolbar-button" type="button">
+                📈 Predictions
+            </button>
+
+            <button class="toolbar-button" type="button">
+                📊 Analytics
+            </button>
+
+            <button class="toolbar-button" type="button">
+                ⚾ Statcast
+            </button>
+
+        </div>
 
         <div class="chat-header">
 
@@ -206,7 +234,6 @@
                 </div>
 
                 <div>
-
                     <strong>
                         Alfred • AISP2 Baseball Intelligence
                     </strong>
@@ -214,7 +241,6 @@
                     <span>
                         Live MLB Intelligence Workspace
                     </span>
-
                 </div>
 
             </div>
@@ -225,57 +251,74 @@
 
         </div>
 
-
         <div
             id="messages"
             class="messages"
-        >
+        ></div>
 
-            <div class="message bot">
+        <div class="quick-action-grid">
 
-                Welcome to AISP2 Enterprise.
+            <button
+                class="quick-action-card"
+                type="button"
+                data-prompt="show all MLB teams"
+            >
+                🏟
+                <span>Browse Teams</span>
+            </button>
 
-                <br><br>
+            <button
+                class="quick-action-card"
+                type="button"
+                data-prompt="search Aaron Judge"
+            >
+                👤
+                <span>Browse Players</span>
+            </button>
 
-                Ask me things like:
+            <button
+                class="quick-action-card"
+                type="button"
+                data-prompt="today's MLB games"
+            >
+                📅
+                <span>Today’s Games</span>
+            </button>
 
-                <br><br>
+            <button
+                class="quick-action-card"
+                type="button"
+                data-prompt="predict Yankees vs Red Sox"
+            >
+                📈
+                <span>Game Prediction</span>
+            </button>
 
-                • Show all MLB teams
+            <button
+                class="quick-action-card"
+                type="button"
+                data-prompt="database status"
+            >
+                🗄
+                <span>Warehouse</span>
+            </button>
 
-                <br>
-
-                • Search Aaron Judge
-
-                <br>
-
-                • Show Yankees roster
-
-                <br>
-
-                • Predict Dodgers vs Mets
-
-                <br>
-
-                • Predict Aaron Judge Home Run
-
-                <br>
-
-                • Database Status
-
-                <br>
-
-                • API Health
-
-            </div>
+            <button
+                class="quick-action-card"
+                type="button"
+                data-prompt="show model status"
+            >
+                🧠
+                <span>AI Models</span>
+            </button>
 
         </div>
-
 
         <div class="suggestions">
 
             <button
                 class="suggestion"
+                type="button"
                 data-prompt="Show all MLB teams."
             >
                 All Teams
@@ -283,6 +326,7 @@
 
             <button
                 class="suggestion"
+                type="button"
                 data-prompt="Search Aaron Judge."
             >
                 Aaron Judge
@@ -290,20 +334,23 @@
 
             <button
                 class="suggestion"
-                data-prompt="Show Dodgers roster."
+                type="button"
+                data-prompt="Search Shohei Ohtani."
             >
-                Dodgers
+                Shohei Ohtani
             </button>
 
             <button
                 class="suggestion"
-                data-prompt="Predict Yankees vs Red Sox."
+                type="button"
+                data-prompt="Predict Aaron Judge home run."
             >
-                Predict Game
+                Judge HR
             </button>
 
             <button
                 class="suggestion"
+                type="button"
                 data-prompt="Database Status."
             >
                 Warehouse
@@ -311,13 +358,13 @@
 
             <button
                 class="suggestion"
+                type="button"
                 data-prompt="System Health."
             >
                 Health
             </button>
 
         </div>
-
 
         <form
             id="chat-form"
@@ -329,7 +376,7 @@
                 class="chat-input"
                 type="text"
                 autocomplete="off"
-                maxlength="900"
+                maxlength="1000"
                 placeholder="Ask Alfred anything about MLB..."
             >
 
@@ -346,7 +393,7 @@
 
 
     <!-- ========================================
-         RIGHT SIDEBAR
+         SECTION 05.03 - RIGHT INTELLIGENCE SIDEBAR
          ======================================== -->
 
     <aside class="workspace-details">
@@ -367,7 +414,6 @@
 
         </div>
 
-
         <div class="workspace-card">
 
             <div class="workspace-card-title">
@@ -377,110 +423,52 @@
             <div class="prediction-panel">
 
                 <div class="prediction-stat">
-
-                    <span class="prediction-label">
-                        Logistic Regression
-                    </span>
-
-                    <span class="prediction-number">
-                        Ready
-                    </span>
-
+                    <span class="prediction-label">Logistic Regression</span>
+                    <span class="prediction-number">Ready</span>
                 </div>
 
                 <div class="prediction-stat">
-
-                    <span class="prediction-label">
-                        Monte Carlo
-                    </span>
-
-                    <span class="prediction-number">
-                        Soon
-                    </span>
-
+                    <span class="prediction-label">Monte Carlo</span>
+                    <span class="prediction-number">Soon</span>
                 </div>
 
                 <div class="prediction-stat">
-
-                    <span class="prediction-label">
-                        XGBoost
-                    </span>
-
-                    <span class="prediction-number">
-                        Soon
-                    </span>
-
+                    <span class="prediction-label">XGBoost</span>
+                    <span class="prediction-number">Soon</span>
                 </div>
 
                 <div class="prediction-stat">
-
-                    <span class="prediction-label">
-                        Bayesian
-                    </span>
-
-                    <span class="prediction-number">
-                        Soon
-                    </span>
-
+                    <span class="prediction-label">Bayesian</span>
+                    <span class="prediction-number">Soon</span>
                 </div>
 
             </div>
 
         </div>
-
 
         <div class="system-status">
 
             <div class="system-tile">
-
-                <div class="system-title">
-                    API
-                </div>
-
-                <div class="system-value">
-                    LIVE
-                </div>
-
+                <div class="system-title">API</div>
+                <div class="system-value">LIVE</div>
             </div>
 
             <div class="system-tile">
-
-                <div class="system-title">
-                    Database
-                </div>
-
-                <div class="system-value">
-                    READY
-                </div>
-
+                <div class="system-title">Database</div>
+                <div class="system-value">READY</div>
             </div>
 
             <div class="system-tile">
-
-                <div class="system-title">
-                    Teams
-                </div>
-
-                <div class="system-value">
-                    30
-                </div>
-
+                <div class="system-title">Teams</div>
+                <div class="system-value">30</div>
             </div>
 
             <div class="system-tile">
-
-                <div class="system-title">
-                    Models
-                </div>
-
-                <div class="system-value">
-                    1
-                </div>
-
+                <div class="system-title">Models</div>
+                <div class="system-value">1</div>
             </div>
 
         </div>
-
 
         <div class="ai-safety-banner">
 
@@ -488,10 +476,10 @@
                 AISP2 Safety Notice
             </strong>
 
-            Predictions are probability estimates generated from statistical
-            models and available baseball data. They are not guarantees,
-            gambling advice, financial advice, or recommendations. Always
-            independently verify important information before making decisions.
+            AISP2 predictions are statistical probability estimates only.
+            They are not guarantees, gambling advice, financial advice,
+            or recommendations. Always independently verify important
+            information before making decisions.
 
         </div>
 

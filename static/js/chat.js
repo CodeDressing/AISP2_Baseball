@@ -885,3 +885,370 @@ Next Upgrades
 24.10 Explainable AI
 
 */
+
+/* ============================================================
+   SECTION 25 - ENTERPRISE CARD RENDER ENGINE
+   PURPOSE:
+   Render interactive AI cards instead of plain text responses.
+   This becomes the foundation for the Team Browser,
+   Player Browser, Prediction Builder, Warehouse Explorer,
+   and Model Explorer.
+   ============================================================ */
+
+function createEnterpriseCard(config) {
+
+    const wrapper = document.createElement("div");
+
+    wrapper.className =
+        "message bot enterprise-card";
+
+    if (config.title) {
+
+        const title = document.createElement("div");
+
+        title.className =
+            "enterprise-card-title";
+
+        title.innerText =
+            config.title;
+
+        wrapper.appendChild(title);
+
+    }
+
+    if (config.subtitle) {
+
+        const subtitle =
+            document.createElement("div");
+
+        subtitle.className =
+            "enterprise-card-subtitle";
+
+        subtitle.innerText =
+            config.subtitle;
+
+        wrapper.appendChild(subtitle);
+
+    }
+
+    if (Array.isArray(config.buttons)) {
+
+        const grid =
+            document.createElement("div");
+
+        grid.className =
+            "enterprise-card-grid";
+
+        config.buttons.forEach(function(button){
+
+            const element =
+                document.createElement("button");
+
+            element.type = "button";
+
+            element.className =
+                "enterprise-card-button";
+
+            element.innerText =
+                button.label;
+
+            element.addEventListener(
+                "click",
+                function(){
+
+                    if(button.prompt){
+
+                        sendChatMessage(
+                            button.prompt
+                        );
+
+                    }
+
+                }
+            );
+
+            grid.appendChild(
+                element
+            );
+
+        });
+
+        wrapper.appendChild(
+            grid
+        );
+
+    }
+
+    const messages =
+        getChatMessages();
+
+    if(messages){
+
+        messages.appendChild(
+            wrapper
+        );
+
+        scrollMessagesToBottom();
+
+    }
+
+    return wrapper;
+
+}
+
+
+/* ============================================================
+   SECTION 26 - MAIN GUIDED ASSISTANT
+   ============================================================ */
+
+function showMainAssistantCard(){
+
+    createEnterpriseCard({
+
+        title:
+            "Welcome to Alfred",
+
+        subtitle:
+            "Choose an area of baseball intelligence.",
+
+        buttons:[
+
+            {
+
+                label:"🏟 Teams",
+
+                prompt:"show all MLB teams"
+
+            },
+
+            {
+
+                label:"👤 Players",
+
+                prompt:"search Aaron Judge"
+
+            },
+
+            {
+
+                label:"📈 Predictions",
+
+                prompt:"predict Aaron Judge home run"
+
+            },
+
+            {
+
+                label:"⚾ Games",
+
+                prompt:"show today's MLB games"
+
+            },
+
+            {
+
+                label:"🗄 Warehouse",
+
+                prompt:"database status"
+
+            },
+
+            {
+
+                label:"🧠 Models",
+
+                prompt:"show model status"
+
+            },
+
+            {
+
+                label:"📊 Statcast",
+
+                prompt:"statcast status"
+
+            },
+
+            {
+
+                label:"❤️ API Health",
+
+                prompt:"health"
+
+            }
+
+        ]
+
+    });
+
+}
+
+
+/* ============================================================
+   SECTION 27 - INITIALIZE CARD EXPERIENCE
+   ============================================================ */
+
+const originalInitializeAISP2Chat =
+    initializeAISP2Chat;
+
+initializeAISP2Chat =
+function(){
+
+    originalInitializeAISP2Chat();
+
+    showMainAssistantCard();
+
+};
+
+
+/* ============================================================
+   SECTION 28 - TEAM BROWSER CARD
+   ============================================================ */
+
+function showTeamBrowserCard(){
+
+    if(
+        !AISP2_CHAT_STATE.teams.length
+    ){
+
+        return;
+
+    }
+
+    createEnterpriseCard({
+
+        title:
+            "MLB Teams",
+
+        subtitle:
+            "Choose a team.",
+
+        buttons:
+
+            AISP2_CHAT_STATE.teams.map(
+
+                function(team){
+
+                    return{
+
+                        label:
+                            team.name,
+
+                        prompt:
+                            "show " +
+                            team.name +
+                            " roster"
+
+                    };
+
+                }
+
+            )
+
+    });
+
+}
+
+
+/* ============================================================
+   SECTION 29 - PATCH TEAM SEARCH
+   ============================================================ */
+
+const previousTeamSearch =
+    handleTeamsQuestion;
+
+handleTeamsQuestion =
+async function(){
+
+    const response =
+        await previousTeamSearch();
+
+    showTeamBrowserCard();
+
+    return response;
+
+};
+
+
+/* ============================================================
+   SECTION 30 - PLAYER CARD PLACEHOLDER
+   ============================================================ */
+
+function showPlayerBrowserCard(){
+
+    createEnterpriseCard({
+
+        title:
+            "Player Explorer",
+
+        subtitle:
+            "Popular Searches",
+
+        buttons:[
+
+            {
+
+                label:"Aaron Judge",
+
+                prompt:"search Aaron Judge"
+
+            },
+
+            {
+
+                label:"Shohei Ohtani",
+
+                prompt:"search Shohei Ohtani"
+
+            },
+
+            {
+
+                label:"Juan Soto",
+
+                prompt:"search Juan Soto"
+
+            },
+
+            {
+
+                label:"Corbin Carroll",
+
+                prompt:"search Corbin Carroll"
+
+            }
+
+        ]
+
+    });
+
+}
+
+
+/* ============================================================
+   SECTION 31 - NEXT PHASE ROADMAP
+   ============================================================ */
+
+/*
+
+31.01 Division Browser
+
+31.02 Team Logo Cards
+
+31.03 Player Cards
+
+31.04 Player Images
+
+31.05 Statcast Dashboard
+
+31.06 Prediction Builder
+
+31.07 Logistic Regression Viewer
+
+31.08 Monte Carlo Simulator
+
+31.09 Bayesian Dashboard
+
+31.10 XGBoost Dashboard
+
+*/

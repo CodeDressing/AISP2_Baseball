@@ -982,3 +982,388 @@ Future Chat Upgrades
     }
 
 }
+
+/* ============================================================
+   SECTION 25 - ENTERPRISE AI CARDS
+   PURPOSE:
+   Interactive workspace cards used by Alfred.
+   ============================================================ */
+
+.enterprise-card {
+
+    width: 100%;
+
+    max-width: 100%;
+
+    margin: 14px 0;
+
+    padding: 20px;
+
+    border-radius: 22px;
+
+    border:
+        1px solid rgba(56,189,248,.18);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(15,23,42,.96),
+            rgba(2,6,23,.96)
+        );
+
+    box-shadow:
+        0 18px 60px rgba(0,0,0,.28);
+
+    animation:
+        enterpriseCardFade .25s ease;
+}
+
+.enterprise-card-title{
+
+    font-size:20px;
+
+    font-weight:900;
+
+    color:white;
+
+    margin-bottom:8px;
+}
+
+.enterprise-card-subtitle{
+
+    color:#94a3b8;
+
+    line-height:1.7;
+
+    margin-bottom:18px;
+}
+
+
+/* ============================================================
+   SECTION 26 - CARD BUTTON GRID
+   ============================================================ */
+
+.enterprise-card-grid{
+
+    display:grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(170px,1fr)
+        );
+
+    gap:12px;
+}
+
+.enterprise-card-button{
+
+    min-height:72px;
+
+    padding:16px;
+
+    border-radius:18px;
+
+    border:
+        1px solid rgba(255,255,255,.08);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.18),
+            rgba(56,189,248,.10)
+        );
+
+    color:white;
+
+    font-size:14px;
+
+    font-weight:800;
+
+    text-align:left;
+
+    cursor:pointer;
+
+    transition:
+        .18s ease;
+}
+
+.enterprise-card-button:hover{
+
+    transform:
+        translateY(-3px);
+
+    border-color:
+        rgba(56,189,248,.45);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.30),
+            rgba(56,189,248,.22)
+        );
+
+    box-shadow:
+        0 16px 36px rgba(56,189,248,.18);
+}
+
+
+/* ============================================================
+   SECTION 27 - TEAM CARDS
+   ============================================================ */
+
+.team-card{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    gap:20px;
+
+    padding:18px;
+
+    border-radius:18px;
+
+    background:
+        rgba(255,255,255,.04);
+
+    border:
+        1px solid rgba(255,255,255,.06);
+
+    transition:.18s ease;
+}
+
+.team-card:hover{
+
+    background:
+        rgba(56,189,248,.10);
+
+    transform:
+        translateX(4px);
+}
+
+.team-card-name{
+
+    font-size:17px;
+
+    font-weight:900;
+
+    color:white;
+}
+
+.team-card-meta{
+
+    color:#94a3b8;
+
+    font-size:13px;
+}
+
+
+/* ============================================================
+   SECTION 28 - PLAYER PROFILE CARD
+   ============================================================ */
+
+.player-card{
+
+    display:grid;
+
+    grid-template-columns:
+        84px
+        1fr;
+
+    gap:18px;
+
+    padding:18px;
+
+    border-radius:20px;
+
+    background:
+        rgba(255,255,255,.04);
+
+    border:
+        1px solid rgba(255,255,255,.08);
+}
+
+.player-avatar{
+
+    width:84px;
+
+    height:84px;
+
+    border-radius:50%;
+
+    display:grid;
+
+    place-items:center;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.45),
+            rgba(56,189,248,.24)
+        );
+
+    font-size:30px;
+
+    font-weight:900;
+}
+
+.player-name{
+
+    color:white;
+
+    font-size:22px;
+
+    font-weight:900;
+}
+
+.player-team{
+
+    color:#94a3b8;
+
+    margin-top:6px;
+}
+
+
+/* ============================================================
+   SECTION 29 - PROBABILITY METER
+   ============================================================ */
+
+.probability-meter{
+
+    margin-top:18px;
+}
+
+.probability-bar{
+
+    height:18px;
+
+    border-radius:999px;
+
+    overflow:hidden;
+
+    background:
+        rgba(255,255,255,.08);
+}
+
+.probability-fill{
+
+    height:100%;
+
+    width:0;
+
+    background:
+        linear-gradient(
+            90deg,
+            #22c55e,
+            #38bdf8
+        );
+
+    transition:
+        width .55s ease;
+}
+
+.probability-text{
+
+    margin-top:8px;
+
+    color:white;
+
+    font-weight:900;
+}
+
+
+/* ============================================================
+   SECTION 30 - MODEL STATUS BADGES
+   ============================================================ */
+
+.model-badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    padding:10px 16px;
+
+    border-radius:999px;
+
+    background:
+        rgba(34,197,94,.12);
+
+    border:
+        1px solid rgba(34,197,94,.22);
+
+    color:
+        #bbf7d0;
+
+    font-size:12px;
+
+    font-weight:900;
+
+    margin:6px;
+}
+
+.model-badge.planned{
+
+    background:
+        rgba(234,179,8,.12);
+
+    border-color:
+        rgba(234,179,8,.30);
+
+    color:
+        #fde68a;
+}
+
+
+/* ============================================================
+   SECTION 31 - CARD ANIMATION
+   ============================================================ */
+
+@keyframes enterpriseCardFade{
+
+    from{
+
+        opacity:0;
+
+        transform:
+            translateY(12px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:
+            translateY(0);
+
+    }
+
+}
+
+
+/* ============================================================
+   SECTION 32 - LARGE SCREEN CHAT
+   ============================================================ */
+
+@media (min-width:1600px){
+
+    .messages{
+
+        height:700px;
+    }
+
+    .workspace-layout{
+
+        grid-template-columns:
+            300px
+            minmax(0,1fr)
+            380px;
+    }
+
+}
