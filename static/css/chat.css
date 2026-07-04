@@ -1536,3 +1536,291 @@ Future Chat Upgrades
         min-height: 420px;
     }
 }
+
+/* ============================================================
+   SECTION 33 - RESPONSIVE WORKSPACE RESET
+   PURPOSE:
+   Make AISP2 fit full screen, half screen, laptop, and mobile
+   without broken stacking, oversized empty space, or duplicate
+   navigation blocks.
+   ============================================================ */
+
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+}
+
+.hero {
+    width: 100%;
+    min-height: calc(100vh - 76px);
+    padding:
+        clamp(22px, 3vh, 44px)
+        clamp(14px, 2vw, 34px);
+}
+
+.center-stack {
+    width: 100%;
+    max-width: 1720px;
+    margin: 0 auto;
+}
+
+.workspace-layout {
+    width: 100%;
+    max-width: 1720px;
+    min-height: calc(100vh - 300px);
+
+    display: grid;
+    grid-template-columns:
+        minmax(220px, 260px)
+        minmax(560px, 1fr)
+        minmax(280px, 340px);
+
+    gap: clamp(14px, 1.4vw, 22px);
+
+    align-items: stretch;
+}
+
+.workspace-sidebar,
+.workspace-main,
+.workspace-details {
+    min-height: calc(100vh - 300px);
+}
+
+.workspace-main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.messages {
+    flex: 1;
+    min-height: 360px;
+    height: auto;
+    overflow-y: auto;
+}
+
+.workspace-toolbar {
+    display: none;
+}
+
+
+/* ============================================================
+   SECTION 34 - CLEAN CENTER ACTION GRID
+   PURPOSE:
+   Remove bad white/default controls and make the main actions
+   look like premium dark application controls.
+   ============================================================ */
+
+.quick-action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+
+    padding:
+        16px
+        clamp(16px, 1.5vw, 24px)
+        8px;
+}
+
+.quick-action-card {
+    min-height: 84px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
+    gap: 8px;
+
+    padding: 16px;
+
+    border-radius: 18px;
+
+    border:
+        1px solid rgba(56,189,248,.22);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(15,23,42,.96),
+            rgba(8,47,73,.72)
+        );
+
+    color: #e5f6ff;
+
+    font-size: 13px;
+    font-weight: 900;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    transition:
+        transform .18s ease,
+        border-color .18s ease,
+        background .18s ease,
+        box-shadow .18s ease;
+}
+
+.quick-action-card span {
+    color: white;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-2px);
+
+    border-color:
+        rgba(125,211,252,.55);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.38),
+            rgba(56,189,248,.24)
+        );
+
+    box-shadow:
+        0 16px 42px rgba(56,189,248,.14);
+}
+
+.input-area {
+    flex-shrink: 0;
+}
+
+
+/* ============================================================
+   SECTION 35 - MIDSCREEN / HALFSCREEN LAYOUT
+   PURPOSE:
+   When browser width gets tight, remove the side columns and
+   make the center workspace the full application.
+   ============================================================ */
+
+@media (max-width: 1250px) {
+
+    .workspace-layout {
+        max-width: 980px;
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .workspace-sidebar,
+    .workspace-details {
+        display: none;
+    }
+
+    .workspace-main {
+        width: 100%;
+        min-height: calc(100vh - 300px);
+    }
+
+    .workspace-toolbar {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+
+        padding: 14px;
+
+        border-bottom:
+            1px solid rgba(255,255,255,.07);
+
+        background:
+            rgba(2,6,23,.42);
+    }
+
+    .toolbar-button {
+        min-height: 48px;
+
+        border:
+            1px solid rgba(56,189,248,.22);
+
+        border-radius: 16px;
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(15,23,42,.94),
+                rgba(8,47,73,.62)
+            );
+
+        color: #e5f6ff;
+
+        font-size: 12px;
+        font-weight: 900;
+
+        cursor: pointer;
+
+        transition: .18s ease;
+    }
+
+    .toolbar-button:hover,
+    .toolbar-button.active {
+        transform: translateY(-1px);
+
+        border-color:
+            rgba(125,211,252,.58);
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(37,99,235,.42),
+                rgba(56,189,248,.22)
+            );
+    }
+
+    .messages {
+        min-height: 440px;
+    }
+
+}
+
+
+/* ============================================================
+   SECTION 36 - MOBILE LAYOUT
+   PURPOSE:
+   Single-column mobile-first chat workspace.
+   ============================================================ */
+
+@media (max-width: 760px) {
+
+    .hero {
+        padding: 18px 10px;
+    }
+
+    .workspace-layout {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .workspace-main {
+        min-height: calc(100vh - 240px);
+        border-radius: 22px;
+    }
+
+    .workspace-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .quick-action-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-header {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .messages {
+        min-height: 420px;
+        padding: 16px;
+    }
+
+    .input-area {
+        flex-direction: column;
+    }
+
+    .send-button {
+        width: 100%;
+    }
+
+}
