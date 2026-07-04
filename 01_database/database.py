@@ -169,3 +169,109 @@ if __name__ == "__main__":
     print(f"Database type: {'sqlite' if IS_SQLITE else 'external'}")
     print(f"Database healthy: {database_health_check()}")
     print(database_health_details())
+
+# ============================================================
+# SECTION 13 - DATABASE TABLE MANAGEMENT
+# PURPOSE: create and inspect database tables for warehouse
+# ingestion, team sync, player sync, and prediction data.
+# ============================================================
+
+def create_all_database_tables() -> bool:
+    try:
+        Base.metadata.create_all(
+            bind=engine,
+        )
+
+        return True
+
+    except Exception:
+        return False
+
+
+def drop_all_database_tables() -> bool:
+    try:
+        Base.metadata.drop_all(
+            bind=engine,
+        )
+
+        return True
+
+    except Exception:
+        return False
+
+
+def get_database_table_names() -> list[str]:
+    try:
+        with engine.connect() as connection:
+            if IS_SQLITE:
+                result = connection.execute(
+                    text(
+                        "SELECT name FROM sqlite_master "
+                        "WHERE type='table' "
+                        "ORDER BY name"
+                    )
+                )
+
+                return [
+                    row[0]
+                    for row in result.fetchall()
+                ]
+
+            result = connection.execute(
+                text(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema='public' "
+                    "ORDER BY table_name"
+                )
+            )
+
+            return [
+                row[0]
+                for row in result.fetchall()
+            ]
+
+    except Exception:
+        return []
+
+
+# ============================================================
+# SECTION 14 - DATABASE WAREHOUSE STATUS
+# PURPOSE: return human-readable warehouse readiness for AISP2.
+# ============================================================
+
+def database_warehouse_status() -> dict:
+    table_names = get_database_table_names()
+
+    return {
+        "database_connected": database_health_check(),
+        "database_type": "sqlite" if IS_SQLITE else "external",
+        "tables_created": len(table_names),
+        "tables": table_names,
+        "warehouse_ready": len(table_names) > 0,
+        "required_next_tables": [
+            "teams",
+            "players",
+            "rosters",
+            "games",
+            "player_stats",
+            "team_stats",
+            "predictions",
+            "model_runs",
+        ],
+    }
+
+
+# ============================================================
+# SECTION 15 - DATABASE INITIALIZATION ENTRYPOINT
+# PURPOSE: one command used by scripts, Render, and local dev
+# to initialize the AISP2 warehouse schema.
+# ============================================================
+
+def initialize_database() -> dict:
+    created = create_all_database_tables()
+
+    return {
+        "initialized": created,
+        "health": database_health_check(),
+        "warehouse": database_warehouse_status(),
+    }

@@ -267,6 +267,10 @@ def upsert_team(
 
 # ============================================================
 # SECTION 09 - TEAM INGESTION ENGINE
+# FILE: 03_ingestion/team_ingestion.py
+# PURPOSE: initialize warehouse tables, pull official MLB team
+# data, validate records, upsert teams, and return an ingestion
+# report that can support future dashboard and chatbot status
 # ============================================================
 
 def ingest_mlb_teams(
@@ -276,6 +280,10 @@ def ingest_mlb_teams(
     Pulls official MLB teams from MLB Stats API and stores them
     in the AISP2 database.
     """
+
+    from database import initialize_database
+
+    initialization_report = initialize_database()
 
     client = MLBStatsAPIClient()
 
@@ -288,6 +296,8 @@ def ingest_mlb_teams(
         "version": INGESTION_VERSION,
         "season": season,
         "source": "MLB Stats API",
+        "database_initialized": initialization_report.get("initialized"),
+        "database_health": initialization_report.get("health"),
         "raw_team_count": len(raw_teams),
         "created": 0,
         "updated": 0,
@@ -336,20 +346,20 @@ def ingest_mlb_teams(
                     "abbreviation": normalized_team["abbreviation"],
                     "league": normalized_team["league"],
                     "division": normalized_team["division"],
+                    "venue": normalized_team["venue"],
                     "action": action,
                 }
             )
 
     report["success"] = (
         report["raw_team_count"] > 0
+        and report["database_health"] is True
         and len(report["errors"]) == 0
     )
 
     report["database_team_count_after_ingestion"] = count_database_teams()
 
     return report
-
-
 # ============================================================
 # SECTION 10 - DATABASE TEAM COUNT
 # ============================================================
