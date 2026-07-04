@@ -522,124 +522,145 @@ function initializeWorkspace() {
 
 /* ============================================================
    SECTION 18 - WORKSPACE NAVIGATION
+   PURPOSE:
+   Connect sidebar buttons, toolbar buttons, quick action cards,
+   and suggestion chips to the same command routing system.
    ============================================================ */
 
 function initializeWorkspaceNavigation() {
 
+    bindWorkspaceButtons(
+        ".workspace-nav-button"
+    );
+
+    bindWorkspaceButtons(
+        ".toolbar-button"
+    );
+
+    bindPromptButtons(
+        ".quick-action-card"
+    );
+
+    bindPromptButtons(
+        ".suggestion"
+    );
+
+}
+
+function bindWorkspaceButtons(selector) {
+
     const buttons =
-        document.querySelectorAll(
-            ".workspace-nav-button"
-        );
+        document.querySelectorAll(selector);
 
-    buttons.forEach(function(button){
+    buttons.forEach(function(button) {
 
-        button.addEventListener(
-            "click",
-            function(){
+        button.addEventListener("click", function() {
 
-                buttons.forEach(function(item){
+            buttons.forEach(function(item) {
+                item.classList.remove("active");
+            });
 
-                    item.classList.remove("active");
+            button.classList.add("active");
 
-                });
+            const command =
+                button.innerText
+                    .trim()
+                    .toLowerCase();
 
-                button.classList.add("active");
+            routeWorkspaceCommand(command);
 
-                const command =
-                    button.innerText
-                        .trim()
-                        .toLowerCase();
-
-                routeWorkspaceCommand(command);
-
-            }
-        );
+        });
 
     });
 
 }
 
-async function routeWorkspaceCommand(command){
+function bindPromptButtons(selector) {
 
-    if(command.includes("chat")){
+    const buttons =
+        document.querySelectorAll(selector);
 
-        focusChatInput();
+    buttons.forEach(function(button) {
 
-        return;
+        button.addEventListener("click", function() {
 
-    }
+            const prompt =
+                button.dataset.prompt ||
+                button.innerText ||
+                "";
 
-    if(command.includes("team")){
+            if (!prompt.trim()) {
+                return;
+            }
 
-        sendChatMessage(
-            "show all MLB teams"
-        );
+            sendChatMessage(prompt);
 
-        return;
+        });
 
-    }
-
-    if(command.includes("player")){
-
-        sendChatMessage(
-            "search Aaron Judge"
-        );
-
-        return;
-
-    }
-
-    if(command.includes("prediction")){
-
-        sendChatMessage(
-            "predict Aaron Judge home run"
-        );
-
-        return;
-
-    }
-
-    if(command.includes("warehouse")){
-
-        sendChatMessage(
-            "database status"
-        );
-
-        return;
-
-    }
-
-    if(command.includes("system")){
-
-        sendChatMessage(
-            "health"
-        );
-
-        return;
-
-    }
-
-    if(command.includes("statcast")){
-
-        addBotMessage(
-            "Statcast explorer will be connected during Phase 8."
-        );
-
-        return;
-
-    }
-
-    if(command.includes("model")){
-
-        addBotMessage(
-            "Machine learning model dashboard coming soon."
-        );
-
-    }
+    });
 
 }
 
+async function routeWorkspaceCommand(command) {
 
+    if (command.includes("chat")) {
+        showMainAssistantCard();
+        focusChatInput();
+        return;
+    }
+
+    if (command.includes("team")) {
+        sendChatMessage("show all MLB teams");
+        return;
+    }
+
+    if (command.includes("player")) {
+        showPlayerBrowserCard();
+        return;
+    }
+
+    if (command.includes("prediction")) {
+        showPredictionBuilderCard();
+        return;
+    }
+
+    if (command.includes("warehouse")) {
+        sendChatMessage("database status");
+        return;
+    }
+
+    if (command.includes("system")) {
+        sendChatMessage("health");
+        return;
+    }
+
+    if (command.includes("statcast")) {
+        createEnterpriseCard({
+            title: "Statcast Explorer",
+            subtitle: "Statcast integration is planned for Phase 8. This will include exit velocity, launch angle, barrel rate, hard-hit rate, sprint speed, and pitch-tracking data.",
+            buttons: [
+                { label: "Database Status", prompt: "database status" },
+                { label: "Model Status", prompt: "show model status" },
+                { label: "Prediction Demo", prompt: "predict Aaron Judge home run" }
+            ]
+        });
+        return;
+    }
+
+    if (command.includes("model") || command.includes("analytics")) {
+        createEnterpriseCard({
+            title: "AISP2 Model Center",
+            subtitle: "Model framework prepared for Logistic Regression, Elo, Poisson, Monte Carlo, XGBoost, and Bayesian updating.",
+            buttons: [
+                { label: "Explain Logistic Regression", prompt: "explain logistic regression" },
+                { label: "Explain Monte Carlo", prompt: "explain monte carlo" },
+                { label: "Explain Elo", prompt: "explain elo ratings" },
+                { label: "Model Status", prompt: "show model status" }
+            ]
+        });
+    }
+
+}
 /* ============================================================
    SECTION 19 - WORKSPACE STATUS
    ============================================================ */
@@ -1226,29 +1247,55 @@ function showPlayerBrowserCard(){
 
 
 /* ============================================================
-   SECTION 31 - NEXT PHASE ROADMAP
+   SECTION 31 - PREDICTION BUILDER CARD
+   PURPOSE:
+   Point-and-click prediction entry point.
    ============================================================ */
 
-/*
+function showPredictionBuilderCard() {
 
-31.01 Division Browser
+    createEnterpriseCard({
 
-31.02 Team Logo Cards
+        title:
+            "Prediction Builder",
 
-31.03 Player Cards
+        subtitle:
+            "Choose a player outcome to prepare an AISP2 probability request.",
 
-31.04 Player Images
+        buttons: [
 
-31.05 Statcast Dashboard
+            {
+                label: "Aaron Judge HR",
+                prompt: "predict Aaron Judge home run"
+            },
 
-31.06 Prediction Builder
+            {
+                label: "Shohei Ohtani Hit",
+                prompt: "predict Shohei Ohtani hit"
+            },
 
-31.07 Logistic Regression Viewer
+            {
+                label: "Juan Soto Walk",
+                prompt: "predict Juan Soto walk"
+            },
 
-31.08 Monte Carlo Simulator
+            {
+                label: "Corbin Carroll Hit",
+                prompt: "predict Corbin Carroll hit"
+            },
 
-31.09 Bayesian Dashboard
+            {
+                label: "Yankees vs Red Sox",
+                prompt: "predict Yankees vs Red Sox"
+            },
 
-31.10 XGBoost Dashboard
+            {
+                label: "Dodgers vs Mets",
+                prompt: "predict Dodgers vs Mets"
+            }
 
-*/
+        ]
+
+    });
+
+}

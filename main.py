@@ -162,6 +162,19 @@ from nlp.intent_detection import build_intent_report
 # )
 #
 # from response_generator import generate_response_from_context
+
+# ============================================================
+# SECTION 01.09 - WAREHOUSE INGESTION IMPORTS
+# FILE: main.py
+# PURPOSE: expose safe warehouse ingestion services through
+# administrative API routes
+# ============================================================
+
+from team_ingestion import (
+    ingest_mlb_teams,
+    build_team_inventory,
+    count_database_teams,
+)
 # ============================================================
 # SECTION 02 - APPLICATION METADATA
 # ============================================================
@@ -1957,4 +1970,53 @@ def prediction_outcomes():
 
         ]
 
+    }
+
+# ============================================================
+# SECTION 19 - ENTERPRISE WAREHOUSE INGESTION API
+# FILE: main.py
+# PURPOSE: administrative endpoints for initializing and
+# inspecting AISP2 warehouse team data
+# ============================================================
+
+@app.post("/admin/setup/warehouse")
+def initialize_complete_warehouse() -> dict:
+    report = ingest_mlb_teams()
+
+    return {
+        "warehouse_ready": report["success"],
+        "message": "AISP2 warehouse setup completed.",
+        "database_teams": report["database_team_count_after_ingestion"],
+        "created": report["created"],
+        "updated": report["updated"],
+        "skipped": report["skipped"],
+        "errors": report["errors"],
+    }
+
+
+@app.post("/admin/ingest/teams")
+def admin_ingest_teams() -> dict:
+    report = ingest_mlb_teams()
+
+    return {
+        "success": report["success"],
+        "message": "MLB team ingestion completed.",
+        "report": report,
+    }
+
+
+@app.get("/admin/database/teams")
+def admin_database_teams() -> dict:
+    teams = build_team_inventory()
+
+    return {
+        "database_team_count": len(teams),
+        "teams": teams,
+    }
+
+
+@app.get("/admin/database/teams/count")
+def admin_database_team_count() -> dict:
+    return {
+        "team_count": count_database_teams(),
     }
