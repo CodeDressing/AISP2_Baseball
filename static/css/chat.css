@@ -1367,3 +1367,172 @@ Future Chat Upgrades
     }
 
 }
+
+/* ============================================================
+   SECTION 33 - FULLSCREEN RESPONSIVE WORKSPACE FIX
+   PURPOSE:
+   Remove cramped fixed-feel layout, eliminate white default
+   buttons, and make the workspace scale proportionally to the
+   available screen size.
+   ============================================================ */
+
+.center-stack {
+    width: min(96vw, 1560px);
+}
+
+.workspace-layout {
+    width: min(96vw, 1560px);
+    min-height: clamp(720px, 72vh, 920px);
+
+    grid-template-columns:
+        clamp(220px, 16vw, 300px)
+        minmax(520px, 1fr)
+        clamp(280px, 22vw, 380px);
+
+    align-items: stretch;
+}
+
+.workspace-main {
+    min-height: clamp(720px, 72vh, 920px);
+}
+
+.workspace-sidebar,
+.workspace-details {
+    min-height: clamp(720px, 72vh, 920px);
+}
+
+.messages {
+    height: auto;
+    min-height: clamp(360px, 48vh, 680px);
+    flex: 1;
+}
+
+.workspace-toolbar {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    background: rgba(2,6,23,.44);
+}
+
+.toolbar-button,
+.quick-action-card {
+    border: 1px solid rgba(56,189,248,.18);
+    border-radius: 16px;
+    background:
+        linear-gradient(
+            135deg,
+            rgba(15,23,42,.92),
+            rgba(8,47,73,.62)
+        );
+    color: #e5f6ff;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+.toolbar-button {
+    min-height: 46px;
+    padding: 10px 12px;
+}
+
+.toolbar-button:hover,
+.quick-action-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(125,211,252,.45);
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.30),
+            rgba(56,189,248,.20)
+        );
+}
+
+.toolbar-button.active {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.55),
+            rgba(56,189,248,.28)
+        );
+    border-color: rgba(125,211,252,.55);
+}
+
+.quick-action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px 20px 8px;
+}
+
+.quick-action-card {
+    min-height: 86px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    text-align: left;
+}
+
+.quick-action-card span {
+    display: block;
+    color: white;
+}
+
+.suggestions {
+    padding-top: 10px;
+}
+
+@media (min-width: 1500px) {
+    .workspace-layout {
+        grid-template-columns:
+            300px
+            minmax(680px, 1fr)
+            390px;
+    }
+
+    .messages {
+        min-height: 620px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .workspace-layout {
+        width: min(94vw, 980px);
+        grid-template-columns: 1fr;
+    }
+
+    .workspace-toolbar {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .quick-action-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .center-stack,
+    .workspace-layout {
+        width: 100%;
+    }
+
+    .workspace-toolbar,
+    .quick-action-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .workspace-layout,
+    .workspace-main,
+    .workspace-sidebar,
+    .workspace-details {
+        min-height: auto;
+    }
+
+    .messages {
+        min-height: 420px;
+    }
+}
