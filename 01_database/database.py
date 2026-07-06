@@ -235,32 +235,136 @@ def get_database_table_names() -> list[str]:
 
 
 # ============================================================
-# SECTION 14 - DATABASE WAREHOUSE STATUS
-# PURPOSE: return human-readable warehouse readiness for AISP2.
+# SECTION 14 - ENTERPRISE DATABASE WAREHOUSE STATUS
+# FILE: 01_database/database.py
+# PURPOSE: inspect whether the AISP2 warehouse has the actual
+# tables needed for teams, players, rosters, schedules, Statcast
+# data, chat memory, learning, and prediction-readiness.
 # ============================================================
 
 def database_warehouse_status() -> dict:
     table_names = get_database_table_names()
 
+    table_set = set(table_names)
+
+    required_core_tables = [
+        "teams",
+        "players",
+        "roster_entries",
+        "games",
+    ]
+
+    required_stat_tables = [
+        "player_season_stats",
+        "player_advanced_batting_stats",
+        "player_percentile_rankings",
+        "player_pitch_arsenals",
+        "player_pitch_tempo",
+        "player_batted_ball_profiles",
+        "player_batting_stances",
+        "player_home_run_profiles",
+        "team_plate_discipline",
+    ]
+
+    required_learning_tables = [
+        "chat_memory",
+        "learning_signals",
+        "training_examples",
+        "entity_aliases",
+        "user_feedback",
+    ]
+
+    required_audit_tables = [
+        "raw_data_import_logs",
+    ]
+
+    all_required_tables = (
+        required_core_tables
+        + required_stat_tables
+        + required_learning_tables
+        + required_audit_tables
+    )
+
+    missing_tables = [
+        table_name
+        for table_name in all_required_tables
+        if table_name not in table_set
+    ]
+
+    present_required_tables = [
+        table_name
+        for table_name in all_required_tables
+        if table_name in table_set
+    ]
+
+    core_ready = all(
+        table_name in table_set
+        for table_name in required_core_tables
+    )
+
+    stats_ready = all(
+        table_name in table_set
+        for table_name in required_stat_tables
+    )
+
+    learning_ready = all(
+        table_name in table_set
+        for table_name in required_learning_tables
+    )
+
+    audit_ready = all(
+        table_name in table_set
+        for table_name in required_audit_tables
+    )
+
+    prediction_ready = (
+        core_ready
+        and stats_ready
+        and audit_ready
+    )
+
+    warehouse_score = 0
+
+    if core_ready:
+        warehouse_score += 30
+
+    if stats_ready:
+        warehouse_score += 40
+
+    if learning_ready:
+        warehouse_score += 20
+
+    if audit_ready:
+        warehouse_score += 10
+
     return {
         "database_connected": database_health_check(),
         "database_type": "sqlite" if IS_SQLITE else "external",
+        "database_url_configured": bool(DATABASE_URL),
         "tables_created": len(table_names),
         "tables": table_names,
-        "warehouse_ready": len(table_names) > 0,
-        "required_next_tables": [
-            "teams",
-            "players",
-            "rosters",
-            "games",
-            "player_stats",
-            "team_stats",
-            "predictions",
-            "model_runs",
-        ],
+        "required_table_count": len(all_required_tables),
+        "present_required_table_count": len(present_required_tables),
+        "missing_required_table_count": len(missing_tables),
+        "present_required_tables": present_required_tables,
+        "missing_required_tables": missing_tables,
+        "core_ready": core_ready,
+        "stats_ready": stats_ready,
+        "learning_ready": learning_ready,
+        "audit_ready": audit_ready,
+        "warehouse_ready": len(missing_tables) == 0,
+        "prediction_ready": prediction_ready,
+        "warehouse_score": warehouse_score,
+        "required_core_tables": required_core_tables,
+        "required_stat_tables": required_stat_tables,
+        "required_learning_tables": required_learning_tables,
+        "required_audit_tables": required_audit_tables,
+        "next_required_action": (
+            "Warehouse tables are present. Next step is importing and validating rows."
+            if len(missing_tables) == 0
+            else "Run database initialization so missing warehouse tables are created."
+        ),
     }
-
-
 # ============================================================
 # SECTION 15 - DATABASE INITIALIZATION ENTRYPOINT
 # PURPOSE: one command used by scripts, Render, and local dev

@@ -1652,54 +1652,474 @@ def import_statcast_file(file_path: Path) -> dict:
                 first_season=first_season,
             )
 # ============================================================
-# SECTION 18 - BULK IMPORT
+# SECTION 18 - ENTERPRISE BULK WAREHOUSE IMPORT
+# FILE: 03_ingestion/statcast_warehouse_ingestion.py
+# PURPOSE: discover every supported Statcast/Joe CSV, classify
+# files before import, execute single-file imports, aggregate
+# warehouse-wide results, calculate prediction readiness, expose
+# category coverage, and produce a complete audit report.
 # ============================================================
 
 def discover_csv_files(
     raw_data_dir: Path = RAW_DATA_DIR,
+    recursive: bool = False,
 ) -> list[Path]:
+    raw_data_dir = Path(raw_data_dir)
+
     if not raw_data_dir.exists():
         return []
 
+    if recursive:
+        discovered_files = raw_data_dir.rglob("*.csv")
+    else:
+        discovered_files = raw_data_dir.glob("*.csv")
+
     return sorted(
-        raw_data_dir.glob("*.csv"),
+        [
+            file_path
+            for file_path in discovered_files
+            if file_path.is_file()
+        ],
         key=lambda file_path: file_path.name.lower(),
     )
 
 
+def build_default_import_file_paths(
+    raw_data_dir: Path = RAW_DATA_DIR,
+) -> list[Path]:
+    return [
+        Path(raw_data_dir) / file_name
+        for file_name in DEFAULT_IMPORT_FILES
+    ]
+
+
+def build_preflight_file_report(
+    file_paths: list[Path],
+) -> list[dict]:
+    preflight_reports = []
+
+    for file_path in file_paths:
+        if not file_path.exists():
+            preflight_reports.append(
+                {
+                    "file": str(file_path),
+                    "file_name": file_path.name,
+                    "exists": False,
+                    "category": CATEGORY_UNKNOWN,
+                    "target_table": None,
+                    "confidence": "unknown",
+                    "rows_detected": 0,
+                    "supported": False,
+                    "ready_for_import": False,
+                    "reason": "missing_file",
+                }
+            )
+
+            continue
+
+        detection_report = detect_import_category_with_diagnostics(
+            file_path,
+        )
+
+        try:
+            rows = load_csv_rows(
+                file_path,
+            )
+
+            rows_detected = len(rows)
+
+        except Exception:
+            rows_detected = 0
+
+        preflight_reports.append(
+            {
+                "file": str(file_path),
+                "file_name": file_path.name,
+                "exists": True,
+                "category": detection_report.get("category"),
+                "target_table": detection_report.get("target_table"),
+                "confidence": detection_report.get("confidence"),
+                "score": detection_report.get("score"),
+                "supported": detection_report.get("supported", False),
+                "rows_detected": rows_detected,
+                "prediction_feature_groups": detection_report.get(
+                    "prediction_feature_groups",
+                    [],
+                ),
+                "ready_for_import": (
+                    detection_report.get("supported", False)
+                    and detection_report.get("category") != CATEGORY_UNKNOWN
+                    and rows_detected > 0
+                ),
+                "reason": (
+                    "ready"
+                    if (
+                        detection_report.get("supported", False)
+                        and detection_report.get("category") != CATEGORY_UNKNOWN
+                        and rows_detected > 0
+                    )
+                    else "not_ready"
+                ),
+            }
+        )
+
+    return preflight_reports
+
+
+def summarize_category_coverage(
+    import_results: list[dict],
+) -> dict:
+    category_summary: dict[str, dict] = {}
+
+    for category in SUPPORTED_IMPORT_CATEGORIES:
+        category_summary[category] = {
+            "category": category,
+            "target_table": WAREHOUSE_TABLE_TARGETS.get(category),
+            "files": 0,
+            "completed_files": 0,
+            "failed_files": 0,
+            "missing_files": 0,
+            "skipped_files": 0,
+            "inserted": 0,
+            "updated": 0,
+            "skipped_rows": 0,
+            "affected_rows": 0,
+            "loaded": False,
+        }
+
+    category_summary[CATEGORY_UNKNOWN] = {
+        "category": CATEGORY_UNKNOWN,
+        "target_table": None,
+        "files": 0,
+        "completed_files": 0,
+        "failed_files": 0,
+        "missing_files": 0,
+        "skipped_files": 0,
+        "inserted": 0,
+        "updated": 0,
+        "skipped_rows": 0,
+        "affected_rows": 0,
+        "loaded": False,
+    }
+
+    for result in import_results:
+        category = result.get(
+            "category",
+            CATEGORY_UNKNOWN,
+        )
+
+        if category not in category_summary:
+            category = CATEGORY_UNKNOWN
+
+        status = result.get(
+            "status",
+            IMPORT_STATUS_UNKNOWN,
+        )
+
+        category_summary[category]["files"] += 1
+        category_summary[category]["inserted"] += int(result.get("inserted", 0) or 0)
+        category_summary[category]["updated"] += int(result.get("updated", 0) or 0)
+        category_summary[category]["skipped_rows"] += int(result.get("skipped", 0) or 0)
+        category_summary[category]["affected_rows"] += int(result.get("affected_rows", 0) or 0)
+
+        if status == IMPORT_STATUS_COMPLETED:
+            category_summary[category]["completed_files"] += 1
+
+        elif status == IMPORT_STATUS_FAILED:
+            category_summary[category]["failed_files"] += 1
+
+        elif status == IMPORT_STATUS_MISSING:
+            category_summary[category]["missing_files"] += 1
+
+        elif status == IMPORT_STATUS_SKIPPED:
+            category_summary[category]["skipped_files"] += 1
+
+    for category, summary in category_summary.items():
+        summary["loaded"] = (
+            summary["completed_files"] > 0
+            and summary["affected_rows"] > 0
+        )
+
+    return category_summary
+
+
+def calculate_prediction_readiness(
+    category_summary: dict,
+    total_inserted: int,
+    completed_file_count: int,
+) -> dict:
+    loaded_categories = [
+        category
+        for category, summary in category_summary.items()
+        if category != CATEGORY_UNKNOWN and summary.get("loaded")
+    ]
+
+    loaded_category_set = set(loaded_categories)
+
+    feature_group_readiness = {}
+
+    for feature_group_name, required_categories in PREDICTION_FEATURE_GROUPS.items():
+        required_category_set = set(required_categories)
+
+        loaded_required_categories = sorted(
+            required_category_set.intersection(
+                loaded_category_set,
+            )
+        )
+
+        missing_required_categories = sorted(
+            required_category_set.difference(
+                loaded_category_set,
+            )
+        )
+
+        feature_group_readiness[feature_group_name] = {
+            "ready": len(missing_required_categories) == 0,
+            "required_categories": sorted(required_categories),
+            "loaded_categories": loaded_required_categories,
+            "missing_categories": missing_required_categories,
+            "coverage_ratio": (
+                len(loaded_required_categories) / len(required_categories)
+                if required_categories
+                else 0
+            ),
+        }
+
+    player_feature_categories = {
+        CATEGORY_PERCENTILE_RANKINGS,
+        CATEGORY_PITCH_ARSENAL,
+        CATEGORY_PITCH_TEMPO,
+        CATEGORY_BATTED_BALL_PROFILE,
+        CATEGORY_BATTING_STANCE,
+        CATEGORY_HOME_RUN_PROFILE,
+        CATEGORY_ADVANCED_BATTING_STATS,
+        CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS,
+    }
+
+    team_feature_categories = {
+        CATEGORY_TEAM_PLATE_DISCIPLINE,
+    }
+
+    loaded_player_feature_tables = len(
+        loaded_category_set.intersection(
+            player_feature_categories,
+        )
+    )
+
+    loaded_team_feature_tables = len(
+        loaded_category_set.intersection(
+            team_feature_categories,
+        )
+    )
+
+    thresholds = WAREHOUSE_READINESS_THRESHOLDS
+
+    minimum_files_loaded = thresholds.get(
+        "minimum_files_loaded",
+        3,
+    )
+
+    minimum_rows_loaded = thresholds.get(
+        "minimum_rows_loaded",
+        100,
+    )
+
+    minimum_player_feature_tables = thresholds.get(
+        "minimum_player_feature_tables",
+        3,
+    )
+
+    minimum_team_feature_tables = thresholds.get(
+        "minimum_team_feature_tables",
+        1,
+    )
+
+    files_ready = completed_file_count >= minimum_files_loaded
+    rows_ready = total_inserted >= minimum_rows_loaded
+    player_features_ready = loaded_player_feature_tables >= minimum_player_feature_tables
+    team_features_ready = loaded_team_feature_tables >= minimum_team_feature_tables
+
+    warehouse_ready = (
+        files_ready
+        and rows_ready
+        and player_features_ready
+    )
+
+    prediction_ready = (
+        warehouse_ready
+        and any(
+            readiness.get("ready")
+            for readiness in feature_group_readiness.values()
+        )
+    )
+
+    return {
+        "warehouse_ready": warehouse_ready,
+        "prediction_ready": prediction_ready,
+        "files_ready": files_ready,
+        "rows_ready": rows_ready,
+        "player_features_ready": player_features_ready,
+        "team_features_ready": team_features_ready,
+        "completed_file_count": completed_file_count,
+        "total_inserted": total_inserted,
+        "loaded_categories": sorted(loaded_categories),
+        "loaded_player_feature_tables": loaded_player_feature_tables,
+        "loaded_team_feature_tables": loaded_team_feature_tables,
+        "thresholds": thresholds,
+        "feature_group_readiness": feature_group_readiness,
+        "next_required_action": (
+            "Warehouse is prediction-ready. Next step is connecting probability_engine.py to these tables."
+            if prediction_ready
+            else "Warehouse is not prediction-ready yet. Review failed files, missing categories, and inserted row counts."
+        ),
+    }
+
+
+def build_bulk_import_summary(
+    raw_data_dir: Path,
+    import_files: list[Path],
+    preflight_reports: list[dict],
+    import_results: list[dict],
+) -> dict:
+    total_inserted = sum(
+        int(item.get("inserted", 0) or 0)
+        for item in import_results
+    )
+
+    total_updated = sum(
+        int(item.get("updated", 0) or 0)
+        for item in import_results
+    )
+
+    total_skipped = sum(
+        int(item.get("skipped", 0) or 0)
+        for item in import_results
+    )
+
+    total_affected_rows = sum(
+        int(item.get("affected_rows", 0) or 0)
+        for item in import_results
+    )
+
+    completed_files = [
+        item
+        for item in import_results
+        if item.get("status") == IMPORT_STATUS_COMPLETED
+    ]
+
+    failed_files = [
+        item
+        for item in import_results
+        if item.get("status") == IMPORT_STATUS_FAILED
+    ]
+
+    missing_files = [
+        item
+        for item in import_results
+        if item.get("status") == IMPORT_STATUS_MISSING
+    ]
+
+    skipped_files = [
+        item
+        for item in import_results
+        if item.get("status") == IMPORT_STATUS_SKIPPED
+    ]
+
+    category_summary = summarize_category_coverage(
+        import_results,
+    )
+
+    readiness = calculate_prediction_readiness(
+        category_summary=category_summary,
+        total_inserted=total_inserted,
+        completed_file_count=len(completed_files),
+    )
+
+    return {
+        "operation": "import_default_statcast_files",
+        "version": STATCAST_INGESTION_VERSION,
+        "raw_data_dir": str(raw_data_dir),
+        "started_file_count": len(import_files),
+        "preflight_file_count": len(preflight_reports),
+        "file_count": len(import_results),
+        "completed_file_count": len(completed_files),
+        "failed_file_count": len(failed_files),
+        "missing_file_count": len(missing_files),
+        "skipped_file_count": len(skipped_files),
+        "total_inserted": total_inserted,
+        "total_updated": total_updated,
+        "total_skipped": total_skipped,
+        "total_affected_rows": total_affected_rows,
+        "successful_files": [
+            item.get("file_name")
+            for item in completed_files
+        ],
+        "failed_files": [
+            {
+                "file_name": item.get("file_name"),
+                "category": item.get("category"),
+                "error": item.get("error"),
+            }
+            for item in failed_files
+        ],
+        "missing_files": [
+            item.get("file_name")
+            for item in missing_files
+        ],
+        "skipped_files": [
+            item.get("file_name")
+            for item in skipped_files
+        ],
+        "category_summary": category_summary,
+        "prediction_readiness": readiness,
+        "preflight": preflight_reports,
+        "results": import_results,
+        "completed_at": utc_now_string(),
+    }
+
+
 def import_default_statcast_files(
     raw_data_dir: Path = RAW_DATA_DIR,
+    recursive: bool = False,
+    use_default_manifest_when_empty: bool = True,
 ) -> dict:
-    results = []
+    raw_data_dir = Path(raw_data_dir)
 
     discovered_files = discover_csv_files(
         raw_data_dir=raw_data_dir,
+        recursive=recursive,
     )
 
     if discovered_files:
         import_files = discovered_files
+
+    elif use_default_manifest_when_empty:
+        import_files = build_default_import_file_paths(
+            raw_data_dir=raw_data_dir,
+        )
+
     else:
-        import_files = [
-            raw_data_dir / file_name
-            for file_name in DEFAULT_IMPORT_FILES
-        ]
+        import_files = []
+
+    preflight_reports = build_preflight_file_report(
+        import_files,
+    )
+
+    results = []
 
     for file_path in import_files:
         results.append(
-            import_statcast_file(file_path)
+            import_statcast_file(
+                file_path,
+            )
         )
 
-    return {
-        "operation": "import_default_statcast_files",
-        "raw_data_dir": str(raw_data_dir),
-        "file_count": len(results),
-        "results": results,
-        "total_inserted": sum(item.get("inserted", 0) for item in results),
-        "total_updated": sum(item.get("updated", 0) for item in results),
-        "total_skipped": sum(item.get("skipped", 0) for item in results),
-        "completed_at": utc_now_string(),
-    }
-
+    return build_bulk_import_summary(
+        raw_data_dir=raw_data_dir,
+        import_files=import_files,
+        preflight_reports=preflight_reports,
+        import_results=results,
+    )
 # ============================================================
 # SECTION 19 - COMMAND LINE EXECUTION
 # ============================================================
