@@ -388,7 +388,7 @@ class Player(Base):
     # RELATIONSHIPS
     # --------------------------------------------------------
 
-    team: Mapped["Team" | None] = relationship(
+    team: Mapped[Team | None] = relationship(
         back_populates="players",
     )
 
