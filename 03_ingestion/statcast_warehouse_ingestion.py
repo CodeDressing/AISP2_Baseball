@@ -383,40 +383,409 @@ def load_csv_rows(file_path: Path) -> list[dict]:
 
 
 # ============================================================
-# SECTION 06 - FILE CATEGORY DETECTION
+# SECTION 06 - ENTERPRISE FILE CATEGORY DETECTION
+# FILE: 03_ingestion/statcast_warehouse_ingestion.py
+# PURPOSE: detect which Statcast/Joe CSV category a file belongs
+# to using filename signals, column-header signals, exact known
+# file aliases, fuzzy-safe normalized matching, and prediction
+# warehouse routing metadata.
 # ============================================================
 
+def normalize_detection_text(value: Any) -> str:
+    if value is None:
+        return ""
+
+    return (
+        str(value)
+        .lower()
+        .strip()
+        .replace("-", "_")
+        .replace(" ", "_")
+        .replace(".", "_")
+        .replace("(", "")
+        .replace(")", "")
+        .replace("__", "_")
+    )
+
+
+def normalize_column_name(value: Any) -> str:
+    return normalize_detection_text(value)
+
+
+def get_csv_header_columns(file_path: Path) -> list[str]:
+    if not file_path.exists():
+        return []
+
+    try:
+        with file_path.open(
+            "r",
+            encoding="utf-8-sig",
+            newline="",
+        ) as csv_file:
+            reader = csv.DictReader(csv_file)
+
+            if not reader.fieldnames:
+                return []
+
+            return [
+                normalize_column_name(column)
+                for column in reader.fieldnames
+                if column
+            ]
+
+    except Exception:
+        return []
+
+
+def score_filename_category_match(
+    normalized_filename: str,
+    category: str,
+) -> int:
+    score = 0
+
+    patterns = FILENAME_CATEGORY_PATTERNS.get(
+        category,
+        [],
+    )
+
+    for pattern in patterns:
+        normalized_pattern = normalize_detection_text(
+            pattern,
+        )
+
+        if not normalized_pattern:
+            continue
+
+        if normalized_filename == normalized_pattern:
+            score += 100
+
+        elif normalized_filename.startswith(normalized_pattern):
+            score += 70
+
+        elif normalized_pattern in normalized_filename:
+            score += 50
+
+    return score
+
+
+def score_column_category_match(
+    normalized_columns: list[str],
+    category: str,
+) -> int:
+    column_set = set(normalized_columns)
+
+    if not column_set:
+        return 0
+
+    score = 0
+
+    percentile_columns = {
+        "xwoba",
+        "xba",
+        "xslg",
+        "brl",
+        "brl_percent",
+        "hard_hit_percent",
+        "exit_velocity",
+        "sprint_speed",
+        "arm_strength",
+        "whiff_percent",
+        "chase_percent",
+        "bb_percent",
+        "k_percent",
+    }
+
+    pitch_arsenal_columns = {
+        "pitcher",
+        "ff_avg_speed",
+        "si_avg_speed",
+        "fc_avg_speed",
+        "sl_avg_speed",
+        "ch_avg_speed",
+        "cu_avg_speed",
+        "fs_avg_speed",
+        "kn_avg_speed",
+        "st_avg_speed",
+        "sv_avg_speed",
+    }
+
+    pitch_tempo_columns = {
+        "entity_id",
+        "entity_name",
+        "median_seconds_empty",
+        "median_seconds_empty_1",
+        "violations",
+    }
+
+    batted_ball_columns = {
+        "avg_hit_speed",
+        "max_hit_speed",
+        "avg_hit_angle",
+        "brl_percent",
+        "ev95percent",
+        "anglesweetspotpercent",
+        "xba",
+        "xslg",
+        "xwoba",
+    }
+
+    batting_stance_columns = {
+        "avg_batter_x_position",
+        "avg_batter_y_position",
+        "avg_foot_sep",
+        "avg_stance_angle",
+        "bat_side",
+    }
+
+    home_run_columns = {
+        "hr_total",
+        "avg_distance",
+        "avg_hr_distance",
+        "avg_hit_speed",
+        "max_hit_speed",
+        "team_abbrev",
+    }
+
+    advanced_batting_columns = {
+        "pa",
+        "k_percent",
+        "bb_percent",
+        "woba",
+        "xwoba",
+        "barrel_batted_rate",
+        "hard_hit_percent",
+        "whiff_percent",
+        "swing_percent",
+    }
+
+    team_plate_discipline_columns = {
+        "pitches",
+        "zone_%",
+        "zone_swing_%",
+        "zone_contact_%",
+        "chase_%",
+        "chase_contact_%",
+        "edge_%",
+        "1st_pitch_swing_%",
+        "swing_%",
+        "whiff_%",
+        "meatball_%",
+        "meatball_swing_%",
+    }
+
+    category_column_signatures = {
+        CATEGORY_PERCENTILE_RANKINGS: percentile_columns,
+        CATEGORY_PITCH_ARSENAL: pitch_arsenal_columns,
+        CATEGORY_PITCH_TEMPO: pitch_tempo_columns,
+        CATEGORY_BATTED_BALL_PROFILE: batted_ball_columns,
+        CATEGORY_BATTING_STANCE: batting_stance_columns,
+        CATEGORY_HOME_RUN_PROFILE: home_run_columns,
+        CATEGORY_ADVANCED_BATTING_STATS: advanced_batting_columns,
+        CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS: advanced_batting_columns,
+        CATEGORY_TEAM_PLATE_DISCIPLINE: team_plate_discipline_columns,
+    }
+
+    expected_columns = category_column_signatures.get(
+        category,
+        set(),
+    )
+
+    matched_columns = column_set.intersection(
+        expected_columns,
+    )
+
+    score += len(matched_columns) * 12
+
+    if category == CATEGORY_PITCH_ARSENAL and any(
+        column.endswith("_avg_speed")
+        for column in column_set
+    ):
+        score += 45
+
+    if category == CATEGORY_PITCH_TEMPO and any(
+        "median_seconds" in column
+        for column in column_set
+    ):
+        score += 45
+
+    if category == CATEGORY_BATTED_BALL_PROFILE and {
+        "avg_hit_speed",
+        "max_hit_speed",
+    }.issubset(column_set):
+        score += 45
+
+    if category == CATEGORY_HOME_RUN_PROFILE and (
+        "hr_total" in column_set
+        or "avg_hr_distance" in column_set
+        or "avg_distance" in column_set
+    ):
+        score += 50
+
+    if category == CATEGORY_BATTING_STANCE and any(
+        "stance" in column
+        for column in column_set
+    ):
+        score += 45
+
+    if category == CATEGORY_TEAM_PLATE_DISCIPLINE and (
+        "zone_%" in column_set
+        or "chase_%" in column_set
+        or "meatball_%" in column_set
+    ):
+        score += 50
+
+    if category == CATEGORY_ADVANCED_BATTING_STATS and {
+        "woba",
+        "xwoba",
+        "pa",
+    }.issubset(column_set):
+        score += 50
+
+    return score
+
+
+def build_file_category_scores(
+    file_path: Path,
+) -> dict[str, int]:
+    normalized_filename = normalize_detection_text(
+        file_path.name,
+    )
+
+    normalized_columns = get_csv_header_columns(
+        file_path,
+    )
+
+    scores: dict[str, int] = {}
+
+    for category in SUPPORTED_IMPORT_CATEGORIES:
+        filename_score = score_filename_category_match(
+            normalized_filename=normalized_filename,
+            category=category,
+        )
+
+        column_score = score_column_category_match(
+            normalized_columns=normalized_columns,
+            category=category,
+        )
+
+        scores[category] = filename_score + column_score
+
+    if normalized_filename == "stats_csv":
+        scores[CATEGORY_ADVANCED_BATTING_STATS] += 150
+
+    if normalized_filename == "pitcherstats_csv":
+        scores[CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS] += 150
+
+    if "percentile_rankings2025" in normalized_filename:
+        scores[CATEGORY_PERCENTILE_RANKINGS] += 150
+
+    if "2025_pitch_arsenals" in normalized_filename:
+        scores[CATEGORY_PITCH_ARSENAL] += 150
+
+    if "2025historicalpitchtempo" in normalized_filename:
+        scores[CATEGORY_PITCH_TEMPO] += 150
+
+    if "2025exitvolicity" in normalized_filename:
+        scores[CATEGORY_BATTED_BALL_PROFILE] += 150
+
+    if "2025_batting_stance" in normalized_filename:
+        scores[CATEGORY_BATTING_STANCE] += 150
+
+    if "homeruns2025" in normalized_filename:
+        scores[CATEGORY_HOME_RUN_PROFILE] += 150
+
+    return scores
+
+
+def detect_import_category_with_diagnostics(
+    file_path: Path,
+) -> dict:
+    normalized_filename = normalize_detection_text(
+        file_path.name,
+    )
+
+    normalized_columns = get_csv_header_columns(
+        file_path,
+    )
+
+    scores = build_file_category_scores(
+        file_path,
+    )
+
+    ranked_scores = sorted(
+        scores.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+
+    best_category = (
+        ranked_scores[0][0]
+        if ranked_scores
+        else CATEGORY_UNKNOWN
+    )
+
+    best_score = (
+        ranked_scores[0][1]
+        if ranked_scores
+        else 0
+    )
+
+    second_score = (
+        ranked_scores[1][1]
+        if len(ranked_scores) > 1
+        else 0
+    )
+
+    confidence_gap = best_score - second_score
+
+    if best_score <= 0:
+        best_category = CATEGORY_UNKNOWN
+
+    confidence = "unknown"
+
+    if best_score >= 150:
+        confidence = "very_high"
+
+    elif best_score >= 90:
+        confidence = "high"
+
+    elif best_score >= 50:
+        confidence = "medium"
+
+    elif best_score > 0:
+        confidence = "low"
+
+    return {
+        "file": file_path.name,
+        "normalized_filename": normalized_filename,
+        "category": best_category,
+        "target_table": WAREHOUSE_TABLE_TARGETS.get(best_category),
+        "score": best_score,
+        "second_score": second_score,
+        "confidence_gap": confidence_gap,
+        "confidence": confidence,
+        "scores": scores,
+        "ranked_scores": ranked_scores,
+        "columns": normalized_columns,
+        "column_count": len(normalized_columns),
+        "supported": best_category in SUPPORTED_IMPORT_CATEGORIES,
+        "prediction_feature_groups": [
+            feature_group_name
+            for feature_group_name, categories in PREDICTION_FEATURE_GROUPS.items()
+            if best_category in categories
+        ],
+    }
+
+
 def detect_import_category(file_path: Path) -> str:
-    name = file_path.name.lower().replace("-", "_").replace(" ", "_")
+    detection_report = detect_import_category_with_diagnostics(
+        file_path,
+    )
 
-    if "percentile" in name:
-        return "percentile_rankings"
-
-    if "pitch_arsenal" in name or "pitcharsenal" in name:
-        return "pitch_arsenal"
-
-    if "pitch_tempo" in name or "pitchtempo" in name or "historicalpitchtempo" in name:
-        return "pitch_tempo"
-
-    if "exit" in name or "volicity" in name or "velocity" in name:
-        return "batted_ball_profile"
-
-    if "stance" in name:
-        return "batting_stance"
-
-    if "homerun" in name or "home_run" in name or "home_runs" in name:
-        return "home_run_profile"
-
-    if "plate_discipline" in name or "plate" in name and "discipline" in name:
-        return "team_plate_discipline"
-
-    if "pitcherstats" in name:
-        return "advanced_batting_or_pitcher_stats"
-
-    if name == "stats.csv":
-        return "advanced_batting_stats"
-
-    return "unknown"
+    return detection_report.get(
+        "category",
+        CATEGORY_UNKNOWN,
+    )
 # ============================================================
 # SECTION 07 - IMPORT LOG HELPERS
 # ============================================================
@@ -933,34 +1302,308 @@ def import_rows_by_category(
 
 
 # ============================================================
-# SECTION 17 - SINGLE FILE IMPORT
+# SECTION 17 - ENTERPRISE SINGLE FILE IMPORT
+# FILE: 03_ingestion/statcast_warehouse_ingestion.py
+# PURPOSE: import one Statcast/Joe CSV with full diagnostics,
+# category detection, schema validation, import logging,
+# row-count proof, prediction feature metadata, and safe failure
+# handling so every dataset import can be audited and trusted.
 # ============================================================
 
-def import_statcast_file(file_path: Path) -> dict:
-    if not file_path.exists():
-        return {
-            "file": str(file_path),
-            "status": "missing",
-            "inserted": 0,
-            "updated": 0,
-            "skipped": 0,
-        }
+def build_missing_file_import_report(
+    file_path: Path,
+) -> dict:
+    return {
+        "file": str(file_path),
+        "file_name": file_path.name,
+        "status": IMPORT_STATUS_MISSING,
+        "category": CATEGORY_UNKNOWN,
+        "target_table": None,
+        "supported": False,
+        "exists": False,
+        "rows_seen": 0,
+        "inserted": 0,
+        "updated": 0,
+        "skipped": 0,
+        "error": "File does not exist.",
+        "detection": {
+            "category": CATEGORY_UNKNOWN,
+            "confidence": "unknown",
+            "score": 0,
+        },
+        "prediction_feature_groups": [],
+        "completed_at": utc_now_string(),
+    }
 
-    rows = load_csv_rows(file_path)
 
-    category = detect_import_category(file_path)
+def build_empty_file_import_report(
+    file_path: Path,
+    detection_report: dict,
+) -> dict:
+    return {
+        "file": str(file_path),
+        "file_name": file_path.name,
+        "status": IMPORT_STATUS_SKIPPED,
+        "category": detection_report.get("category", CATEGORY_UNKNOWN),
+        "target_table": detection_report.get("target_table"),
+        "supported": detection_report.get("supported", False),
+        "exists": True,
+        "rows_seen": 0,
+        "inserted": 0,
+        "updated": 0,
+        "skipped": 0,
+        "error": "CSV file exists but contains no data rows.",
+        "detection": detection_report,
+        "prediction_feature_groups": detection_report.get(
+            "prediction_feature_groups",
+            [],
+        ),
+        "completed_at": utc_now_string(),
+    }
 
-    first_season = (
-        infer_season_from_file(file_path, rows[0])
-        if rows
-        else None
+
+def validate_single_file_import_inputs(
+    file_path: Path,
+    rows: list[dict],
+    detection_report: dict,
+) -> dict:
+    category = detection_report.get(
+        "category",
+        CATEGORY_UNKNOWN,
     )
+
+    supported = detection_report.get(
+        "supported",
+        False,
+    )
+
+    target_table = detection_report.get(
+        "target_table",
+    )
+
+    validation_errors: list[str] = []
+    validation_warnings: list[str] = []
+
+    if category == CATEGORY_UNKNOWN:
+        validation_errors.append(
+            "Unable to determine import category from filename or CSV headers."
+        )
+
+    if not supported:
+        validation_errors.append(
+            f"Unsupported import category: {category}"
+        )
+
+    if not target_table:
+        validation_errors.append(
+            f"No warehouse target table configured for category: {category}"
+        )
+
+    if len(rows) == 0:
+        validation_errors.append(
+            "CSV has no data rows."
+        )
+
+    if detection_report.get("confidence") in ["unknown", "low"]:
+        validation_warnings.append(
+            "Category detection confidence is low. Review file naming and headers."
+        )
+
+    if detection_report.get("confidence_gap", 0) < 20:
+        validation_warnings.append(
+            "Category detection score gap is narrow. File may be ambiguous."
+        )
+
+    return {
+        "valid": len(validation_errors) == 0,
+        "errors": validation_errors,
+        "warnings": validation_warnings,
+        "category": category,
+        "supported": supported,
+        "target_table": target_table,
+    }
+
+
+def build_import_success_report(
+    file_path: Path,
+    detection_report: dict,
+    validation_report: dict,
+    result: dict,
+    first_season: int | None,
+    rows_seen: int,
+) -> dict:
+    inserted = int(
+        result.get("inserted", 0) or 0,
+    )
+
+    updated = int(
+        result.get("updated", 0) or 0,
+    )
+
+    skipped = int(
+        result.get("skipped", 0) or 0,
+    )
+
+    affected_rows = inserted + updated
+
+    return {
+        "file": str(file_path),
+        "file_name": file_path.name,
+        "status": IMPORT_STATUS_COMPLETED,
+        "category": detection_report.get("category", CATEGORY_UNKNOWN),
+        "target_table": detection_report.get("target_table"),
+        "supported": detection_report.get("supported", False),
+        "exists": True,
+        "season": first_season,
+        "rows_seen": rows_seen,
+        "inserted": inserted,
+        "updated": updated,
+        "skipped": skipped,
+        "affected_rows": affected_rows,
+        "import_effective": affected_rows > 0,
+        "detection": detection_report,
+        "validation": validation_report,
+        "prediction_feature_groups": detection_report.get(
+            "prediction_feature_groups",
+            [],
+        ),
+        "message": (
+            "Import completed and inserted/updated warehouse rows."
+            if affected_rows > 0
+            else "Import completed but did not insert or update rows."
+        ),
+        "completed_at": utc_now_string(),
+    }
+
+
+def build_import_failure_report(
+    file_path: Path,
+    detection_report: dict | None,
+    validation_report: dict | None,
+    error: Exception | str,
+    rows_seen: int,
+    first_season: int | None = None,
+) -> dict:
+    detection_report = detection_report or {
+        "category": CATEGORY_UNKNOWN,
+        "confidence": "unknown",
+        "score": 0,
+    }
+
+    validation_report = validation_report or {
+        "valid": False,
+        "errors": [],
+        "warnings": [],
+    }
+
+    return {
+        "file": str(file_path),
+        "file_name": file_path.name,
+        "status": IMPORT_STATUS_FAILED,
+        "category": detection_report.get("category", CATEGORY_UNKNOWN),
+        "target_table": detection_report.get("target_table"),
+        "supported": detection_report.get("supported", False),
+        "exists": file_path.exists(),
+        "season": first_season,
+        "rows_seen": rows_seen,
+        "inserted": 0,
+        "updated": 0,
+        "skipped": rows_seen,
+        "affected_rows": 0,
+        "import_effective": False,
+        "error": str(error),
+        "detection": detection_report,
+        "validation": validation_report,
+        "prediction_feature_groups": detection_report.get(
+            "prediction_feature_groups",
+            [],
+        ),
+        "completed_at": utc_now_string(),
+    }
+
+
+def import_statcast_file(file_path: Path) -> dict:
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        return build_missing_file_import_report(
+            file_path=file_path,
+        )
+
+    detection_report = detect_import_category_with_diagnostics(
+        file_path,
+    )
+
+    try:
+        rows = load_csv_rows(
+            file_path,
+        )
+
+    except Exception as load_error:
+        return build_import_failure_report(
+            file_path=file_path,
+            detection_report=detection_report,
+            validation_report={
+                "valid": False,
+                "errors": [
+                    "CSV loading failed.",
+                ],
+                "warnings": [],
+            },
+            error=load_error,
+            rows_seen=0,
+        )
+
+    if not rows:
+        return build_empty_file_import_report(
+            file_path=file_path,
+            detection_report=detection_report,
+        )
+
+    first_season = infer_season_from_file(
+        file_path,
+        rows[0],
+    )
+
+    validation_report = validate_single_file_import_inputs(
+        file_path=file_path,
+        rows=rows,
+        detection_report=detection_report,
+    )
+
+    if not validation_report["valid"]:
+        with managed_database_session() as database_session:
+            import_log = create_import_log(
+                database_session=database_session,
+                file_path=file_path,
+                category=validation_report.get("category", CATEGORY_UNKNOWN),
+                season=first_season,
+                rows_seen=len(rows),
+            )
+
+            complete_import_log(
+                import_log=import_log,
+                rows_inserted=0,
+                rows_updated=0,
+                rows_skipped=len(rows),
+                status=IMPORT_STATUS_FAILED,
+                error_message=" | ".join(validation_report["errors"]),
+            )
+
+        return build_import_failure_report(
+            file_path=file_path,
+            detection_report=detection_report,
+            validation_report=validation_report,
+            error=" | ".join(validation_report["errors"]),
+            rows_seen=len(rows),
+            first_season=first_season,
+        )
 
     with managed_database_session() as database_session:
         import_log = create_import_log(
             database_session=database_session,
             file_path=file_path,
-            category=category,
+            category=validation_report["category"],
             season=first_season,
             rows_seen=len(rows),
         )
@@ -969,46 +1612,45 @@ def import_statcast_file(file_path: Path) -> dict:
             result = import_rows_by_category(
                 database_session=database_session,
                 file_path=file_path,
-                category=category,
+                category=validation_report["category"],
                 rows=rows,
             )
 
             complete_import_log(
                 import_log=import_log,
-                rows_inserted=result["inserted"],
-                rows_updated=result["updated"],
-                rows_skipped=result["skipped"],
-                status="completed",
+                rows_inserted=result.get("inserted", 0),
+                rows_updated=result.get("updated", 0),
+                rows_skipped=result.get("skipped", 0),
+                status=IMPORT_STATUS_COMPLETED,
             )
 
-            return {
-                "file": file_path.name,
-                "category": category,
-                "status": "completed",
-                **result,
-            }
+            return build_import_success_report(
+                file_path=file_path,
+                detection_report=detection_report,
+                validation_report=validation_report,
+                result=result,
+                first_season=first_season,
+                rows_seen=len(rows),
+            )
 
-        except Exception as error:
+        except Exception as import_error:
             complete_import_log(
                 import_log=import_log,
                 rows_inserted=0,
                 rows_updated=0,
                 rows_skipped=len(rows),
-                status="failed",
-                error_message=str(error),
+                status=IMPORT_STATUS_FAILED,
+                error_message=str(import_error),
             )
 
-            return {
-                "file": file_path.name,
-                "category": category,
-                "status": "failed",
-                "error": str(error),
-                "inserted": 0,
-                "updated": 0,
-                "skipped": len(rows),
-            }
-
-
+            return build_import_failure_report(
+                file_path=file_path,
+                detection_report=detection_report,
+                validation_report=validation_report,
+                error=import_error,
+                rows_seen=len(rows),
+                first_season=first_season,
+            )
 # ============================================================
 # SECTION 18 - BULK IMPORT
 # ============================================================
