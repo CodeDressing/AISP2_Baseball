@@ -1349,3 +1349,304 @@ class RawDataImportLog(Base):
 
     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     completed_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+# ============================================================
+# SECTION 21 - PREDICTION AND EVENT ORM MODELS
+# FILE: 01_database/models.py
+# PURPOSE: define missing mapped classes referenced by Player
+# relationships so SQLAlchemy can initialize cleanly.
+# ============================================================
+
+class PlayerGameStat(Base):
+    """
+    Stores player-level game results.
+
+    This table supports future:
+        - rolling form
+        - player game logs
+        - matchup history
+        - trend features
+        - prediction training labels
+    """
+
+    __tablename__ = "player_game_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=False,
+        index=True,
+    )
+
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
+
+    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True, index=True)
+    opponent_team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True, index=True)
+
+    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    opponent_team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    games_played: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plate_appearances: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    at_bats: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hits: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    doubles: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    triples: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    home_runs: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rbi: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    walks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    strikeouts: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    stolen_bases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    innings_pitched: Mapped[float | None] = mapped_column(Float, nullable=True)
+    earned_runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pitcher_strikeouts: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    walks_allowed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hits_allowed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    raw_game_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    player: Mapped[Player] = relationship(
+        back_populates="game_stats",
+    )
+
+
+class PitchEvent(Base):
+    """
+    Stores pitch-level event data.
+
+    This table supports future pitch modeling, pitch sequencing,
+    batter-vs-pitcher analysis, whiff modeling, and deep learning
+    sequence features.
+    """
+
+    __tablename__ = "pitch_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    pitcher_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    batter_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    inning: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    inning_half: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
+    pitch_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pitch_name: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    pitch_result: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    spin_rate: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    horizontal_break: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vertical_break: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    balls: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    strikes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    is_swing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_whiff: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_called_strike: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_in_play: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    raw_pitch_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    player: Mapped[Player | None] = relationship(
+        back_populates="pitch_events",
+    )
+
+
+class PlateAppearance(Base):
+    """
+    Stores plate appearance level outcomes.
+
+    This table bridges pitch-level data and game-level stats.
+    """
+
+    __tablename__ = "plate_appearances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    batter_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    pitcher_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    inning: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    inning_half: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
+    result: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    pitches_seen: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    balls: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    strikes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    is_hit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_home_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_walk: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_strikeout: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    is_rbi_event: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    rbi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_bases: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    raw_plate_appearance_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    player: Mapped[Player | None] = relationship(
+        back_populates="plate_appearances",
+    )
+
+
+class StatcastEvent(Base):
+    """
+    Stores Statcast event-level batted-ball and pitch outcome data.
+
+    This table is intended for future ML feature engineering and
+    deep learning sequence modeling.
+    """
+
+    __tablename__ = "statcast_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    batter_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    pitcher_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    description: Mapped[str | None] = mapped_column(String(180), nullable=True)
+
+    launch_speed: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    launch_angle: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    hit_distance: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    barrel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    hard_hit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    expected_batting_average: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    expected_slugging: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    expected_woba: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    pitch_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pitch_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    pitch_spin_rate: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+
+    raw_statcast_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    player: Mapped[Player | None] = relationship(
+        back_populates="statcast_events",
+    )
+
+
+class PredictionResult(Base):
+    """
+    Stores model prediction outputs.
+
+    This table gives AISP2 an auditable record of predictions,
+    model versions, input features, confidence, and outcomes.
+    """
+
+    __tablename__ = "prediction_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
+
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    prediction_scope: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    prediction_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    outcome_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+
+    probability: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    prediction_tier: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    risk_profile: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+
+    model_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    model_version: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+
+    feature_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    explanation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_prediction_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    actual_result: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    was_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True, index=True)
+
+    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
+    player: Mapped[Player | None] = relationship(
+        back_populates="prediction_results",
+    )
