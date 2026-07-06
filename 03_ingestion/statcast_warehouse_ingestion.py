@@ -50,42 +50,186 @@ from models import PlayerHomeRunProfile
 from models import TeamPlateDiscipline
 
 
-# # ============================================================
-# # SECTION 02 - IMPORT CONFIGURATION
-# # ============================================================
-#
-# RAW_DATA_DIR = PROJECT_ROOT / "00_raw_data"
-#
-# DEFAULT_IMPORT_FILES = [
-#     "percentile_rankings.csv",
-#     "percentile_rankings2025.csv",
-#     "pitch_arsenals.csv",
-#     "2025-pitch_arsenals.csv",
-#     "pitch_tempo.csv",
-#     "2025historicalpitchtempo (1).csv",
-#     "pitcherstats.csv",
-#     "stats.csv",
-#     "batting-stance.csv",
-#     "2025-batting-stance.csv",
-#     "exit_velocity.csv",
-#     "2025exitvolicity.csv",
-#     "homeruns.csv",
-#     "homeruns2025.csv",
-#     "plate_discipline.csv",
-# ]
-#
-# SUPPORTED_IMPORT_CATEGORIES = [
-#     "percentile_rankings",
-#     "pitch_arsenal",
-#     "pitch_tempo",
-#     "batted_ball_profile",
-#     "batting_stance",
-#     "home_run_profile",
-#     "advanced_batting_stats",
-#     "advanced_batting_or_pitcher_stats",
-#     "team_plate_discipline",
-# ]
+# ============================================================
+# SECTION 02 - ENTERPRISE STATCAST IMPORT CONFIGURATION
+# FILE: 03_ingestion/statcast_warehouse_ingestion.py
+# PURPOSE: define raw-data directory, supported warehouse
+# datasets, default import files, filename detection aliases,
+# import categories, readiness thresholds, and ML-ready data
+# routing configuration for AISP2 predictions.
+# ============================================================
 
+RAW_DATA_DIR = PROJECT_ROOT / "00_raw_data"
+
+STATCAST_INGESTION_VERSION = "phase_11_part_4_enterprise_statcast_warehouse"
+
+DEFAULT_IMPORT_SEASON = 2026
+
+IMPORT_STATUS_COMPLETED = "completed"
+IMPORT_STATUS_FAILED = "failed"
+IMPORT_STATUS_MISSING = "missing"
+IMPORT_STATUS_SKIPPED = "skipped"
+IMPORT_STATUS_UNKNOWN = "unknown"
+
+CATEGORY_PERCENTILE_RANKINGS = "percentile_rankings"
+CATEGORY_PITCH_ARSENAL = "pitch_arsenal"
+CATEGORY_PITCH_TEMPO = "pitch_tempo"
+CATEGORY_BATTED_BALL_PROFILE = "batted_ball_profile"
+CATEGORY_BATTING_STANCE = "batting_stance"
+CATEGORY_HOME_RUN_PROFILE = "home_run_profile"
+CATEGORY_ADVANCED_BATTING_STATS = "advanced_batting_stats"
+CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS = "advanced_batting_or_pitcher_stats"
+CATEGORY_TEAM_PLATE_DISCIPLINE = "team_plate_discipline"
+CATEGORY_UNKNOWN = "unknown"
+
+SUPPORTED_IMPORT_CATEGORIES = [
+    CATEGORY_PERCENTILE_RANKINGS,
+    CATEGORY_PITCH_ARSENAL,
+    CATEGORY_PITCH_TEMPO,
+    CATEGORY_BATTED_BALL_PROFILE,
+    CATEGORY_BATTING_STANCE,
+    CATEGORY_HOME_RUN_PROFILE,
+    CATEGORY_ADVANCED_BATTING_STATS,
+    CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS,
+    CATEGORY_TEAM_PLATE_DISCIPLINE,
+]
+
+DEFAULT_IMPORT_FILES = [
+    "percentile_rankings.csv",
+    "percentile_rankings2025.csv",
+    "pitch_arsenals.csv",
+    "2025-pitch_arsenals.csv",
+    "pitch_tempo.csv",
+    "2025historicalpitchtempo (1).csv",
+    "pitcherstats.csv",
+    "stats.csv",
+    "batting-stance.csv",
+    "2025-batting-stance.csv",
+    "exit_velocity.csv",
+    "2025exitvolicity.csv",
+    "homeruns.csv",
+    "homeruns2025.csv",
+    "plate_discipline.csv",
+]
+
+FILENAME_CATEGORY_PATTERNS = {
+    CATEGORY_PERCENTILE_RANKINGS: [
+        "percentile",
+        "percentile_rankings",
+        "percentilerankings",
+    ],
+    CATEGORY_PITCH_ARSENAL: [
+        "pitch_arsenal",
+        "pitch_arsenals",
+        "pitcharsenal",
+        "arsenal",
+    ],
+    CATEGORY_PITCH_TEMPO: [
+        "pitch_tempo",
+        "pitchtempo",
+        "historicalpitchtempo",
+        "tempo",
+    ],
+    CATEGORY_BATTED_BALL_PROFILE: [
+        "exit_velocity",
+        "exitvelocity",
+        "exitvolicity",
+        "batted_ball",
+        "battedball",
+        "launch_angle",
+        "hard_hit",
+        "barrel",
+    ],
+    CATEGORY_BATTING_STANCE: [
+        "batting_stance",
+        "batting-stance",
+        "stance",
+    ],
+    CATEGORY_HOME_RUN_PROFILE: [
+        "homerun",
+        "home_run",
+        "home_runs",
+        "homeruns",
+        "hr_profile",
+    ],
+    CATEGORY_TEAM_PLATE_DISCIPLINE: [
+        "plate_discipline",
+        "platediscipline",
+        "plate discipline",
+    ],
+    CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS: [
+        "pitcherstats",
+        "pitcher_stats",
+    ],
+    CATEGORY_ADVANCED_BATTING_STATS: [
+        "stats.csv",
+        "batting_stats",
+        "advanced_batting",
+    ],
+}
+
+WAREHOUSE_TABLE_TARGETS = {
+    CATEGORY_PERCENTILE_RANKINGS: "player_percentile_rankings",
+    CATEGORY_PITCH_ARSENAL: "player_pitch_arsenals",
+    CATEGORY_PITCH_TEMPO: "player_pitch_tempo",
+    CATEGORY_BATTED_BALL_PROFILE: "player_batted_ball_profiles",
+    CATEGORY_BATTING_STANCE: "player_batting_stances",
+    CATEGORY_HOME_RUN_PROFILE: "player_home_run_profiles",
+    CATEGORY_ADVANCED_BATTING_STATS: "player_advanced_batting_stats",
+    CATEGORY_ADVANCED_BATTING_OR_PITCHER_STATS: "player_advanced_batting_stats",
+    CATEGORY_TEAM_PLATE_DISCIPLINE: "team_plate_discipline",
+}
+
+PREDICTION_FEATURE_GROUPS = {
+    "home_run_model": [
+        CATEGORY_HOME_RUN_PROFILE,
+        CATEGORY_BATTED_BALL_PROFILE,
+        CATEGORY_PERCENTILE_RANKINGS,
+        CATEGORY_ADVANCED_BATTING_STATS,
+        CATEGORY_TEAM_PLATE_DISCIPLINE,
+    ],
+    "hit_probability_model": [
+        CATEGORY_ADVANCED_BATTING_STATS,
+        CATEGORY_BATTED_BALL_PROFILE,
+        CATEGORY_PERCENTILE_RANKINGS,
+        CATEGORY_TEAM_PLATE_DISCIPLINE,
+    ],
+    "strikeout_model": [
+        CATEGORY_ADVANCED_BATTING_STATS,
+        CATEGORY_PERCENTILE_RANKINGS,
+        CATEGORY_PITCH_ARSENAL,
+        CATEGORY_TEAM_PLATE_DISCIPLINE,
+    ],
+    "pitcher_model": [
+        CATEGORY_PITCH_ARSENAL,
+        CATEGORY_PITCH_TEMPO,
+        CATEGORY_PERCENTILE_RANKINGS,
+    ],
+}
+
+WAREHOUSE_READINESS_THRESHOLDS = {
+    "minimum_files_loaded": 3,
+    "minimum_rows_loaded": 100,
+    "minimum_player_feature_tables": 3,
+    "minimum_team_feature_tables": 1,
+}
+
+STATCAST_IMPORT_CONFIGURATION = {
+    "raw_data_dir": str(RAW_DATA_DIR),
+    "version": STATCAST_INGESTION_VERSION,
+    "default_season": DEFAULT_IMPORT_SEASON,
+    "supported_categories": SUPPORTED_IMPORT_CATEGORIES,
+    "default_files": DEFAULT_IMPORT_FILES,
+    "prediction_feature_groups": PREDICTION_FEATURE_GROUPS,
+    "warehouse_table_targets": WAREHOUSE_TABLE_TARGETS,
+    "readiness_thresholds": WAREHOUSE_READINESS_THRESHOLDS,
+    "import_logs_enabled": True,
+    "raw_json_storage_enabled": True,
+    "player_resolution_enabled": True,
+    "team_resolution_enabled": True,
+    "fallback_unresolved_players_allowed": True,
+    "fallback_unresolved_teams_allowed": True,
+}
 # ============================================================
 # SECTION 03 - SAFE VALUE HELPERS
 # ============================================================
