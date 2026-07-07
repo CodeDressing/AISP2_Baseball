@@ -1650,3 +1650,974 @@ class PredictionResult(Base):
     player: Mapped[Player | None] = relationship(
         back_populates="prediction_results",
     )
+    # ============================================================
+    # SECTION 22 - ORM MAPPING VERIFICATION
+    # FILE: 01_database/models.py
+    # PURPOSE:
+    # Verify SQLAlchemy model registration, relationship mappings,
+    # table metadata, critical columns, prediction-readiness models,
+    # and ingestion-readiness models without redesigning the schema.
+    #
+    # This section does not create new tables by itself.
+    # It gives AISP2 a safe diagnostic layer so ingestion, chatbot,
+    # warehouse, and prediction systems can prove the ORM is valid
+    # before attempting database writes.
+    # ============================================================
+
+    from typing import Any
+
+    # ============================================================
+    # SECTION 22.01 - EXPECTED MODEL REGISTRY
+    # ============================================================
+
+    EXPECTED_CORE_MODEL_NAMES = [
+        "Team",
+        "Player",
+        "RosterEntry",
+        "Game",
+    ]
+
+    EXPECTED_STAT_MODEL_NAMES = [
+        "PlayerSeasonStat",
+        "PlayerAdvancedBattingStat",
+        "PlayerPercentileRanking",
+        "PlayerPitchArsenal",
+        "PlayerPitchTempo",
+        "PlayerBattedBallProfile",
+        "PlayerBattingStance",
+        "PlayerHomeRunProfile",
+        "TeamPlateDiscipline",
+        "RawDataImportLog",
+    ]
+
+    EXPECTED_MEMORY_MODEL_NAMES = [
+        "ChatMemory",
+        "LearningSignal",
+        "TrainingExample",
+        "EntityAlias",
+        "UserFeedback",
+    ]
+
+    EXPECTED_EVENT_AND_PREDICTION_MODEL_NAMES = [
+        "PlayerGameStat",
+        "PitchEvent",
+        "PlateAppearance",
+        "StatcastEvent",
+        "PredictionResult",
+    ]
+
+    EXPECTED_MODEL_NAMES = (
+            EXPECTED_CORE_MODEL_NAMES
+            + EXPECTED_STAT_MODEL_NAMES
+            + EXPECTED_MEMORY_MODEL_NAMES
+            + EXPECTED_EVENT_AND_PREDICTION_MODEL_NAMES
+    )
+
+    # ============================================================
+    # SECTION 22.02 - EXPECTED TABLE REGISTRY
+    # ============================================================
+
+    EXPECTED_CORE_TABLES = [
+        "teams",
+        "players",
+        "roster_entries",
+        "games",
+    ]
+
+    EXPECTED_STAT_TABLES = [
+        "player_season_stats",
+        "player_advanced_batting_stats",
+        "player_percentile_rankings",
+        "player_pitch_arsenals",
+        "player_pitch_tempo",
+        "player_batted_ball_profiles",
+        "player_batting_stances",
+        "player_home_run_profiles",
+        "team_plate_discipline",
+        "raw_data_import_logs",
+    ]
+
+    EXPECTED_MEMORY_TABLES = [
+        "chat_memory",
+        "learning_signals",
+        "training_examples",
+        "entity_aliases",
+        "user_feedback",
+    ]
+
+    EXPECTED_EVENT_AND_PREDICTION_TABLES = [
+        "player_game_stats",
+        "pitch_events",
+        "plate_appearances",
+        "statcast_events",
+        "prediction_results",
+    ]
+
+    EXPECTED_TABLES = (
+            EXPECTED_CORE_TABLES
+            + EXPECTED_STAT_TABLES
+            + EXPECTED_MEMORY_TABLES
+            + EXPECTED_EVENT_AND_PREDICTION_TABLES
+    )
+
+    # ============================================================
+    # SECTION 22.03 - CRITICAL MODEL COLUMN REQUIREMENTS
+    # ============================================================
+
+    CRITICAL_MODEL_COLUMNS = {
+        "Team": [
+            "id",
+            "mlb_team_id",
+            "name",
+            "abbreviation",
+            "league",
+            "division",
+            "is_active",
+        ],
+        "Player": [
+            "id",
+            "mlb_player_id",
+            "full_name",
+            "position",
+            "current_team_id",
+            "active_status",
+        ],
+        "RosterEntry": [
+            "id",
+            "season",
+            "roster_type",
+            "team_id",
+            "player_id",
+        ],
+        "Game": [
+            "id",
+            "game_pk",
+            "season",
+            "home_team_id",
+            "away_team_id",
+            "home_team_name",
+            "away_team_name",
+        ],
+        "PlayerSeasonStat": [
+            "id",
+            "player_id",
+            "season",
+            "stat_group",
+            "hits",
+            "home_runs",
+            "strikeouts",
+            "batting_average",
+            "ops",
+        ],
+        "PlayerAdvancedBattingStat": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "plate_appearances",
+            "strikeout_percent",
+            "walk_percent",
+            "woba",
+            "expected_woba",
+            "barrel_batted_rate",
+            "hard_hit_percent",
+            "whiff_percent",
+        ],
+        "PlayerPercentileRanking": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "player_name",
+            "xwoba_percentile",
+            "barrel_percentile",
+            "hard_hit_percentile",
+            "whiff_percentile",
+            "chase_percentile",
+        ],
+        "PlayerPitchArsenal": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "pitch_type",
+            "pitch_name",
+            "average_velocity",
+            "whiff_percent",
+        ],
+        "PlayerPitchTempo": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "pitch_tempo",
+            "tempo_empty",
+            "tempo_runners_on",
+        ],
+        "PlayerBattedBallProfile": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "average_exit_velocity",
+            "max_exit_velocity",
+            "launch_angle",
+            "barrel_percent",
+            "hard_hit_percent",
+            "expected_woba",
+        ],
+        "PlayerBattingStance": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "player_name",
+            "bats",
+            "stance_side",
+        ],
+        "PlayerHomeRunProfile": [
+            "id",
+            "player_id",
+            "mlb_player_id",
+            "season",
+            "player_name",
+            "home_runs",
+            "average_home_run_distance",
+            "average_exit_velocity",
+        ],
+        "TeamPlateDiscipline": [
+            "id",
+            "team_id",
+            "mlb_team_id",
+            "season",
+            "team_name",
+            "zone_percent",
+            "chase_percent",
+            "whiff_percent",
+        ],
+        "RawDataImportLog": [
+            "id",
+            "source_file",
+            "source_category",
+            "rows_seen",
+            "rows_inserted",
+            "rows_updated",
+            "rows_skipped",
+            "status",
+        ],
+        "ChatMemory": [
+            "id",
+            "user_message",
+            "assistant_response",
+            "detected_intent",
+            "detected_task",
+            "detected_team",
+            "detected_player",
+            "detected_outcome",
+        ],
+        "LearningSignal": [
+            "id",
+            "chat_memory_id",
+            "signal_type",
+            "signal_status",
+            "intent",
+            "task",
+            "entity_type",
+            "entity_value",
+        ],
+        "TrainingExample": [
+            "id",
+            "chat_memory_id",
+            "input_text",
+            "target_intent",
+            "target_task",
+            "target_team",
+            "target_player",
+            "target_outcome",
+        ],
+        "EntityAlias": [
+            "id",
+            "entity_type",
+            "canonical_value",
+            "alias_value",
+            "usage_count",
+            "is_active",
+            "is_trusted",
+        ],
+        "UserFeedback": [
+            "id",
+            "chat_memory_id",
+            "feedback_type",
+            "feedback_value",
+        ],
+        "PlayerGameStat": [
+            "id",
+            "player_id",
+            "game_id",
+            "game_pk",
+            "season",
+            "game_date",
+            "hits",
+            "home_runs",
+            "rbi",
+            "strikeouts",
+        ],
+        "PitchEvent": [
+            "id",
+            "player_id",
+            "pitcher_mlb_id",
+            "batter_mlb_id",
+            "game_pk",
+            "season",
+            "pitch_type",
+            "velocity",
+            "spin_rate",
+            "is_swing",
+            "is_whiff",
+        ],
+        "PlateAppearance": [
+            "id",
+            "player_id",
+            "batter_mlb_id",
+            "pitcher_mlb_id",
+            "game_pk",
+            "season",
+            "result",
+            "event_type",
+            "is_hit",
+            "is_home_run",
+            "is_walk",
+            "is_strikeout",
+        ],
+        "StatcastEvent": [
+            "id",
+            "player_id",
+            "batter_mlb_id",
+            "pitcher_mlb_id",
+            "game_pk",
+            "season",
+            "event_type",
+            "launch_speed",
+            "launch_angle",
+            "expected_woba",
+        ],
+        "PredictionResult": [
+            "id",
+            "player_id",
+            "team_id",
+            "game_id",
+            "prediction_scope",
+            "prediction_type",
+            "outcome_key",
+            "probability",
+            "confidence",
+            "model_name",
+            "model_version",
+        ],
+    }
+
+    # ============================================================
+    # SECTION 22.04 - CRITICAL RELATIONSHIP REQUIREMENTS
+    # ============================================================
+
+    CRITICAL_MODEL_RELATIONSHIPS = {
+        "Team": [
+            "players",
+            "roster_entries",
+            "home_games",
+            "away_games",
+        ],
+        "Player": [
+            "team",
+            "roster_entries",
+            "season_stats",
+            "advanced_batting_stats",
+            "game_stats",
+            "pitch_events",
+            "plate_appearances",
+            "statcast_events",
+            "prediction_results",
+        ],
+        "RosterEntry": [
+            "team",
+            "player",
+        ],
+        "PlayerSeasonStat": [
+            "player",
+        ],
+        "PlayerAdvancedBattingStat": [
+            "player",
+        ],
+        "ChatMemory": [
+            "learning_signals",
+            "training_examples",
+            "feedback_entries",
+        ],
+        "LearningSignal": [
+            "chat_memory",
+        ],
+        "TrainingExample": [
+            "chat_memory",
+        ],
+        "UserFeedback": [
+            "chat_memory",
+        ],
+        "Game": [
+            "home_team",
+            "away_team",
+        ],
+        "PlayerGameStat": [
+            "player",
+        ],
+        "PitchEvent": [
+            "player",
+        ],
+        "PlateAppearance": [
+            "player",
+        ],
+        "StatcastEvent": [
+            "player",
+        ],
+        "PredictionResult": [
+            "player",
+        ],
+    }
+
+    # ============================================================
+    # SECTION 22.05 - MODEL REGISTRY HELPERS
+    # ============================================================
+
+    def get_model_class_by_name(
+            model_name: str,
+    ):
+        return globals().get(model_name)
+
+    def get_available_model_names() -> list[str]:
+        available_model_names = []
+
+        for model_name in EXPECTED_MODEL_NAMES:
+            model_class = get_model_class_by_name(model_name)
+
+            if model_class is not None:
+                available_model_names.append(model_name)
+
+        return available_model_names
+
+    def get_missing_model_names() -> list[str]:
+        return [
+            model_name
+            for model_name in EXPECTED_MODEL_NAMES
+            if get_model_class_by_name(model_name) is None
+        ]
+
+    def get_metadata_table_names() -> list[str]:
+        return sorted(
+            Base.metadata.tables.keys(),
+        )
+
+    def get_missing_metadata_tables() -> list[str]:
+        metadata_tables = set(
+            get_metadata_table_names(),
+        )
+
+        return [
+            table_name
+            for table_name in EXPECTED_TABLES
+            if table_name not in metadata_tables
+        ]
+
+    def get_present_metadata_tables() -> list[str]:
+        metadata_tables = set(
+            get_metadata_table_names(),
+        )
+
+        return [
+            table_name
+            for table_name in EXPECTED_TABLES
+            if table_name in metadata_tables
+        ]
+
+    # ============================================================
+    # SECTION 22.06 - MODEL INSPECTION HELPERS
+    # ============================================================
+
+    def inspect_model_columns(
+            model_name: str,
+    ) -> dict[str, Any]:
+        model_class = get_model_class_by_name(model_name)
+
+        if model_class is None:
+            return {
+                "model": model_name,
+                "exists": False,
+                "columns": [],
+                "missing_columns": CRITICAL_MODEL_COLUMNS.get(model_name, []),
+                "valid": False,
+            }
+
+        try:
+            mapper = model_class.__mapper__
+
+            columns = sorted(
+                mapper.columns.keys(),
+            )
+
+            required_columns = CRITICAL_MODEL_COLUMNS.get(
+                model_name,
+                [],
+            )
+
+            missing_columns = [
+                column_name
+                for column_name in required_columns
+                if column_name not in columns
+            ]
+
+            return {
+                "model": model_name,
+                "exists": True,
+                "columns": columns,
+                "required_columns": required_columns,
+                "missing_columns": missing_columns,
+                "valid": len(missing_columns) == 0,
+            }
+
+        except Exception as error:
+            return {
+                "model": model_name,
+                "exists": True,
+                "columns": [],
+                "missing_columns": CRITICAL_MODEL_COLUMNS.get(model_name, []),
+                "valid": False,
+                "error": str(error),
+            }
+
+    def inspect_model_relationships(
+            model_name: str,
+    ) -> dict[str, Any]:
+        model_class = get_model_class_by_name(model_name)
+
+        if model_class is None:
+            return {
+                "model": model_name,
+                "exists": False,
+                "relationships": [],
+                "missing_relationships": CRITICAL_MODEL_RELATIONSHIPS.get(model_name, []),
+                "valid": False,
+            }
+
+        try:
+            mapper = model_class.__mapper__
+
+            relationships = sorted(
+                mapper.relationships.keys(),
+            )
+
+            required_relationships = CRITICAL_MODEL_RELATIONSHIPS.get(
+                model_name,
+                [],
+            )
+
+            missing_relationships = [
+                relationship_name
+                for relationship_name in required_relationships
+                if relationship_name not in relationships
+            ]
+
+            return {
+                "model": model_name,
+                "exists": True,
+                "relationships": relationships,
+                "required_relationships": required_relationships,
+                "missing_relationships": missing_relationships,
+                "valid": len(missing_relationships) == 0,
+            }
+
+        except Exception as error:
+            return {
+                "model": model_name,
+                "exists": True,
+                "relationships": [],
+                "missing_relationships": CRITICAL_MODEL_RELATIONSHIPS.get(model_name, []),
+                "valid": False,
+                "error": str(error),
+            }
+
+    def inspect_model_table_mapping(
+            model_name: str,
+    ) -> dict[str, Any]:
+        model_class = get_model_class_by_name(model_name)
+
+        if model_class is None:
+            return {
+                "model": model_name,
+                "exists": False,
+                "table_name": None,
+                "mapped": False,
+                "valid": False,
+            }
+
+        try:
+            table_name = model_class.__tablename__
+
+            mapped = table_name in Base.metadata.tables
+
+            return {
+                "model": model_name,
+                "exists": True,
+                "table_name": table_name,
+                "mapped": mapped,
+                "valid": mapped,
+            }
+
+        except Exception as error:
+            return {
+                "model": model_name,
+                "exists": True,
+                "table_name": None,
+                "mapped": False,
+                "valid": False,
+                "error": str(error),
+            }
+
+    # ============================================================
+    # SECTION 22.07 - ORM CONFIGURATION CHECK
+    # ============================================================
+
+    def verify_sqlalchemy_mapper_configuration() -> dict[str, Any]:
+        try:
+            from sqlalchemy.orm import configure_mappers
+
+            configure_mappers()
+
+            return {
+                "configured": True,
+                "valid": True,
+                "error": None,
+            }
+
+        except Exception as error:
+            return {
+                "configured": False,
+                "valid": False,
+                "error": str(error),
+            }
+
+    # ============================================================
+    # SECTION 22.08 - DATABASE PURPOSE READINESS CHECKS
+    # ============================================================
+
+    def calculate_orm_readiness_score(
+            missing_models: list[str],
+            missing_tables: list[str],
+            column_reports: dict[str, dict[str, Any]],
+            relationship_reports: dict[str, dict[str, Any]],
+            mapper_report: dict[str, Any],
+    ) -> int:
+        score = 100
+
+        if not mapper_report.get("valid"):
+            score -= 40
+
+        score -= min(
+            len(missing_models) * 5,
+            25,
+        )
+
+        score -= min(
+            len(missing_tables) * 4,
+            20,
+        )
+
+        for report in column_reports.values():
+            if not report.get("valid"):
+                score -= 2
+
+        for report in relationship_reports.values():
+            if not report.get("valid"):
+                score -= 2
+
+        return max(
+            0,
+            min(score, 100),
+        )
+
+    def classify_orm_readiness(
+            score: int,
+            mapper_valid: bool,
+    ) -> str:
+        if not mapper_valid:
+            return "blocked_mapper_configuration"
+
+        if score >= 95:
+            return "enterprise_ready"
+
+        if score >= 85:
+            return "ready_with_minor_warnings"
+
+        if score >= 70:
+            return "partial_ready"
+
+        if score >= 50:
+            return "needs_schema_attention"
+
+        return "not_ready"
+
+    def build_database_system_readiness(
+            missing_models: list[str],
+            missing_tables: list[str],
+            mapper_report: dict[str, Any],
+    ) -> dict[str, Any]:
+        model_set = set(
+            get_available_model_names(),
+        )
+
+        table_set = set(
+            get_metadata_table_names(),
+        )
+
+        core_ready = all(
+            model_name in model_set
+            for model_name in EXPECTED_CORE_MODEL_NAMES
+        ) and all(
+            table_name in table_set
+            for table_name in EXPECTED_CORE_TABLES
+        )
+
+        stats_ready = all(
+            model_name in model_set
+            for model_name in EXPECTED_STAT_MODEL_NAMES
+        ) and all(
+            table_name in table_set
+            for table_name in EXPECTED_STAT_TABLES
+        )
+
+        memory_ready = all(
+            model_name in model_set
+            for model_name in EXPECTED_MEMORY_MODEL_NAMES
+        ) and all(
+            table_name in table_set
+            for table_name in EXPECTED_MEMORY_TABLES
+        )
+
+        event_prediction_ready = all(
+            model_name in model_set
+            for model_name in EXPECTED_EVENT_AND_PREDICTION_MODEL_NAMES
+        ) and all(
+            table_name in table_set
+            for table_name in EXPECTED_EVENT_AND_PREDICTION_TABLES
+        )
+
+        mapper_ready = bool(
+            mapper_report.get("valid"),
+        )
+
+        ingestion_ready = (
+                mapper_ready
+                and core_ready
+                and stats_ready
+        )
+
+        chatbot_ready = (
+                mapper_ready
+                and core_ready
+                and memory_ready
+        )
+
+        prediction_ready = (
+                mapper_ready
+                and core_ready
+                and stats_ready
+                and event_prediction_ready
+        )
+
+        return {
+            "mapper_ready": mapper_ready,
+            "core_ready": core_ready,
+            "stats_ready": stats_ready,
+            "memory_ready": memory_ready,
+            "event_prediction_ready": event_prediction_ready,
+            "ingestion_ready": ingestion_ready,
+            "chatbot_ready": chatbot_ready,
+            "prediction_ready": prediction_ready,
+            "missing_models": missing_models,
+            "missing_tables": missing_tables,
+        }
+
+    # ============================================================
+    # SECTION 22.09 - FULL ORM VERIFICATION REPORT
+    # ============================================================
+
+    def verify_orm_mappings() -> dict[str, Any]:
+        mapper_report = verify_sqlalchemy_mapper_configuration()
+
+        available_models = get_available_model_names()
+        missing_models = get_missing_model_names()
+
+        present_tables = get_present_metadata_tables()
+        missing_tables = get_missing_metadata_tables()
+
+        table_mapping_reports = {
+            model_name: inspect_model_table_mapping(model_name)
+            for model_name in EXPECTED_MODEL_NAMES
+        }
+
+        column_reports = {
+            model_name: inspect_model_columns(model_name)
+            for model_name in EXPECTED_MODEL_NAMES
+        }
+
+        relationship_reports = {
+            model_name: inspect_model_relationships(model_name)
+            for model_name in EXPECTED_MODEL_NAMES
+        }
+
+        readiness_score = calculate_orm_readiness_score(
+            missing_models=missing_models,
+            missing_tables=missing_tables,
+            column_reports=column_reports,
+            relationship_reports=relationship_reports,
+            mapper_report=mapper_report,
+        )
+
+        readiness_status = classify_orm_readiness(
+            score=readiness_score,
+            mapper_valid=mapper_report.get("valid", False),
+        )
+
+        system_readiness = build_database_system_readiness(
+            missing_models=missing_models,
+            missing_tables=missing_tables,
+            mapper_report=mapper_report,
+        )
+
+        failed_column_models = [
+            model_name
+            for model_name, report in column_reports.items()
+            if not report.get("valid")
+        ]
+
+        failed_relationship_models = [
+            model_name
+            for model_name, report in relationship_reports.items()
+            if not report.get("valid")
+        ]
+
+        failed_table_mappings = [
+            model_name
+            for model_name, report in table_mapping_reports.items()
+            if not report.get("valid")
+        ]
+
+        return {
+            "database_model_version": DATABASE_MODEL_VERSION,
+            "database_model_description": DATABASE_MODEL_DESCRIPTION,
+            "checked_at": utc_now().isoformat(),
+            "valid": (
+                    mapper_report.get("valid", False)
+                    and len(missing_models) == 0
+                    and len(missing_tables) == 0
+                    and len(failed_column_models) == 0
+                    and len(failed_relationship_models) == 0
+                    and len(failed_table_mappings) == 0
+            ),
+            "readiness_score": readiness_score,
+            "readiness_status": readiness_status,
+            "mapper": mapper_report,
+            "expected_model_count": len(EXPECTED_MODEL_NAMES),
+            "available_model_count": len(available_models),
+            "missing_model_count": len(missing_models),
+            "available_models": available_models,
+            "missing_models": missing_models,
+            "expected_table_count": len(EXPECTED_TABLES),
+            "present_table_count": len(present_tables),
+            "missing_table_count": len(missing_tables),
+            "present_tables": present_tables,
+            "missing_tables": missing_tables,
+            "failed_column_models": failed_column_models,
+            "failed_relationship_models": failed_relationship_models,
+            "failed_table_mappings": failed_table_mappings,
+            "table_mapping_reports": table_mapping_reports,
+            "column_reports": column_reports,
+            "relationship_reports": relationship_reports,
+            "system_readiness": system_readiness,
+            "next_required_action": (
+                "ORM mappings are valid. Run database initialization and then ingestion."
+                if mapper_report.get("valid") and len(missing_models) == 0
+                else "Fix missing models, missing tables, or mapper configuration errors before ingestion."
+            ),
+        }
+
+    # ============================================================
+    # SECTION 22.10 - HUMAN-READABLE VERIFICATION SUMMARY
+    # ============================================================
+
+    def build_orm_verification_summary(
+            report: dict[str, Any] | None = None,
+    ) -> str:
+        report = report or verify_orm_mappings()
+
+        summary_lines = [
+            "AISP2 ORM Mapping Verification",
+            "=" * 42,
+            f"Valid: {report.get('valid')}",
+            f"Readiness Score: {report.get('readiness_score')}",
+            f"Readiness Status: {report.get('readiness_status')}",
+            f"Mapper Configured: {report.get('mapper', {}).get('configured')}",
+            f"Expected Models: {report.get('expected_model_count')}",
+            f"Available Models: {report.get('available_model_count')}",
+            f"Missing Models: {report.get('missing_model_count')}",
+            f"Expected Tables: {report.get('expected_table_count')}",
+            f"Present Tables: {report.get('present_table_count')}",
+            f"Missing Tables: {report.get('missing_table_count')}",
+            "",
+            "System Readiness",
+            "-" * 42,
+            f"Core Ready: {report.get('system_readiness', {}).get('core_ready')}",
+            f"Stats Ready: {report.get('system_readiness', {}).get('stats_ready')}",
+            f"Memory Ready: {report.get('system_readiness', {}).get('memory_ready')}",
+            f"Event/Prediction Ready: {report.get('system_readiness', {}).get('event_prediction_ready')}",
+            f"Ingestion Ready: {report.get('system_readiness', {}).get('ingestion_ready')}",
+            f"Chatbot Ready: {report.get('system_readiness', {}).get('chatbot_ready')}",
+            f"Prediction Ready: {report.get('system_readiness', {}).get('prediction_ready')}",
+        ]
+
+        if report.get("missing_models"):
+            summary_lines.append("")
+            summary_lines.append("Missing Models")
+            summary_lines.append("-" * 42)
+
+            for model_name in report["missing_models"]:
+                summary_lines.append(f"- {model_name}")
+
+        if report.get("missing_tables"):
+            summary_lines.append("")
+            summary_lines.append("Missing Tables")
+            summary_lines.append("-" * 42)
+
+            for table_name in report["missing_tables"]:
+                summary_lines.append(f"- {table_name}")
+
+        if report.get("mapper", {}).get("error"):
+            summary_lines.append("")
+            summary_lines.append("Mapper Error")
+            summary_lines.append("-" * 42)
+            summary_lines.append(str(report["mapper"]["error"]))
+
+        summary_lines.append("")
+        summary_lines.append("Next Required Action")
+        summary_lines.append("-" * 42)
+        summary_lines.append(str(report.get("next_required_action")))
+
+        return "\n".join(summary_lines)
+
+    def print_orm_verification_report() -> dict[str, Any]:
+        report = verify_orm_mappings()
+
+        print(
+            build_orm_verification_summary(
+                report,
+            )
+        )
+
+        return report
