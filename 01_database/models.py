@@ -1350,28 +1350,55 @@ class RawDataImportLog(Base):
     created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     completed_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
 
-# ============================================================
+## ============================================================
 # SECTION 21 - PREDICTION AND EVENT ORM MODELS
 # FILE: 01_database/models.py
-# PURPOSE: define missing mapped classes referenced by Player
-# relationships so SQLAlchemy can initialize cleanly.
+# PURPOSE:
+# Define mapped classes referenced by Player relationships so
+# SQLAlchemy can initialize cleanly and AISP2 can support
+# future game logs, pitch events, plate appearances, Statcast
+# event storage, prediction history, ML feature engineering,
+# and deep-learning sequence modeling.
 # ============================================================
 
 class PlayerGameStat(Base):
     """
     Stores player-level game results.
 
-    This table supports future:
+    This table supports:
         - rolling form
         - player game logs
         - matchup history
         - trend features
-        - prediction training labels
+        - training labels
+        - game-level player prediction context
     """
 
     __tablename__ = "player_game_stats"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    __table_args__ = (
+        Index(
+            "idx_player_game_stats_player_season",
+            "player_id",
+            "season",
+        ),
+        Index(
+            "idx_player_game_stats_player_game",
+            "player_id",
+            "game_pk",
+        ),
+        Index(
+            "idx_player_game_stats_team_date",
+            "team_id",
+            "game_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     player_id: Mapped[int] = mapped_column(
         ForeignKey("players.id"),
@@ -1385,43 +1412,175 @@ class PlayerGameStat(Base):
         index=True,
     )
 
-    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True, index=True)
-    opponent_team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    player_name: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
-    team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    opponent_team_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    game_date: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
-    games_played: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    plate_appearances: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    at_bats: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    hits: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    doubles: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    triples: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    home_runs: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    rbi: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    walks: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    strikeouts: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    stolen_bases: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
 
-    innings_pitched: Mapped[float | None] = mapped_column(Float, nullable=True)
-    earned_runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    pitcher_strikeouts: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    walks_allowed: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    hits_allowed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    opponent_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
 
-    raw_game_stat_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    player_name: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
 
-    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    opponent_team_name: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    games_played: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    plate_appearances: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    at_bats: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    hits: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    doubles: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    triples: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    home_runs: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    runs: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    rbi: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    walks: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    strikeouts: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    stolen_bases: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    innings_pitched: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    earned_runs: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    pitcher_strikeouts: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    walks_allowed: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    hits_allowed: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    raw_game_stat_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    updated_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
     player: Mapped[Player] = relationship(
         back_populates="game_stats",
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
+    )
+
+    team: Mapped[Team | None] = relationship(
+        foreign_keys=[team_id],
+    )
+
+    opponent_team: Mapped[Team | None] = relationship(
+        foreign_keys=[opponent_team_id],
     )
 
 
@@ -1429,14 +1588,41 @@ class PitchEvent(Base):
     """
     Stores pitch-level event data.
 
-    This table supports future pitch modeling, pitch sequencing,
-    batter-vs-pitcher analysis, whiff modeling, and deep learning
-    sequence features.
+    This table supports:
+        - pitch modeling
+        - pitch sequencing
+        - batter-vs-pitcher analysis
+        - whiff modeling
+        - chase/contact modeling
+        - deep-learning sequence features
     """
 
     __tablename__ = "pitch_events"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    __table_args__ = (
+        Index(
+            "idx_pitch_events_pitcher_batter_game",
+            "pitcher_mlb_id",
+            "batter_mlb_id",
+            "game_pk",
+        ),
+        Index(
+            "idx_pitch_events_pitch_type_season",
+            "pitch_type",
+            "season",
+        ),
+        Index(
+            "idx_pitch_events_player_game",
+            "player_id",
+            "game_pk",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     player_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.id"),
@@ -1444,43 +1630,165 @@ class PitchEvent(Base):
         index=True,
     )
 
-    pitcher_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    batter_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    pitcher_mlb_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
-    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    batter_mlb_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    inning: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    inning_half: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
 
-    pitch_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    pitch_name: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
-    pitch_result: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    spin_rate: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    horizontal_break: Mapped[float | None] = mapped_column(Float, nullable=True)
-    vertical_break: Mapped[float | None] = mapped_column(Float, nullable=True)
+    season: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    balls: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    strikes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    outs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    game_date: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
-    is_swing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_whiff: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_called_strike: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_in_play: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    inning: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
 
-    raw_pitch_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inning_half: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+    )
 
-    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pitch_type: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    pitch_name: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    pitch_result: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    event_type: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    velocity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    spin_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    horizontal_break: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    vertical_break: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    balls: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    strikes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    outs: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    is_swing: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_whiff: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_called_strike: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_in_play: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    raw_pitch_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    updated_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
     player: Mapped[Player | None] = relationship(
         back_populates="pitch_events",
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
     )
 
 
@@ -1493,7 +1801,30 @@ class PlateAppearance(Base):
 
     __tablename__ = "plate_appearances"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    __table_args__ = (
+        Index(
+            "idx_plate_appearances_batter_pitcher_game",
+            "batter_mlb_id",
+            "pitcher_mlb_id",
+            "game_pk",
+        ),
+        Index(
+            "idx_plate_appearances_player_season",
+            "player_id",
+            "season",
+        ),
+        Index(
+            "idx_plate_appearances_event_type",
+            "event_type",
+            "season",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     player_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.id"),
@@ -1501,41 +1832,154 @@ class PlateAppearance(Base):
         index=True,
     )
 
-    batter_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    pitcher_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    batter_mlb_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
-    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pitcher_mlb_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    inning: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    inning_half: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
 
-    result: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    pitches_seen: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    balls: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    strikes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    outs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    season: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    is_hit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_home_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_walk: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_strikeout: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    is_rbi_event: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    game_date: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
-    rbi: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    total_bases: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    inning: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
 
-    raw_plate_appearance_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inning_half: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+    )
 
-    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    result: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    event_type: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    pitches_seen: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    balls: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    strikes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    outs: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    is_hit: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_home_run: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_walk: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_strikeout: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_rbi_event: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    rbi: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    total_bases: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    raw_plate_appearance_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    updated_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
     player: Mapped[Player | None] = relationship(
         back_populates="plate_appearances",
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
     )
 
 
@@ -1543,13 +1987,39 @@ class StatcastEvent(Base):
     """
     Stores Statcast event-level batted-ball and pitch outcome data.
 
-    This table is intended for future ML feature engineering and
-    deep learning sequence modeling.
+    This table is intended for:
+        - ML feature engineering
+        - xBA / xSLG / xwOBA modeling
+        - pitch-type split analysis
+        - deep learning sequence modeling
     """
 
     __tablename__ = "statcast_events"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    __table_args__ = (
+        Index(
+            "idx_statcast_events_batter_pitcher_game",
+            "batter_mlb_id",
+            "pitcher_mlb_id",
+            "game_pk",
+        ),
+        Index(
+            "idx_statcast_events_player_season",
+            "player_id",
+            "season",
+        ),
+        Index(
+            "idx_statcast_events_quality",
+            "launch_speed",
+            "launch_angle",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     player_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.id"),
@@ -1557,38 +2027,144 @@ class StatcastEvent(Base):
         index=True,
     )
 
-    batter_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    pitcher_mlb_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    batter_mlb_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), nullable=True, index=True)
-    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    game_date: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    pitcher_mlb_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    event_type: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    description: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
 
-    launch_speed: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    launch_angle: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    hit_distance: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    barrel: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    hard_hit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    expected_batting_average: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    expected_slugging: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    expected_woba: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    pitch_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    pitch_velocity: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    pitch_spin_rate: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    game_date: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
-    raw_statcast_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_type: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
 
-    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    description: Mapped[str | None] = mapped_column(
+        String(180),
+        nullable=True,
+    )
+
+    launch_speed: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    launch_angle: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    hit_distance: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    barrel: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    hard_hit: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    expected_batting_average: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    expected_slugging: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    expected_woba: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    pitch_type: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    pitch_velocity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    pitch_spin_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    raw_statcast_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    updated_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
     player: Mapped[Player | None] = relationship(
         back_populates="statcast_events",
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
     )
 
 
@@ -1596,13 +2172,40 @@ class PredictionResult(Base):
     """
     Stores model prediction outputs.
 
-    This table gives AISP2 an auditable record of predictions,
-    model versions, input features, confidence, and outcomes.
+    This table gives AISP2 an auditable record of:
+        - predictions
+        - model versions
+        - input features
+        - confidence
+        - actual outcomes
+        - future model evaluation
     """
 
     __tablename__ = "prediction_results"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    __table_args__ = (
+        Index(
+            "idx_prediction_results_player_outcome",
+            "player_id",
+            "outcome_key",
+        ),
+        Index(
+            "idx_prediction_results_team_game",
+            "team_id",
+            "game_id",
+        ),
+        Index(
+            "idx_prediction_results_model",
+            "model_name",
+            "model_version",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     player_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.id"),
@@ -1622,34 +2225,1178 @@ class PredictionResult(Base):
         index=True,
     )
 
-    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    game_pk: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    season: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    prediction_scope: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
-    prediction_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    outcome_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
 
-    probability: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    confidence: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
-    prediction_tier: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
-    risk_profile: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    prediction_scope: Mapped[str] = mapped_column(
+        String(80),
+        nullable=False,
+        index=True,
+    )
 
-    model_name: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    model_version: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    prediction_type: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
 
-    feature_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    explanation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    raw_prediction_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome_key: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
 
-    actual_result: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    was_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True, index=True)
+    probability: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
 
-    created_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
-    updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    confidence: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    prediction_tier: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    risk_profile: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    model_name: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    model_version: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    feature_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    explanation_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    raw_prediction_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    actual_result: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    was_correct: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        index=True,
+    )
+
+    created_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
+
+    updated_at: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        index=True,
+    )
 
     player: Mapped[Player | None] = relationship(
         back_populates="prediction_results",
     )
+
+    team: Mapped[Team | None] = relationship(
+        foreign_keys=[team_id],
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
+    )
+
+
+# ============================================================
+# SECTION 22 - ORM MAPPING VERIFICATION
+# FILE: 01_database/models.py
+# PURPOSE:
+# Verify SQLAlchemy model registration, relationship mappings,
+# table metadata, critical columns, prediction-readiness models,
+# and ingestion-readiness models without redesigning the schema.
+#
+# This section does not create new tables by itself.
+# It gives AISP2 a safe diagnostic layer so ingestion, chatbot,
+# warehouse, and prediction systems can prove the ORM is valid
+# before attempting database writes.
+# ============================================================
+
+EXPECTED_CORE_MODEL_NAMES = [
+    "Team",
+    "Player",
+    "RosterEntry",
+    "Game",
+]
+
+EXPECTED_STAT_MODEL_NAMES = [
+    "PlayerSeasonStat",
+    "PlayerAdvancedBattingStat",
+    "PlayerPercentileRanking",
+    "PlayerPitchArsenal",
+    "PlayerPitchTempo",
+    "PlayerBattedBallProfile",
+    "PlayerBattingStance",
+    "PlayerHomeRunProfile",
+    "TeamPlateDiscipline",
+    "RawDataImportLog",
+]
+
+EXPECTED_MEMORY_MODEL_NAMES = [
+    "ChatMemory",
+    "LearningSignal",
+    "TrainingExample",
+    "EntityAlias",
+    "UserFeedback",
+]
+
+EXPECTED_EVENT_AND_PREDICTION_MODEL_NAMES = [
+    "PlayerGameStat",
+    "PitchEvent",
+    "PlateAppearance",
+    "StatcastEvent",
+    "PredictionResult",
+]
+
+EXPECTED_MODEL_NAMES = (
+    EXPECTED_CORE_MODEL_NAMES
+    + EXPECTED_STAT_MODEL_NAMES
+    + EXPECTED_MEMORY_MODEL_NAMES
+    + EXPECTED_EVENT_AND_PREDICTION_MODEL_NAMES
+)
+
+
+# ============================================================
+# SECTION 22.01 - EXPECTED TABLE REGISTRY
+# ============================================================
+
+EXPECTED_CORE_TABLES = [
+    "teams",
+    "players",
+    "roster_entries",
+    "games",
+]
+
+EXPECTED_STAT_TABLES = [
+    "player_season_stats",
+    "player_advanced_batting_stats",
+    "player_percentile_rankings",
+    "player_pitch_arsenals",
+    "player_pitch_tempo",
+    "player_batted_ball_profiles",
+    "player_batting_stances",
+    "player_home_run_profiles",
+    "team_plate_discipline",
+    "raw_data_import_logs",
+]
+
+EXPECTED_MEMORY_TABLES = [
+    "chat_memory",
+    "learning_signals",
+    "training_examples",
+    "entity_aliases",
+    "user_feedback",
+]
+
+EXPECTED_EVENT_AND_PREDICTION_TABLES = [
+    "player_game_stats",
+    "pitch_events",
+    "plate_appearances",
+    "statcast_events",
+    "prediction_results",
+]
+
+EXPECTED_TABLES = (
+    EXPECTED_CORE_TABLES
+    + EXPECTED_STAT_TABLES
+    + EXPECTED_MEMORY_TABLES
+    + EXPECTED_EVENT_AND_PREDICTION_TABLES
+)
+
+
+# ============================================================
+# SECTION 22.02 - CRITICAL MODEL COLUMN REQUIREMENTS
+# ============================================================
+
+CRITICAL_MODEL_COLUMNS = {
+    "Team": [
+        "id",
+        "mlb_team_id",
+        "name",
+        "abbreviation",
+        "league",
+        "division",
+        "is_active",
+    ],
+    "Player": [
+        "id",
+        "mlb_player_id",
+        "full_name",
+        "position",
+        "current_team_id",
+        "active_status",
+    ],
+    "RosterEntry": [
+        "id",
+        "season",
+        "roster_type",
+        "team_id",
+        "player_id",
+    ],
+    "Game": [
+        "id",
+        "game_pk",
+        "season",
+        "home_team_id",
+        "away_team_id",
+        "home_team_name",
+        "away_team_name",
+    ],
+    "PlayerSeasonStat": [
+        "id",
+        "player_id",
+        "season",
+        "stat_group",
+        "hits",
+        "home_runs",
+        "strikeouts",
+        "batting_average",
+        "ops",
+    ],
+    "PlayerAdvancedBattingStat": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "plate_appearances",
+        "strikeout_percent",
+        "walk_percent",
+        "woba",
+        "expected_woba",
+        "barrel_batted_rate",
+        "hard_hit_percent",
+        "whiff_percent",
+    ],
+    "PlayerPercentileRanking": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "player_name",
+        "xwoba_percentile",
+        "barrel_percentile",
+        "hard_hit_percentile",
+        "whiff_percentile",
+        "chase_percentile",
+    ],
+    "PlayerPitchArsenal": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "pitch_type",
+        "pitch_name",
+        "average_velocity",
+        "whiff_percent",
+    ],
+    "PlayerPitchTempo": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "pitch_tempo",
+        "tempo_empty",
+        "tempo_runners_on",
+    ],
+    "PlayerBattedBallProfile": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "average_exit_velocity",
+        "max_exit_velocity",
+        "launch_angle",
+        "barrel_percent",
+        "hard_hit_percent",
+        "expected_woba",
+    ],
+    "PlayerBattingStance": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "player_name",
+        "bats",
+        "stance_side",
+    ],
+    "PlayerHomeRunProfile": [
+        "id",
+        "player_id",
+        "mlb_player_id",
+        "season",
+        "player_name",
+        "home_runs",
+        "average_home_run_distance",
+        "average_exit_velocity",
+    ],
+    "TeamPlateDiscipline": [
+        "id",
+        "team_id",
+        "mlb_team_id",
+        "season",
+        "team_name",
+        "zone_percent",
+        "chase_percent",
+        "whiff_percent",
+    ],
+    "RawDataImportLog": [
+        "id",
+        "source_file",
+        "source_category",
+        "rows_seen",
+        "rows_inserted",
+        "rows_updated",
+        "rows_skipped",
+        "status",
+    ],
+    "ChatMemory": [
+        "id",
+        "user_message",
+        "assistant_response",
+        "detected_intent",
+        "detected_task",
+        "detected_team",
+        "detected_player",
+        "detected_outcome",
+    ],
+    "LearningSignal": [
+        "id",
+        "chat_memory_id",
+        "signal_type",
+        "signal_status",
+        "intent",
+        "task",
+        "entity_type",
+        "entity_value",
+    ],
+    "TrainingExample": [
+        "id",
+        "chat_memory_id",
+        "input_text",
+        "target_intent",
+        "target_task",
+        "target_team",
+        "target_player",
+        "target_outcome",
+    ],
+    "EntityAlias": [
+        "id",
+        "entity_type",
+        "canonical_value",
+        "alias_value",
+        "usage_count",
+        "is_active",
+        "is_trusted",
+    ],
+    "UserFeedback": [
+        "id",
+        "chat_memory_id",
+        "feedback_type",
+        "feedback_value",
+    ],
+    "PlayerGameStat": [
+        "id",
+        "player_id",
+        "game_id",
+        "game_pk",
+        "season",
+        "game_date",
+        "hits",
+        "home_runs",
+        "rbi",
+        "strikeouts",
+    ],
+    "PitchEvent": [
+        "id",
+        "player_id",
+        "pitcher_mlb_id",
+        "batter_mlb_id",
+        "game_pk",
+        "season",
+        "pitch_type",
+        "velocity",
+        "spin_rate",
+        "is_swing",
+        "is_whiff",
+    ],
+    "PlateAppearance": [
+        "id",
+        "player_id",
+        "batter_mlb_id",
+        "pitcher_mlb_id",
+        "game_pk",
+        "season",
+        "result",
+        "event_type",
+        "is_hit",
+        "is_home_run",
+        "is_walk",
+        "is_strikeout",
+    ],
+    "StatcastEvent": [
+        "id",
+        "player_id",
+        "batter_mlb_id",
+        "pitcher_mlb_id",
+        "game_pk",
+        "season",
+        "event_type",
+        "launch_speed",
+        "launch_angle",
+        "expected_woba",
+    ],
+    "PredictionResult": [
+        "id",
+        "player_id",
+        "team_id",
+        "game_id",
+        "prediction_scope",
+        "prediction_type",
+        "outcome_key",
+        "probability",
+        "confidence",
+        "model_name",
+        "model_version",
+    ],
+}
+
+
+# ============================================================
+# SECTION 22.03 - CRITICAL RELATIONSHIP REQUIREMENTS
+# ============================================================
+
+CRITICAL_MODEL_RELATIONSHIPS = {
+    "Team": [
+        "players",
+        "roster_entries",
+        "home_games",
+        "away_games",
+    ],
+    "Player": [
+        "team",
+        "roster_entries",
+        "season_stats",
+        "advanced_batting_stats",
+        "game_stats",
+        "pitch_events",
+        "plate_appearances",
+        "statcast_events",
+        "prediction_results",
+    ],
+    "RosterEntry": [
+        "team",
+        "player",
+    ],
+    "PlayerSeasonStat": [
+        "player",
+    ],
+    "PlayerAdvancedBattingStat": [
+        "player",
+    ],
+    "ChatMemory": [
+        "learning_signals",
+        "training_examples",
+        "feedback_entries",
+    ],
+    "LearningSignal": [
+        "chat_memory",
+    ],
+    "TrainingExample": [
+        "chat_memory",
+    ],
+    "UserFeedback": [
+        "chat_memory",
+    ],
+    "Game": [
+        "home_team",
+        "away_team",
+    ],
+    "PlayerGameStat": [
+        "player",
+        "game",
+        "team",
+        "opponent_team",
+    ],
+    "PitchEvent": [
+        "player",
+        "game",
+    ],
+    "PlateAppearance": [
+        "player",
+        "game",
+    ],
+    "StatcastEvent": [
+        "player",
+        "game",
+    ],
+    "PredictionResult": [
+        "player",
+        "team",
+        "game",
+    ],
+}
+
+
+# ============================================================
+# SECTION 22.04 - MODEL REGISTRY HELPERS
+# ============================================================
+
+def get_model_class_by_name(
+    model_name: str,
+):
+    return globals().get(model_name)
+
+
+def get_available_model_names() -> list[str]:
+    return [
+        model_name
+        for model_name in EXPECTED_MODEL_NAMES
+        if get_model_class_by_name(model_name) is not None
+    ]
+
+
+def get_missing_model_names() -> list[str]:
+    return [
+        model_name
+        for model_name in EXPECTED_MODEL_NAMES
+        if get_model_class_by_name(model_name) is None
+    ]
+
+
+def get_metadata_table_names() -> list[str]:
+    return sorted(
+        Base.metadata.tables.keys(),
+    )
+
+
+def get_present_metadata_tables() -> list[str]:
+    metadata_tables = set(
+        get_metadata_table_names(),
+    )
+
+    return [
+        table_name
+        for table_name in EXPECTED_TABLES
+        if table_name in metadata_tables
+    ]
+
+
+def get_missing_metadata_tables() -> list[str]:
+    metadata_tables = set(
+        get_metadata_table_names(),
+    )
+
+    return [
+        table_name
+        for table_name in EXPECTED_TABLES
+        if table_name not in metadata_tables
+    ]
+
+
+# ============================================================
+# SECTION 22.05 - MODEL INSPECTION HELPERS
+# ============================================================
+
+def inspect_model_table_mapping(
+    model_name: str,
+) -> dict[str, object]:
+    model_class = get_model_class_by_name(
+        model_name,
+    )
+
+    if model_class is None:
+        return {
+            "model": model_name,
+            "exists": False,
+            "table_name": None,
+            "mapped": False,
+            "valid": False,
+            "error": "model_missing",
+        }
+
+    try:
+        table_name = model_class.__tablename__
+
+        mapped = table_name in Base.metadata.tables
+
+        return {
+            "model": model_name,
+            "exists": True,
+            "table_name": table_name,
+            "mapped": mapped,
+            "valid": mapped,
+            "error": None,
+        }
+
+    except Exception as error:
+        return {
+            "model": model_name,
+            "exists": True,
+            "table_name": None,
+            "mapped": False,
+            "valid": False,
+            "error": str(error),
+        }
+
+
+def inspect_model_columns(
+    model_name: str,
+) -> dict[str, object]:
+    model_class = get_model_class_by_name(
+        model_name,
+    )
+
+    if model_class is None:
+        return {
+            "model": model_name,
+            "exists": False,
+            "columns": [],
+            "required_columns": CRITICAL_MODEL_COLUMNS.get(model_name, []),
+            "missing_columns": CRITICAL_MODEL_COLUMNS.get(model_name, []),
+            "valid": False,
+            "error": "model_missing",
+        }
+
+    try:
+        mapper = model_class.__mapper__
+
+        columns = sorted(
+            mapper.columns.keys(),
+        )
+
+        required_columns = CRITICAL_MODEL_COLUMNS.get(
+            model_name,
+            [],
+        )
+
+        missing_columns = [
+            column_name
+            for column_name in required_columns
+            if column_name not in columns
+        ]
+
+        return {
+            "model": model_name,
+            "exists": True,
+            "columns": columns,
+            "required_columns": required_columns,
+            "missing_columns": missing_columns,
+            "valid": len(missing_columns) == 0,
+            "error": None,
+        }
+
+    except Exception as error:
+        return {
+            "model": model_name,
+            "exists": True,
+            "columns": [],
+            "required_columns": CRITICAL_MODEL_COLUMNS.get(model_name, []),
+            "missing_columns": CRITICAL_MODEL_COLUMNS.get(model_name, []),
+            "valid": False,
+            "error": str(error),
+        }
+
+
+def inspect_model_relationships(
+    model_name: str,
+) -> dict[str, object]:
+    model_class = get_model_class_by_name(
+        model_name,
+    )
+
+    if model_class is None:
+        return {
+            "model": model_name,
+            "exists": False,
+            "relationships": [],
+            "required_relationships": CRITICAL_MODEL_RELATIONSHIPS.get(model_name, []),
+            "missing_relationships": CRITICAL_MODEL_RELATIONSHIPS.get(model_name, []),
+            "valid": False,
+            "error": "model_missing",
+        }
+
+    try:
+        mapper = model_class.__mapper__
+
+        relationships = sorted(
+            mapper.relationships.keys(),
+        )
+
+        required_relationships = CRITICAL_MODEL_RELATIONSHIPS.get(
+            model_name,
+            [],
+        )
+
+        missing_relationships = [
+            relationship_name
+            for relationship_name in required_relationships
+            if relationship_name not in relationships
+        ]
+
+        return {
+            "model": model_name,
+            "exists": True,
+            "relationships": relationships,
+            "required_relationships": required_relationships,
+            "missing_relationships": missing_relationships,
+            "valid": len(missing_relationships) == 0,
+            "error": None,
+        }
+
+    except Exception as error:
+        return {
+            "model": model_name,
+            "exists": True,
+            "relationships": [],
+            "required_relationships": CRITICAL_MODEL_RELATIONSHIPS.get(model_name, []),
+            "missing_relationships": CRITICAL_MODEL_RELATIONSHIPS.get(model_name, []),
+            "valid": False,
+            "error": str(error),
+        }
+
+
+# ============================================================
+# SECTION 22.06 - SQLALCHEMY MAPPER CONFIGURATION
+# ============================================================
+
+def verify_sqlalchemy_mapper_configuration() -> dict[str, object]:
+    try:
+        from sqlalchemy.orm import configure_mappers
+
+        configure_mappers()
+
+        return {
+            "configured": True,
+            "valid": True,
+            "error": None,
+        }
+
+    except Exception as error:
+        return {
+            "configured": False,
+            "valid": False,
+            "error": str(error),
+        }
+
+
+# ============================================================
+# SECTION 22.07 - READINESS SCORING
+# ============================================================
+
+def calculate_orm_readiness_score(
+    missing_models: list[str],
+    missing_tables: list[str],
+    column_reports: dict[str, dict[str, object]],
+    relationship_reports: dict[str, dict[str, object]],
+    mapper_report: dict[str, object],
+) -> int:
+    score = 100
+
+    if not mapper_report.get("valid"):
+        score -= 40
+
+    score -= min(
+        len(missing_models) * 5,
+        25,
+    )
+
+    score -= min(
+        len(missing_tables) * 4,
+        20,
+    )
+
+    for report in column_reports.values():
+        if not report.get("valid"):
+            score -= 2
+
+    for report in relationship_reports.values():
+        if not report.get("valid"):
+            score -= 2
+
+    return max(
+        0,
+        min(score, 100),
+    )
+
+
+def classify_orm_readiness(
+    score: int,
+    mapper_valid: bool,
+) -> str:
+    if not mapper_valid:
+        return "blocked_mapper_configuration"
+
+    if score >= 95:
+        return "enterprise_ready"
+
+    if score >= 85:
+        return "ready_with_minor_warnings"
+
+    if score >= 70:
+        return "partial_ready"
+
+    if score >= 50:
+        return "needs_schema_attention"
+
+    return "not_ready"
+
+
+def build_database_system_readiness(
+    missing_models: list[str],
+    missing_tables: list[str],
+    mapper_report: dict[str, object],
+) -> dict[str, object]:
+    model_set = set(
+        get_available_model_names(),
+    )
+
+    table_set = set(
+        get_metadata_table_names(),
+    )
+
+    core_ready = all(
+        model_name in model_set
+        for model_name in EXPECTED_CORE_MODEL_NAMES
+    ) and all(
+        table_name in table_set
+        for table_name in EXPECTED_CORE_TABLES
+    )
+
+    stats_ready = all(
+        model_name in model_set
+        for model_name in EXPECTED_STAT_MODEL_NAMES
+    ) and all(
+        table_name in table_set
+        for table_name in EXPECTED_STAT_TABLES
+    )
+
+    memory_ready = all(
+        model_name in model_set
+        for model_name in EXPECTED_MEMORY_MODEL_NAMES
+    ) and all(
+        table_name in table_set
+        for table_name in EXPECTED_MEMORY_TABLES
+    )
+
+    event_prediction_ready = all(
+        model_name in model_set
+        for model_name in EXPECTED_EVENT_AND_PREDICTION_MODEL_NAMES
+    ) and all(
+        table_name in table_set
+        for table_name in EXPECTED_EVENT_AND_PREDICTION_TABLES
+    )
+
+    mapper_ready = bool(
+        mapper_report.get("valid"),
+    )
+
+    ingestion_ready = (
+        mapper_ready
+        and core_ready
+        and stats_ready
+    )
+
+    chatbot_ready = (
+        mapper_ready
+        and core_ready
+        and memory_ready
+    )
+
+    prediction_ready = (
+        mapper_ready
+        and core_ready
+        and stats_ready
+        and event_prediction_ready
+    )
+
+    return {
+        "mapper_ready": mapper_ready,
+        "core_ready": core_ready,
+        "stats_ready": stats_ready,
+        "memory_ready": memory_ready,
+        "event_prediction_ready": event_prediction_ready,
+        "ingestion_ready": ingestion_ready,
+        "chatbot_ready": chatbot_ready,
+        "prediction_ready": prediction_ready,
+        "missing_models": missing_models,
+        "missing_tables": missing_tables,
+    }
+
+
+# ============================================================
+# SECTION 22.08 - FULL ORM VERIFICATION REPORT
+# ============================================================
+
+def verify_orm_mappings() -> dict[str, object]:
+    mapper_report = verify_sqlalchemy_mapper_configuration()
+
+    available_models = get_available_model_names()
+    missing_models = get_missing_model_names()
+
+    present_tables = get_present_metadata_tables()
+    missing_tables = get_missing_metadata_tables()
+
+    table_mapping_reports = {
+        model_name: inspect_model_table_mapping(
+            model_name,
+        )
+        for model_name in EXPECTED_MODEL_NAMES
+    }
+
+    column_reports = {
+        model_name: inspect_model_columns(
+            model_name,
+        )
+        for model_name in EXPECTED_MODEL_NAMES
+    }
+
+    relationship_reports = {
+        model_name: inspect_model_relationships(
+            model_name,
+        )
+        for model_name in EXPECTED_MODEL_NAMES
+    }
+
+    readiness_score = calculate_orm_readiness_score(
+        missing_models=missing_models,
+        missing_tables=missing_tables,
+        column_reports=column_reports,
+        relationship_reports=relationship_reports,
+        mapper_report=mapper_report,
+    )
+
+    readiness_status = classify_orm_readiness(
+        score=readiness_score,
+        mapper_valid=bool(mapper_report.get("valid")),
+    )
+
+    system_readiness = build_database_system_readiness(
+        missing_models=missing_models,
+        missing_tables=missing_tables,
+        mapper_report=mapper_report,
+    )
+
+    failed_column_models = [
+        model_name
+        for model_name, report in column_reports.items()
+        if not report.get("valid")
+    ]
+
+    failed_relationship_models = [
+        model_name
+        for model_name, report in relationship_reports.items()
+        if not report.get("valid")
+    ]
+
+    failed_table_mappings = [
+        model_name
+        for model_name, report in table_mapping_reports.items()
+        if not report.get("valid")
+    ]
+
+    valid = (
+        bool(mapper_report.get("valid"))
+        and len(missing_models) == 0
+        and len(missing_tables) == 0
+        and len(failed_column_models) == 0
+        and len(failed_relationship_models) == 0
+        and len(failed_table_mappings) == 0
+    )
+
+    return {
+        "database_model_version": DATABASE_MODEL_VERSION,
+        "database_model_description": DATABASE_MODEL_DESCRIPTION,
+        "checked_at": utc_now().isoformat(),
+        "valid": valid,
+        "readiness_score": readiness_score,
+        "readiness_status": readiness_status,
+        "mapper": mapper_report,
+        "expected_model_count": len(EXPECTED_MODEL_NAMES),
+        "available_model_count": len(available_models),
+        "missing_model_count": len(missing_models),
+        "available_models": available_models,
+        "missing_models": missing_models,
+        "expected_table_count": len(EXPECTED_TABLES),
+        "present_table_count": len(present_tables),
+        "missing_table_count": len(missing_tables),
+        "present_tables": present_tables,
+        "missing_tables": missing_tables,
+        "failed_column_models": failed_column_models,
+        "failed_relationship_models": failed_relationship_models,
+        "failed_table_mappings": failed_table_mappings,
+        "table_mapping_reports": table_mapping_reports,
+        "column_reports": column_reports,
+        "relationship_reports": relationship_reports,
+        "system_readiness": system_readiness,
+        "next_required_action": (
+            "ORM mappings are valid. Run database initialization and then ingestion."
+            if valid
+            else "Fix missing models, missing tables, or mapper configuration errors before ingestion."
+        ),
+    }
+
+
+# ============================================================
+# SECTION 22.09 - HUMAN READABLE SUMMARY
+# ============================================================
+
+def build_orm_verification_summary(
+    report: dict[str, object] | None = None,
+) -> str:
+    report = report or verify_orm_mappings()
+
+    system_readiness = report.get(
+        "system_readiness",
+        {},
+    )
+
+    mapper = report.get(
+        "mapper",
+        {},
+    )
+
+    summary_lines = [
+        "AISP2 ORM Mapping Verification",
+        "=" * 42,
+        f"Valid: {report.get('valid')}",
+        f"Readiness Score: {report.get('readiness_score')}",
+        f"Readiness Status: {report.get('readiness_status')}",
+        f"Mapper Configured: {mapper.get('configured')}",
+        f"Expected Models: {report.get('expected_model_count')}",
+        f"Available Models: {report.get('available_model_count')}",
+        f"Missing Models: {report.get('missing_model_count')}",
+        f"Expected Tables: {report.get('expected_table_count')}",
+        f"Present Tables: {report.get('present_table_count')}",
+        f"Missing Tables: {report.get('missing_table_count')}",
+        "",
+        "System Readiness",
+        "-" * 42,
+        f"Core Ready: {system_readiness.get('core_ready')}",
+        f"Stats Ready: {system_readiness.get('stats_ready')}",
+        f"Memory Ready: {system_readiness.get('memory_ready')}",
+        f"Event/Prediction Ready: {system_readiness.get('event_prediction_ready')}",
+        f"Ingestion Ready: {system_readiness.get('ingestion_ready')}",
+        f"Chatbot Ready: {system_readiness.get('chatbot_ready')}",
+        f"Prediction Ready: {system_readiness.get('prediction_ready')}",
+    ]
+
+    if report.get("missing_models"):
+        summary_lines.append("")
+        summary_lines.append("Missing Models")
+        summary_lines.append("-" * 42)
+
+        for model_name in report["missing_models"]:
+            summary_lines.append(f"- {model_name}")
+
+    if report.get("missing_tables"):
+        summary_lines.append("")
+        summary_lines.append("Missing Tables")
+        summary_lines.append("-" * 42)
+
+        for table_name in report["missing_tables"]:
+            summary_lines.append(f"- {table_name}")
+
+    if mapper.get("error"):
+        summary_lines.append("")
+        summary_lines.append("Mapper Error")
+        summary_lines.append("-" * 42)
+        summary_lines.append(str(mapper.get("error")))
+
+    if report.get("failed_column_models"):
+        summary_lines.append("")
+        summary_lines.append("Failed Column Models")
+        summary_lines.append("-" * 42)
+
+        for model_name in report["failed_column_models"]:
+            summary_lines.append(f"- {model_name}")
+
+    if report.get("failed_relationship_models"):
+        summary_lines.append("")
+        summary_lines.append("Failed Relationship Models")
+        summary_lines.append("-" * 42)
+
+        for model_name in report["failed_relationship_models"]:
+            summary_lines.append(f"- {model_name}")
+
+    summary_lines.append("")
+    summary_lines.append("Next Required Action")
+    summary_lines.append("-" * 42)
+    summary_lines.append(str(report.get("next_required_action")))
+
+    return "\n".join(summary_lines)
+
+
+def print_orm_verification_report() -> dict[str, object]:
+    report = verify_orm_mappings()
+
+    print(
+        build_orm_verification_summary(
+            report,
+        )
+    )
+
+    return report
+
+
+# ============================================================
+# SECTION 23 - LOCAL MODEL VERIFICATION ENTRYPOINT
+# FILE: 01_database/models.py
+# PURPOSE:
+# Allows direct local model verification with:
+#
+#     python 01_database/models.py
+#
+# This does not create tables. It only verifies mapper health,
+# metadata registration, and readiness for ingestion.
+# ============================================================
+
+if __name__ == "__main__":
+    print_orm_verification_report()
     # ============================================================
     # SECTION 22 - ORM MAPPING VERIFICATION
     # FILE: 01_database/models.py
