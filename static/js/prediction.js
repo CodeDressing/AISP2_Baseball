@@ -10,11 +10,19 @@
 /* ============================================================
    SECTION 01 - PREDICTION STATE
    ============================================================ */
+/* ============================================================
+   SECTION 01 - ENTERPRISE PREDICTION STATE
+   FILE: static/js/prediction.js
+   PURPOSE: runtime state for live prediction endpoint,
+   prediction workbench controls, model response rendering,
+   and safe fallback behavior.
+   ============================================================ */
 
 const AISP2_PREDICTION_STATE = {
     initialized: false,
     isRunning: false,
-    endpoint: "/api/demo/prediction",
+    endpoint: "/predict/player",
+    method: "POST",
     lastPrediction: null
 };
 
@@ -76,30 +84,128 @@ function getPredictionButton() {
    SECTION 04 - EVENT BINDING
    ============================================================ */
 
+/* ============================================================
+   SECTION 04 - ENTERPRISE EVENT BINDING
+   FILE: static/js/prediction.js
+   PURPOSE: bind Run Prediction button, optional form submit,
+   team selector changes, reset behavior, and prevent duplicate
+   event binding across hot reloads or page reinitialization.
+   ============================================================ */
+
 function bindPredictionEvents() {
 
     const form = getPredictionForm();
 
-    if (form) {
+    if (form && !form.dataset.aisp2Bound) {
 
         form.addEventListener(
             "submit",
             handlePredictionSubmit
         );
+
+        form.dataset.aisp2Bound = "true";
+    }
+
+    const predictionButton = getPredictionButton();
+
+    if (predictionButton && !predictionButton.dataset.aisp2Bound) {
+
+        predictionButton.addEventListener(
+            "click",
+            function(event) {
+
+                event.preventDefault();
+
+                runPrediction();
+            }
+        );
+
+        predictionButton.dataset.aisp2Bound = "true";
     }
 
     const teamSelector = getTeamSelector();
 
-    if (teamSelector) {
+    if (teamSelector && !teamSelector.dataset.aisp2Bound) {
 
         teamSelector.addEventListener(
             "change",
             handleTeamChange
         );
+
+        teamSelector.dataset.aisp2Bound = "true";
+    }
+
+    const resetButton =
+        document.querySelector("[data-prediction-reset]");
+
+    if (resetButton && !resetButton.dataset.aisp2Bound) {
+
+        resetButton.addEventListener(
+            "click",
+            function(event) {
+
+                event.preventDefault();
+
+                resetPredictionWorkbench();
+            }
+        );
+
+        resetButton.dataset.aisp2Bound = "true";
     }
 }
 
 
+function resetPredictionWorkbench() {
+
+    AISP2_PREDICTION_STATE.lastPrediction = null;
+
+    setTextIfExists(
+        "[data-result-player]",
+        "Selected Player"
+    );
+
+    setTextIfExists(
+        "[data-result-outcome]",
+        "Selected Outcome"
+    );
+
+    setTextIfExists(
+        "[data-result-probability]",
+        "0%"
+    );
+
+    setTextIfExists(
+        "[data-result-confidence]",
+        "Confidence Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-tier]",
+        "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-risk]",
+        "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-profile]",
+        "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-supporting-metric]",
+        "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-ai-explanation]",
+        "Select a player and outcome to generate AISP2 prediction intelligence."
+    );
+
+    clearPredictionResultNotice();
+}
 /* ============================================================
    SECTION 05 - FORM SUBMISSION
    ============================================================ */
@@ -196,26 +302,29 @@ function collectPredictionPayload() {
    SECTION 09 - API REQUEST
    ============================================================ */
 
+/* ============================================================
+   SECTION 09 - ENTERPRISE PREDICTION API REQUEST
+   FILE: static/js/prediction.js
+   PURPOSE: send selected team, player, and outcome to the real
+   backend prediction endpoint and return structured model output.
+   ============================================================ */
+
 async function fetchPredictionResult(payload) {
-
-    const params =
-        new URLSearchParams();
-
-    if (payload.team) {
-        params.set("team", payload.team);
-    }
-
-    if (payload.player) {
-        params.set("player", payload.player);
-    }
-
-    if (payload.outcome) {
-        params.set("outcome", payload.outcome);
-    }
 
     const response =
         await fetch(
-            AISP2_PREDICTION_STATE.endpoint + "?" + params.toString()
+            AISP2_PREDICTION_STATE.endpoint,
+            {
+                method: AISP2_PREDICTION_STATE.method,
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    team: payload.team || "",
+                    player: payload.player || "",
+                    outcome: payload.outcome || "home_run"
+                })
+            }
         );
 
     let data = {};
@@ -237,6 +346,7 @@ async function fetchPredictionResult(payload) {
         throw new Error(
             data.detail ||
             data.error ||
+            data.message ||
             "Prediction request failed."
         );
     }
@@ -244,12 +354,33 @@ async function fetchPredictionResult(payload) {
     return data;
 }
 
-
 /* ============================================================
    SECTION 10 - RENDER RESULT
    ============================================================ */
+/* ============================================================
+   SECTION 10 - ENTERPRISE PREDICTION RESULT RENDERER
+   FILE: static/js/prediction.js
+   PURPOSE: render probability, confidence, model name, risk,
+   outcome profile, primary metric, and AI explanation from
+   backend prediction responses.
+   ============================================================ */
 
 function renderPredictionResult(result) {
+
+    const prediction =
+        result.prediction || {};
+
+    const outcome =
+        result.outcome || {};
+
+    const team =
+        result.team || {};
+
+    const supportingContext =
+        result.supporting_context || {};
+
+    const intelligence =
+        result.intelligence || {};
 
     setTextIfExists(
         "[data-result-player]",
@@ -258,51 +389,77 @@ function renderPredictionResult(result) {
 
     setTextIfExists(
         "[data-result-team]",
-        result.team?.name || "Unknown Team"
+        team.name || result.team || "Unknown Team"
     );
 
     setTextIfExists(
         "[data-result-outcome]",
-        result.outcome?.label || "Unknown Outcome"
+        outcome.label || "Unknown Outcome"
     );
 
     setTextIfExists(
         "[data-result-probability]",
         formatPercent(
-            result.prediction?.estimated_probability
+            prediction.estimated_probability
         )
     );
 
     setTextIfExists(
         "[data-result-confidence]",
         formatPercent(
-            result.prediction?.confidence
+            prediction.confidence
         )
     );
 
     setTextIfExists(
         "[data-result-model]",
-        result.prediction?.model || "AISP2 Demo Model"
+        prediction.model || "AISP2 Baseline Model"
     );
 
     setTextIfExists(
         "[data-result-style]",
-        result.supporting_context?.player_style || "Pending"
+        supportingContext.player_style || "Warehouse Baseline"
     );
 
     setTextIfExists(
         "[data-result-form]",
-        result.supporting_context?.recent_form || "Pending"
+        supportingContext.recent_form || "Pending"
     );
 
     setTextIfExists(
         "[data-result-metric]",
-        result.supporting_context?.primary_metric || "Pending"
+        supportingContext.primary_metric || "Feature Score"
+    );
+
+    setTextIfExists(
+        "[data-result-tier]",
+        prediction.tier || intelligence.tier || "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-risk]",
+        prediction.risk_profile || intelligence.risk_profile || "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-profile]",
+        intelligence.outcome_profile || supportingContext.player_style || "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-supporting-metric]",
+        intelligence.primary_metric || supportingContext.primary_metric || "Pending"
+    );
+
+    setTextIfExists(
+        "[data-result-ai-explanation]",
+        intelligence.ai_explanation ||
+        supportingContext.ai_explanation ||
+        "AISP2 generated a baseline prediction from currently available player and warehouse context."
     );
 
     setPredictionResultVisible(true);
 }
-
 
 /* ============================================================
    SECTION 11 - RENDER ERROR

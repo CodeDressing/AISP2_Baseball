@@ -1254,7 +1254,506 @@ def system_info() -> dict:
         "source_control": "GitHub",
     }
 
+# ============================================================
+# SECTION 12.90 - ENTERPRISE PLAYER PREDICTION RUNTIME API
+# FILE: main.py
+# PURPOSE:
+# Provide the real backend endpoint used by the Prediction
+# Workbench "Run Prediction" button.
+#
+# This endpoint is intentionally baseline-first:
+# - Uses warehouse/player knowledge when available.
+# - Falls back to conservative MLB baseline probabilities when
+#   Statcast warehouse data is incomplete.
+# - Returns the exact response shape expected by prediction.js.
+# - Does not pretend deep learning is active yet.
+# ============================================================
 
+class PlayerPredictionRequest(BaseModel):
+    team: str | None = None
+    player: str | None = None
+    outcome: str | None = "home_run"
+    season: int | None = None
+
+
+PREDICTION_OUTCOME_LABELS = {
+    "home_run": "Home Run Probability",
+    "hit": "Hit Probability",
+    "rbi": "RBI Probability",
+    "run": "Run Scored Probability",
+    "run_scored": "Run Scored Probability",
+    "total_bases": "Total Bases Probability",
+    "strikeout": "Strikeout Probability",
+    "walk": "Walk Probability",
+}
+
+
+PREDICTION_BASELINES = {
+    "home_run": 4,
+    "hit": 62,
+    "rbi": 28,
+    "run": 34,
+    "run_scored": 34,
+    "total_bases": 48,
+    "strikeout": 22,
+    "walk": 8,
+}
+
+
+def normalize_prediction_outcome(
+    outcome: str | None,
+) -> str:
+    if not outcome:
+        return "home_run"
+
+    cleaned = (
+        str(outcome)
+        .lower()
+        .strip()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
+
+    aliases = {
+        "hr": "home_run",
+        "homer": "home_run",
+        "home_runs": "home_run",
+        "home_run_probability": "home_run",
+        "hits": "hit",
+        "hit_probability": "hit",
+        "runs_batted_in": "rbi",
+        "run_batted_in": "rbi",
+        "run_scored": "run_scored",
+        "runs": "run_scored",
+        "tb": "total_bases",
+        "total_base": "total_bases",
+        "total_bases_probability": "total_bases",
+        "strikeouts": "strikeout",
+        "k": "strikeout",
+        "ks": "strikeout",
+        "walks": "walk",
+        "bb": "walk",
+    }
+
+    return aliases.get(
+        cleaned,
+        cleaned if cleaned in PREDICTION_BASELINES else "home_run",
+    )
+
+
+def clamp_prediction_number(
+    value: float,
+    minimum: float = 0,
+    maximum: float = 100,
+) -> float:
+    return max(
+        minimum,
+        min(
+            maximum,
+            value,
+        ),
+    )
+
+
+def get_prediction_tier(
+    probability: float,
+) -> str:
+    if probability >= 75:
+        return "High"
+
+    if probability >= 55:
+        return "Moderate"
+
+    if probability >= 35:
+        return "Speculative"
+
+    if probability >= 15:
+        return "Longshot"
+
+    return "Low Probability"
+
+
+def get_prediction_risk_profile(
+    probability: float,
+    confidence: float,
+    data_coverage: float,
+) -> str:
+    if data_coverage < 35:
+        return "High data risk"
+
+    if confidence < 45:
+        return "Low confidence"
+
+    if probability >= 65:
+        return "Aggressive"
+
+    if probability >= 40:
+        return "Moderate"
+
+    return "High variance"
+
+
+def safe_prediction_number(
+    value,
+    fallback: float = 0,
+) -> float:
+    try:
+        if value is None:
+            return fallback
+
+        return float(value)
+
+    except Exception:
+        return fallback
+
+
+def calculate_baseline_prediction_probability(
+    outcome_key: str,
+    feature_context: dict,
+) -> dict:
+    feature_vector = (
+        feature_context.get("feature_vector", {})
+        if isinstance(feature_context, dict)
+        else {}
+    )
+
+    availability = (
+        feature_context.get("availability", {})
+        if isinstance(feature_context, dict)
+        else {}
+    )
+
+    data_coverage = safe_prediction_number(
+        availability.get("coverage_percent"),
+        fallback=safe_prediction_number(
+            feature_vector.get("data_coverage_score"),
+            fallback=0,
+        ),
+    )
+
+    power_score = safe_prediction_number(
+        feature_vector.get("power_score"),
+        fallback=50,
+    )
+
+    contact_score = safe_prediction_number(
+        feature_vector.get("contact_score"),
+        fallback=50,
+    )
+
+    discipline_score = safe_prediction_number(
+        feature_vector.get("discipline_score"),
+        fallback=50,
+    )
+
+    batted_ball_score = safe_prediction_number(
+        feature_vector.get("batted_ball_score"),
+        fallback=50,
+    )
+
+    percentile_score = safe_prediction_number(
+        feature_vector.get("statcast_percentile_score"),
+        fallback=50,
+    )
+
+    overall_score = safe_prediction_number(
+        feature_vector.get("overall_feature_score"),
+        fallback=50,
+    )
+
+    baseline = PREDICTION_BASELINES.get(
+        outcome_key,
+        PREDICTION_BASELINES["home_run"],
+    )
+
+    if outcome_key == "home_run":
+        model_score = (
+            power_score * 0.42
+            + batted_ball_score * 0.28
+            + percentile_score * 0.20
+            + data_coverage * 0.10
+        )
+
+        probability = baseline + (model_score * 0.30)
+
+    elif outcome_key == "hit":
+        model_score = (
+            contact_score * 0.45
+            + discipline_score * 0.20
+            + batted_ball_score * 0.20
+            + data_coverage * 0.15
+        )
+
+        probability = 38 + (model_score * 0.42)
+
+    elif outcome_key == "total_bases":
+        model_score = (
+            power_score * 0.30
+            + contact_score * 0.25
+            + batted_ball_score * 0.30
+            + data_coverage * 0.15
+        )
+
+        probability = 25 + (model_score * 0.45)
+
+    elif outcome_key == "rbi":
+        model_score = (
+            power_score * 0.35
+            + contact_score * 0.20
+            + overall_score * 0.25
+            + data_coverage * 0.20
+        )
+
+        probability = 15 + (model_score * 0.45)
+
+    elif outcome_key in ["run", "run_scored"]:
+        model_score = (
+            contact_score * 0.30
+            + discipline_score * 0.30
+            + overall_score * 0.20
+            + data_coverage * 0.20
+        )
+
+        probability = 18 + (model_score * 0.45)
+
+    elif outcome_key == "walk":
+        model_score = (
+            discipline_score * 0.65
+            + data_coverage * 0.35
+        )
+
+        probability = 3 + (model_score * 0.18)
+
+    elif outcome_key == "strikeout":
+        model_score = (
+            discipline_score * 0.45
+            + percentile_score * 0.35
+            + data_coverage * 0.20
+        )
+
+        probability = 8 + (model_score * 0.30)
+
+    else:
+        model_score = overall_score
+        probability = baseline + (model_score * 0.25)
+
+    probability = clamp_prediction_number(
+        round(probability, 1),
+        0,
+        99,
+    )
+
+    confidence = clamp_prediction_number(
+        round(35 + (data_coverage * 0.35) + (model_score * 0.25), 1),
+        25,
+        92,
+    )
+
+    return {
+        "probability": probability,
+        "confidence": confidence,
+        "model_score": round(model_score, 2),
+        "data_coverage": round(data_coverage, 2),
+    }
+
+
+def build_prediction_supporting_context(
+    outcome_key: str,
+    feature_context: dict,
+    probability_result: dict,
+) -> dict:
+    outcome_label = PREDICTION_OUTCOME_LABELS.get(
+        outcome_key,
+        "Prediction",
+    )
+
+    feature_vector = feature_context.get("feature_vector", {}) or {}
+
+    if outcome_key == "home_run":
+        player_style = "Power profile"
+        primary_metric = "Power score, barrel profile, exit velocity"
+        recent_form = "Warehouse-backed power context"
+
+    elif outcome_key == "hit":
+        player_style = "Contact profile"
+        primary_metric = "Contact score, xBA, xwOBA"
+        recent_form = "Warehouse-backed contact context"
+
+    elif outcome_key == "total_bases":
+        player_style = "Slugging profile"
+        primary_metric = "Batted-ball score, xSLG, OPS"
+        recent_form = "Warehouse-backed slugging context"
+
+    elif outcome_key == "strikeout":
+        player_style = "Swing-and-miss profile"
+        primary_metric = "Whiff, chase, strikeout indicators"
+        recent_form = "Warehouse-backed plate-discipline context"
+
+    else:
+        player_style = "General player outcome profile"
+        primary_metric = "Overall feature score"
+        recent_form = "Warehouse-backed baseline context"
+
+    ai_explanation = (
+        f"{outcome_label} is being calculated with the AISP2 baseline "
+        f"warehouse model. The current probability is based on loaded player "
+        f"identity, roster data, and any available warehouse feature scores. "
+        f"Model score: {probability_result.get('model_score')}. "
+        f"Data coverage: {probability_result.get('data_coverage')}%."
+    )
+
+    return {
+        "player_style": player_style,
+        "recent_form": recent_form,
+        "primary_metric": primary_metric,
+        "feature_vector": feature_vector,
+        "ai_explanation": ai_explanation,
+    }
+
+
+def build_player_prediction_payload(
+    team: str | None,
+    player: str | None,
+    outcome: str | None,
+    season: int | None = None,
+) -> dict:
+    selected_player = player or "Selected Player"
+    selected_team = team or "Selected Team"
+    outcome_key = normalize_prediction_outcome(outcome)
+
+    feature_context = {}
+
+    try:
+        from baseball.player_knowledge import build_prediction_feature_context
+
+        feature_context = build_prediction_feature_context(
+            player_name=selected_player,
+            outcome=outcome_key,
+            season=season,
+        )
+
+    except Exception as error:
+        feature_context = {
+            "ready": False,
+            "status": "player_knowledge_unavailable",
+            "error": str(error),
+            "player_name": selected_player,
+            "team": {
+                "name": selected_team,
+            },
+            "feature_vector": {},
+            "availability": {
+                "coverage_percent": 0,
+            },
+            "quality_notes": [
+                "Player knowledge layer could not be loaded. Using conservative baseline.",
+            ],
+        }
+
+    probability_result = calculate_baseline_prediction_probability(
+        outcome_key=outcome_key,
+        feature_context=feature_context,
+    )
+
+    probability = probability_result["probability"]
+    confidence = probability_result["confidence"]
+
+    team_payload = feature_context.get("team") or {
+        "name": selected_team,
+    }
+
+    if isinstance(team_payload, str):
+        team_payload = {
+            "name": team_payload,
+        }
+
+    supporting_context = build_prediction_supporting_context(
+        outcome_key=outcome_key,
+        feature_context=feature_context,
+        probability_result=probability_result,
+    )
+
+    tier = get_prediction_tier(
+        probability,
+    )
+
+    risk_profile = get_prediction_risk_profile(
+        probability=probability,
+        confidence=confidence,
+        data_coverage=probability_result["data_coverage"],
+    )
+
+    return {
+        "status": "ready",
+        "player": feature_context.get("player_name") or selected_player,
+        "team": team_payload,
+        "outcome": {
+            "key": outcome_key,
+            "label": PREDICTION_OUTCOME_LABELS.get(
+                outcome_key,
+                "Prediction",
+            ),
+        },
+        "prediction": {
+            "estimated_probability": probability,
+            "confidence": confidence,
+            "model": "AISP2 Baseline Warehouse Model",
+            "model_version": "phase_12_runtime_baseline_v1",
+            "tier": tier,
+            "risk_profile": risk_profile,
+            "data_coverage": probability_result["data_coverage"],
+            "model_score": probability_result["model_score"],
+        },
+        "supporting_context": supporting_context,
+        "intelligence": {
+            "tier": tier,
+            "risk_profile": risk_profile,
+            "outcome_profile": supporting_context["player_style"],
+            "primary_metric": supporting_context["primary_metric"],
+            "ai_explanation": supporting_context["ai_explanation"],
+            "quality_notes": feature_context.get("quality_notes", []),
+            "model_guidance": feature_context.get(
+                "model_guidance",
+                "Baseline prediction generated.",
+            ),
+        },
+        "data_status": {
+            "player_knowledge_status": feature_context.get("status"),
+            "player_knowledge_ready": feature_context.get("ready", False),
+            "warehouse_data_available": probability_result["data_coverage"] > 0,
+        },
+        "disclaimer": (
+            "AISP2 predictions are statistical estimates only. They are not guarantees, "
+            "gambling advice, financial advice, or recommendations."
+        ),
+    }
+
+
+@app.post("/predict/player")
+def predict_player_post(
+    request: PlayerPredictionRequest,
+) -> dict:
+    return build_player_prediction_payload(
+        team=request.team,
+        player=request.player,
+        outcome=request.outcome,
+        season=request.season,
+    )
+
+
+@app.get("/predict/player")
+def predict_player_get(
+    team: str | None = None,
+    player: str | None = None,
+    outcome: str | None = "home_run",
+    season: int | None = None,
+) -> dict:
+    return build_player_prediction_payload(
+        team=team,
+        player=player,
+        outcome=outcome,
+        season=season,
+    )
 # ============================================================
 # SECTION 13 - PROJECT ENDPOINTS
 # ============================================================
