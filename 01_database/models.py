@@ -232,34 +232,24 @@ class Team(Base):
 # ============================================================
 # SECTION 03 - PLAYER MODEL
 # ============================================================
+# ============================================================
+# SECTION 03 - PLAYER MODEL
+# ============================================================
 
 class Player(Base):
     """
     Stores one MLB player.
 
-    This table serves as the central player record used by every
-    subsystem throughout AISP2 Baseball.
-
-    Current Consumers
-    -----------------
-    • Team Rosters
-    • Schedule Engine
-    • Game Engine
-    • Season Statistics
-    • Advanced Statistics
-    • Prediction Engine
-    • AI Chatbot
-    • Semantic Search
-    • Future Statcast Integration
-    • Future Betting Models
-    • Future Machine Learning Pipelines
+    This table serves as the central player record used by:
+        - roster ingestion
+        - team-player relationships
+        - player search
+        - player statistics
+        - prediction features
+        - future model training
     """
 
     __tablename__ = "players"
-
-    # --------------------------------------------------------
-    # PRIMARY KEY
-    # --------------------------------------------------------
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -273,10 +263,6 @@ class Player(Base):
         nullable=False,
         index=True,
     )
-
-    # --------------------------------------------------------
-    # PLAYER IDENTITY
-    # --------------------------------------------------------
 
     full_name: Mapped[str] = mapped_column(
         String(120),
@@ -299,10 +285,6 @@ class Player(Base):
         nullable=True,
     )
 
-    # --------------------------------------------------------
-    # POSITION
-    # --------------------------------------------------------
-
     position: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
@@ -313,10 +295,6 @@ class Player(Base):
         String(20),
         nullable=True,
     )
-
-    # --------------------------------------------------------
-    # PLAYER ATTRIBUTES
-    # --------------------------------------------------------
 
     bats: Mapped[str | None] = mapped_column(
         String(10),
@@ -337,10 +315,6 @@ class Player(Base):
         Integer,
         nullable=True,
     )
-
-    # --------------------------------------------------------
-    # BIRTH INFORMATION
-    # --------------------------------------------------------
 
     birth_date: Mapped[str | None] = mapped_column(
         String(30),
@@ -374,19 +348,11 @@ class Player(Base):
         index=True,
     )
 
-    # --------------------------------------------------------
-    # TEAM RELATIONSHIP
-    # --------------------------------------------------------
-
     current_team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id"),
         nullable=True,
         index=True,
     )
-
-    # --------------------------------------------------------
-    # RELATIONSHIPS
-    # --------------------------------------------------------
 
     team: Mapped[Team | None] = relationship(
         back_populates="players",
@@ -401,28 +367,6 @@ class Player(Base):
     )
 
     advanced_batting_stats: Mapped[list["PlayerAdvancedBattingStat"]] = relationship(
-        back_populates="player",
-    )
-
-    # Reserved for upcoming phases
-
-    game_stats: Mapped[list["PlayerGameStat"]] = relationship(
-        back_populates="player",
-    )
-
-    pitch_events: Mapped[list["PitchEvent"]] = relationship(
-        back_populates="player",
-    )
-
-    plate_appearances: Mapped[list["PlateAppearance"]] = relationship(
-        back_populates="player",
-    )
-
-    statcast_events: Mapped[list["StatcastEvent"]] = relationship(
-        back_populates="player",
-    )
-
-    prediction_results: Mapped[list["PredictionResult"]] = relationship(
         back_populates="player",
     )
 # ============================================================
