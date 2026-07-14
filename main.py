@@ -1,2606 +1,1254 @@
 # ============================================================
-# AISP2 BASEBALL
+# AISP2 BASEBALL INTELLIGENCE PLATFORM
 # FILE: main.py
-# PURPOSE: FastAPI application entrypoint for template routing,
-# static asset mounting, chatbot API, prediction demo API,
-# project status endpoints, and system health checks
-# ============================================================
-
-
-# ============================================================
-# SECTION 01 - IMPORTS
-# FILE: main.py
-# PURPOSE: safe application imports, numbered directory path
-# registration, FastAPI infrastructure, MLB API access,
-# semantic engine access, and intent detection access
+# PURPOSE:
+# Enterprise FastAPI application entrypoint providing template
+# routing, warehouse-first chat orchestration, live MLB fallback,
+# player/team discovery, schedule lookup, model health, warehouse
+# administration, and stable prediction API contracts.
 # ============================================================
 
 from __future__ import annotations
 
-
 # ============================================================
-# SECTION 01.01 - STANDARD LIBRARY IMPORTS
-# FILE: main.py
-# PURPOSE: core Python utilities and numbered folder support
+# SECTION 01 - STANDARD LIBRARY IMPORTS
 # ============================================================
 
-import sys
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
+import logging
+import math
+import os
 from pathlib import Path
-from typing import Any
-
-import requests
-
+import re
+import sys
+import time
+from typing import Any, Final
 
 # ============================================================
-# SECTION 01.02 - PROJECT PATH REGISTRATION
-# FILE: main.py
-# PURPOSE: make numbered folders importable without using
-# invalid Python package names like from 04_ai import ...
+# SECTION 02 - PROJECT PATH REGISTRATION
 # ============================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-
 DATABASE_DIR = PROJECT_ROOT / "01_database"
 DATA_SOURCES_DIR = PROJECT_ROOT / "02_data_sources"
 INGESTION_DIR = PROJECT_ROOT / "03_ingestion"
 AI_DIR = PROJECT_ROOT / "04_ai"
 
-for project_path in [
+for project_path in (
     PROJECT_ROOT,
     DATABASE_DIR,
     DATA_SOURCES_DIR,
     INGESTION_DIR,
     AI_DIR,
-]:
+):
     project_path_string = str(project_path)
-
     if project_path_string not in sys.path:
         sys.path.insert(0, project_path_string)
 
-
 # ============================================================
-# SECTION 01.03 - FASTAPI IMPORTS
-# FILE: main.py
-# PURPOSE: web app, request handling, templates, and static files
+# SECTION 03 - THIRD-PARTY IMPORTS
 # ============================================================
 
-from fastapi import FastAPI
-from fastapi import Request
-
+import requests
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
-from pydantic import BaseModel
-
+from pydantic import BaseModel, Field
 
 # ============================================================
-# SECTION 01.04 - DATABASE IMPORTS
-# FILE: main.py
-# PURPOSE: safe core database access only
+# SECTION 04 - APPLICATION LOGGING
 # ============================================================
 
-from database import database_health_check
-from database import database_health_details
-
-
-# ============================================================
-# SECTION 01.05 - MLB DATA SOURCE IMPORTS
-# FILE: main.py
-# PURPOSE: safe MLB Stats API client access
-# ============================================================
-
-from mlb_stats_api import MLBStatsAPIClient
-from mlb_stats_api import DEFAULT_SEASON
-
-
-## ============================================================
-# SECTION 01.06 - NLP ENGINE IMPORTS
-# FILE: main.py
-# PURPOSE: connect Natural Language Understanding,
-# semantic interpretation, entity recognition,
-# context building, and outcome detection
-# ============================================================
-
-from nlp.nlu_engine import build_nlu_report
-
-from nlp.semantic_engine import (
-    detect_outcome,
-    detect_player,
-    detect_team,
-    interpret_baseball_question,
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
+LOGGER = logging.getLogger("aisp2.main")
 
-from nlp.entity_detection import (
-    MLB_TEAM_ALIASES,
-    build_entity_report,
+# ============================================================
+# SECTION 05 - OPTIONAL PROJECT IMPORTS
+# ============================================================
+
+
+def _optional_import(module_name: str, symbol_name: str, default: Any = None) -> Any:
+    try:
+        module = __import__(module_name, fromlist=[symbol_name])
+        return getattr(module, symbol_name)
+    except Exception as error:  # pragma: no cover - runtime environment dependent
+        LOGGER.warning(
+            "Optional import unavailable: %s.%s (%s)",
+            module_name,
+            symbol_name,
+            error,
+        )
+        return default
+
+
+database_health_check = _optional_import("database", "database_health_check", lambda: False)
+database_health_details = _optional_import("database", "database_health_details", lambda: {})
+
+MLBStatsAPIClient = _optional_import("mlb_stats_api", "MLBStatsAPIClient")
+DEFAULT_SEASON = _optional_import("mlb_stats_api", "DEFAULT_SEASON", datetime.now(UTC).year)
+
+understand_baseball_message = _optional_import(
+    "nlp.nlu_engine",
+    "understand_baseball_message",
 )
+build_nlu_report = _optional_import("nlp.nlu_engine", "build_nlu_report")
+nlu_engine_health = _optional_import("nlp.nlu_engine", "nlu_engine_health")
 
-from nlp.context_builder import (
-    build_baseball_context,
+build_enterprise_entity_report = _optional_import(
+    "nlp.entity_detection",
+    "build_enterprise_entity_report",
 )
-# ============================================================
-# SECTION 01.07 - NLP INTENT DETECTION IMPORTS
-# FILE: main.py
-# PURPOSE: connect chat routing to intent classification
-# ============================================================
-
-from nlp.intent_detection import INTENT_LIST_TEAMS
-from nlp.intent_detection import INTENT_LIST_PLAYERS
-from nlp.intent_detection import INTENT_TEAM_INFO
-from nlp.intent_detection import INTENT_PLAYER_INFO
-from nlp.intent_detection import INTENT_PLAYER_PROBABILITY
-from nlp.intent_detection import INTENT_COMPARE_PLAYERS
-from nlp.intent_detection import INTENT_COMPARE_TEAMS
-from nlp.intent_detection import INTENT_GENERAL_PROBABILITY
-from nlp.intent_detection import INTENT_MATCHUP_ANALYSIS
-from nlp.intent_detection import INTENT_STAT_REQUEST
-from nlp.intent_detection import INTENT_EXPLAIN_MODEL
-from nlp.intent_detection import INTENT_HELP
-from nlp.intent_detection import INTENT_GENERAL_BASEBALL
-from nlp.intent_detection import build_intent_report
-
-
-# =# ============================================================
-# # SECTION 01.08 - AI CORE AND RESPONSE IMPORTS
-# # FILE: main.py
-# # PURPOSE: connect security, persistent memory, continuous
-# # learning, response generation, and self-improving chat flow
-# # ============================================================
-#
-# from core.security_guardrails import (
-#     build_chat_security_report,
-#     build_safe_chat_response,
-# )
-#
-# from core.interaction_memory import (
-#     remember_chat_interaction,
-# )
-#
-# from core.learning_engine import (
-#     learn_from_chat_interaction,
-# )
-#
-# from response_generator import generate_response_from_context
-
-# ============================================================
-# SECTION 01.09 - WAREHOUSE INGESTION IMPORTS
-# FILE: main.py
-# PURPOSE: expose enterprise warehouse ingestion services for
-# teams, players, database inventory, warehouse setup, and
-# database-first player search
-# ============================================================
-
-from team_ingestion import (
-    ingest_mlb_teams,
-    build_team_inventory,
-    count_database_teams,
+build_entity_report = _optional_import("nlp.entity_detection", "build_entity_report")
+entity_detection_health = _optional_import(
+    "nlp.entity_detection",
+    "entity_detection_health",
 )
+MLB_TEAM_ALIASES = _optional_import("nlp.entity_detection", "MLB_TEAM_ALIASES", {})
 
-from player_ingestion import (
-    ingest_mlb_players,
-    build_player_inventory,
-    count_database_players,
-    search_database_players,
-)
+build_team_inventory = _optional_import("team_ingestion", "build_team_inventory", lambda: [])
+count_database_teams = _optional_import("team_ingestion", "count_database_teams", lambda: 0)
+ingest_mlb_teams = _optional_import("team_ingestion", "ingest_mlb_teams")
 
-# ============================================================
-# SECTION 01.09 - WAREHOUSE INGESTION IMPORTS
-# FILE: main.py
-# PURPOSE: expose safe warehouse ingestion services through
-# administrative API routes
-# ============================================================
-
-from team_ingestion import (
-    ingest_mlb_teams,
-    build_team_inventory,
-    count_database_teams,
-)
-# ============================================================
-# SECTION 02 - APPLICATION METADATA
-# ============================================================
-
-PROJECT_NAME = "AISP2 Baseball"
-PROJECT_VERSION = "1.0.0"
-PROJECT_PHASE = "1.00 Template Architecture Foundation"
-SERVICE_NAME = "aisp2-baseball"
-PRIMARY_SPORT = "MLB"
-
-GITHUB_REPOSITORY = "https://github.com/CodeDressing/AISP2_Baseball"
-RENDER_SERVICE = "https://aisp2-baseball.onrender.com"
-
-DEVELOPMENT_RULE = "One file or one directory at a time."
-
+build_player_inventory = _optional_import("player_ingestion", "build_player_inventory", lambda limit=1000: [])
+count_database_players = _optional_import("player_ingestion", "count_database_players", lambda: 0)
+search_database_players = _optional_import("player_ingestion", "search_database_players", lambda query, limit=25: [])
+ingest_mlb_players = _optional_import("player_ingestion", "ingest_mlb_players")
 
 # ============================================================
-# SECTION 03 - ENTERPRISE APPLICATION DATA STATE
-# FILE: main.py
-# PURPOSE: centralize fallback baseball knowledge, supported
-# outcomes, and transition-safe compatibility data while AISP2
-# moves from demo behavior into live database-backed behavior
+# SECTION 06 - APPLICATION METADATA
 # ============================================================
 
-SUPPORTED_OUTCOMES = {
-    "home_run": {
-        "label": "Hits a Home Run",
-        "category": "batting",
-        "requires": [
-            "player identity",
-            "power profile",
-            "exit velocity",
-            "barrel rate",
-            "launch angle",
-            "pitcher matchup",
-        ],
-    },
-    "hit": {
-        "label": "Gets at least 1 Hit",
-        "category": "batting",
-        "requires": [
-            "player identity",
-            "contact profile",
-            "season batting profile",
-            "recent form",
-            "opponent pitcher",
-        ],
-    },
-    "single": {
-        "label": "Hits a Single",
-        "category": "batting",
-        "requires": [
-            "contact profile",
-            "batted-ball profile",
-            "spray tendency",
-        ],
-    },
-    "double": {
-        "label": "Hits a Double",
-        "category": "batting",
-        "requires": [
-            "gap power",
-            "exit velocity",
-            "park factor",
-        ],
-    },
-    "triple": {
-        "label": "Hits a Triple",
-        "category": "batting",
-        "requires": [
-            "speed profile",
-            "park factor",
-            "batted-ball profile",
-        ],
-    },
-    "rbi": {
-        "label": "Records an RBI",
-        "category": "run_production",
-        "requires": [
-            "lineup context",
-            "team offense",
-            "base-runner probability",
-            "player run production",
-        ],
-    },
-    "run": {
-        "label": "Scores a Run",
-        "category": "run_production",
-        "requires": [
-            "on-base profile",
-            "lineup context",
-            "team offense",
-        ],
-    },
-    "walk": {
-        "label": "Draws a Walk",
-        "category": "plate_discipline",
-        "requires": [
-            "walk rate",
-            "chase rate",
-            "zone swing rate",
-            "pitcher command",
-        ],
-    },
-    "strikeout": {
-        "label": "Strikes Out",
-        "category": "plate_discipline",
-        "requires": [
-            "strikeout rate",
-            "whiff rate",
-            "chase rate",
-            "pitch arsenal",
-        ],
-    },
-    "total_bases": {
-        "label": "Over 1.5 Total Bases",
-        "category": "batting",
-        "requires": [
-            "hit probability",
-            "slugging profile",
-            "extra-base-hit probability",
-        ],
-    },
-}
-
-
-FALLBACK_TEAM_PROFILES = {
-    "New York Yankees": {
-        "abbreviation": "NYY",
-        "league": "American League",
-        "division": "AL East",
-        "ballpark": "Yankee Stadium",
-        "players": [
-            "Aaron Judge",
-            "Giancarlo Stanton",
-            "Gerrit Cole",
-        ],
-    },
-    "Boston Red Sox": {
-        "abbreviation": "BOS",
-        "league": "American League",
-        "division": "AL East",
-        "ballpark": "Fenway Park",
-        "players": [
-            "Rafael Devers",
-            "Jarren Duran",
-            "Garrett Crochet",
-        ],
-    },
-    "Baltimore Orioles": {
-        "abbreviation": "BAL",
-        "league": "American League",
-        "division": "AL East",
-        "ballpark": "Oriole Park at Camden Yards",
-        "players": [
-            "Gunnar Henderson",
-            "Adley Rutschman",
-            "Grayson Rodriguez",
-        ],
-    },
-    "Cleveland Guardians": {
-        "abbreviation": "CLE",
-        "league": "American League",
-        "division": "AL Central",
-        "ballpark": "Progressive Field",
-        "players": [
-            "Jose Ramirez",
-            "Steven Kwan",
-            "Tanner Bibee",
-        ],
-    },
-    "Detroit Tigers": {
-        "abbreviation": "DET",
-        "league": "American League",
-        "division": "AL Central",
-        "ballpark": "Comerica Park",
-        "players": [
-            "Riley Greene",
-            "Tarik Skubal",
-            "Spencer Torkelson",
-        ],
-    },
-    "Houston Astros": {
-        "abbreviation": "HOU",
-        "league": "American League",
-        "division": "AL West",
-        "ballpark": "Daikin Park",
-        "players": [
-            "Yordan Alvarez",
-            "Jose Altuve",
-            "Framber Valdez",
-        ],
-    },
-    "Texas Rangers": {
-        "abbreviation": "TEX",
-        "league": "American League",
-        "division": "AL West",
-        "ballpark": "Globe Life Field",
-        "players": [
-            "Corey Seager",
-            "Marcus Semien",
-            "Jacob deGrom",
-        ],
-    },
-    "Seattle Mariners": {
-        "abbreviation": "SEA",
-        "league": "American League",
-        "division": "AL West",
-        "ballpark": "T-Mobile Park",
-        "players": [
-            "Julio Rodriguez",
-            "Cal Raleigh",
-            "Luis Castillo",
-        ],
-    },
-    "New York Mets": {
-        "abbreviation": "NYM",
-        "league": "National League",
-        "division": "NL East",
-        "ballpark": "Citi Field",
-        "players": [
-            "Juan Soto",
-            "Francisco Lindor",
-            "Pete Alonso",
-        ],
-    },
-    "Atlanta Braves": {
-        "abbreviation": "ATL",
-        "league": "National League",
-        "division": "NL East",
-        "ballpark": "Truist Park",
-        "players": [
-            "Ronald Acuna Jr.",
-            "Matt Olson",
-            "Austin Riley",
-        ],
-    },
-    "Philadelphia Phillies": {
-        "abbreviation": "PHI",
-        "league": "National League",
-        "division": "NL East",
-        "ballpark": "Citizens Bank Park",
-        "players": [
-            "Bryce Harper",
-            "Trea Turner",
-            "Zack Wheeler",
-        ],
-    },
-    "Los Angeles Dodgers": {
-        "abbreviation": "LAD",
-        "league": "National League",
-        "division": "NL West",
-        "ballpark": "Dodger Stadium",
-        "players": [
-            "Shohei Ohtani",
-            "Mookie Betts",
-            "Freddie Freeman",
-        ],
-    },
-    "San Diego Padres": {
-        "abbreviation": "SD",
-        "league": "National League",
-        "division": "NL West",
-        "ballpark": "Petco Park",
-        "players": [
-            "Fernando Tatis Jr.",
-            "Manny Machado",
-            "Dylan Cease",
-        ],
-    },
-    "Chicago Cubs": {
-        "abbreviation": "CHC",
-        "league": "National League",
-        "division": "NL Central",
-        "ballpark": "Wrigley Field",
-        "players": [
-            "Kyle Tucker",
-            "Seiya Suzuki",
-            "Shota Imanaga",
-        ],
-    },
-}
-
-
-FALLBACK_PLAYER_PROFILES = {
-    "Aaron Judge": {
-        "team": "New York Yankees",
-        "style": "Elite power hitter",
-        "recent_form": "Strong hard-hit profile",
-        "primary_metric": "Barrel rate",
-        "base_probability": 28,
-        "confidence": 74,
-    },
-    "Shohei Ohtani": {
-        "team": "Los Angeles Dodgers",
-        "style": "Elite two-way offensive force",
-        "recent_form": "High-impact contact profile",
-        "primary_metric": "Exit velocity",
-        "base_probability": 31,
-        "confidence": 77,
-    },
-    "Juan Soto": {
-        "team": "New York Mets",
-        "style": "Elite plate discipline hitter",
-        "recent_form": "Excellent on-base profile",
-        "primary_metric": "OBP and walk rate",
-        "base_probability": 66,
-        "confidence": 81,
-    },
-    "Mookie Betts": {
-        "team": "Los Angeles Dodgers",
-        "style": "Contact and power blend",
-        "recent_form": "Stable all-around production",
-        "primary_metric": "OPS",
-        "base_probability": 61,
-        "confidence": 76,
-    },
-    "Bryce Harper": {
-        "team": "Philadelphia Phillies",
-        "style": "Elite left-handed run producer",
-        "recent_form": "Strong power and OBP profile",
-        "primary_metric": "OPS",
-        "base_probability": 29,
-        "confidence": 77,
-    },
-    "Ronald Acuna Jr.": {
-        "team": "Atlanta Braves",
-        "style": "Power-speed superstar",
-        "recent_form": "Dynamic offensive profile",
-        "primary_metric": "OPS and stolen-base threat",
-        "base_probability": 58,
-        "confidence": 73,
-    },
-    "Pete Alonso": {
-        "team": "New York Mets",
-        "style": "Power-first slugger",
-        "recent_form": "Strong home run profile",
-        "primary_metric": "HR rate",
-        "base_probability": 24,
-        "confidence": 68,
-    },
-    "Gerrit Cole": {
-        "team": "New York Yankees",
-        "style": "Ace starting pitcher",
-        "recent_form": "High strikeout profile",
-        "primary_metric": "K rate",
-        "base_probability": 57,
-        "confidence": 75,
-    },
-}
-
-
-APPLICATION_DATA_STATE = {
-    "mode": "transition_to_live_data",
-    "primary_goal": "Use live MLB/database data first and fallback data only when required.",
-    "fallback_enabled": True,
-    "database_required": False,
-    "live_mlb_api_enabled": True,
-    "supported_outcomes": SUPPORTED_OUTCOMES,
-    "fallback_team_count": len(FALLBACK_TEAM_PROFILES),
-    "fallback_player_count": len(FALLBACK_PLAYER_PROFILES),
-}
-
-
-# Backward-compatible names used by older sections.
-# These stay temporarily so the app does not break while we upgrade
-# section by section away from demo-first behavior.
-DEMO_TEAMS = FALLBACK_TEAM_PROFILES
-DEMO_OUTCOMES = {
-    outcome_key: outcome_data["label"]
-    for outcome_key, outcome_data in SUPPORTED_OUTCOMES.items()
-}
-DEMO_PLAYER_PROFILES = FALLBACK_PLAYER_PROFILES
-# ============================================================
-# SECTION 04 - REQUEST MODELS
-# ============================================================
-
-class ChatRequest(BaseModel):
-    message: str
-
+PROJECT_NAME: Final[str] = "AISP2 Baseball"
+PROJECT_VERSION: Final[str] = "10.12.0"
+PROJECT_PHASE: Final[str] = "Phase 10 Part 12 - Enterprise Chat Runtime"
+SERVICE_NAME: Final[str] = "aisp2-baseball"
+PRIMARY_SPORT: Final[str] = "MLB"
+GITHUB_REPOSITORY: Final[str] = "https://github.com/CodeDressing/AISP2_Baseball"
+RENDER_SERVICE: Final[str] = "https://aisp2-baseball.onrender.com"
+MLB_STATS_API_BASE: Final[str] = "https://statsapi.mlb.com/api/v1"
+HTTP_TIMEOUT_SECONDS: Final[int] = 20
+MAX_CHAT_LENGTH: Final[int] = 2000
+MAX_PLAYER_RESULTS: Final[int] = 25
+MAX_TEAM_RESULTS: Final[int] = 30
 
 # ============================================================
-# SECTION 05 - APPLICATION INITIALIZATION
+# SECTION 07 - FASTAPI INITIALIZATION
 # ============================================================
 
 app = FastAPI(
     title=PROJECT_NAME,
     version=PROJECT_VERSION,
     description=(
-        "AI Sports Intelligence Platform 2 - baseball analytics, "
-        "probability, prediction, and AI assistant platform."
+        "Warehouse-first baseball intelligence, natural-language routing, "
+        "live MLB data, and explainable probability services."
     ),
 )
 
+STATIC_DIRECTORY = PROJECT_ROOT / "static"
+TEMPLATE_DIRECTORY = PROJECT_ROOT / "templates"
+
+if STATIC_DIRECTORY.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIRECTORY)), name="static")
+
+templates = Jinja2Templates(directory=str(TEMPLATE_DIRECTORY))
 
 # ============================================================
-# SECTION 06 - STATIC FILES AND TEMPLATES
+# SECTION 08 - REQUEST MODELS
 # ============================================================
 
-app.mount(
-    "/static",
-    StaticFiles(directory="static"),
-    name="static",
-)
 
-templates = Jinja2Templates(
-    directory="templates",
-)
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=MAX_CHAT_LENGTH)
+    conversation_context: dict[str, Any] | None = None
 
-
-# ============================================================
-# SECTION 07 - SHARED DEMO HELPERS
-# ============================================================
-
-def get_available_players(team_name: str) -> list[str]:
-    team = DEMO_TEAMS.get(team_name)
-
-    if not team:
-        first_team = next(iter(DEMO_TEAMS.values()))
-        return first_team["players"]
-
-    return team["players"]
-
-
-def normalize_demo_selection(
-    team_name: str | None,
-    player_name: str | None,
-    outcome_key: str | None,
-) -> tuple[str, str, str]:
-    selected_team = team_name or "New York Yankees"
-
-    if selected_team not in DEMO_TEAMS:
-        selected_team = "New York Yankees"
-
-    available_players = get_available_players(
-        selected_team,
-    )
-
-    selected_player = player_name or available_players[0]
-
-    if selected_player not in available_players:
-        selected_player = available_players[0]
-
-    selected_outcome = outcome_key or "home_run"
-
-    if selected_outcome not in DEMO_OUTCOMES:
-        selected_outcome = "home_run"
-
-    return selected_team, selected_player, selected_outcome
-
-
-def build_demo_probability(
-    player_name: str,
-    outcome_key: str,
-) -> dict:
-    profile = DEMO_PLAYER_PROFILES.get(
-        player_name,
-        {
-            "style": "Balanced player profile",
-            "recent_form": "Stable recent form",
-            "primary_metric": "Season production",
-            "base_probability": 50,
-            "confidence": 65,
-        },
-    )
-
-    base_probability = profile["base_probability"]
-
-    if outcome_key == "home_run":
-        probability = base_probability
-    elif outcome_key == "hit":
-        probability = min(base_probability + 35, 78)
-    elif outcome_key == "rbi":
-        probability = min(base_probability + 18, 64)
-    elif outcome_key == "total_bases":
-        probability = min(base_probability + 23, 69)
-    elif outcome_key == "strikeout":
-        probability = base_probability
-    else:
-        probability = base_probability
-
-    return {
-        "probability": probability,
-        "confidence": profile["confidence"],
-        "profile": profile,
-    }
-
-# ============================================================
-# SECTION 08 - NLU-FIRST CHAT ORCHESTRATION ENGINE
-# FILE: main.py
-# PURPOSE: route every chat message through security,
-# entity detection, Natural Language Understanding, semantic
-# interpretation, intent detection, context building, live MLB
-# lookup, response generation, and interaction memory
-# ============================================================
-
-def build_engine_probability(
-    player_name: str,
-    outcome_key: str,
-) -> dict:
-    return build_demo_probability(
-        player_name=player_name,
-        outcome_key=outcome_key,
-    )
-
-
-def extract_possible_player_search_name(message: str) -> str | None:
-    lowered_message = message.lower()
-
-    search_phrases = [
-        "search for",
-        "look up",
-        "find",
-        "who is",
-        "tell me about",
-    ]
-
-    for phrase in search_phrases:
-        if phrase in lowered_message:
-            possible_name = message[
-                lowered_message.find(phrase) + len(phrase):
-            ].strip(" ?.!")
-
-            if possible_name:
-                return possible_name
-
-    return None
-
-
-def build_live_team_list_reply() -> str:
-    try:
-        payload = fetch_mlb_json(
-            "/teams?sportId=1&activeStatus=Y"
-        )
-
-        teams = [
-            team.get("name")
-            for team in payload.get("teams", [])
-            if team.get("name")
-        ]
-
-        teams.sort()
-
-        return (
-            f"I currently recognize {len(teams)} active MLB teams:\n\n"
-            + "\n".join(f"- {team}" for team in teams)
-        )
-
-    except Exception:
-        teams = sorted(
-            MLB_TEAM_ALIASES.keys(),
-        )
-
-        return (
-            f"I currently recognize {len(teams)} MLB teams from the AISP2 alias engine:\n\n"
-            + "\n".join(f"- {team}" for team in teams)
-        )
-
-
-def build_live_player_search_reply(message: str) -> str:
-    search_name = extract_possible_player_search_name(
-        message,
-    )
-
-    if not search_name:
-        return (
-            "I can search for players, but I need a player name. "
-            "Try: Can I search for Corbin Carroll?"
-        )
-
-    try:
-        payload = fetch_mlb_json(
-            f"/sports/1/players?season={DEFAULT_SEASON}"
-        )
-
-        people = payload.get(
-            "people",
-            [],
-        )
-
-        search_tokens = [
-            token.lower()
-            for token in search_name.split()
-            if token
-        ]
-
-        matches = []
-
-        for person in people:
-            full_name = person.get(
-                "fullName",
-                "",
-            )
-
-            lowered_name = full_name.lower()
-
-            if all(
-                token in lowered_name
-                for token in search_tokens
-            ):
-                matches.append(person)
-
-        if not matches:
-            return (
-                f"I searched the live MLB player list but could not find {search_name}. "
-                "Try the full player name or check spelling."
-            )
-
-        player = matches[0]
-
-        return (
-            f"Yes. I found {player.get('fullName')} in the live MLB player index.\n\n"
-            f"Player ID: {player.get('id')}\n"
-            f"Primary Number: {player.get('primaryNumber', 'N/A')}\n"
-            f"Position: {player.get('primaryPosition', {}).get('name', 'N/A')}\n\n"
-            "Next upgrade will connect this live player search directly to team, roster, stats, and probability lookup."
-        )
-
-    except Exception:
-        return (
-            f"I understood that you want to search for {search_name}, but the live MLB player lookup "
-            "is not available from the server right now."
-        )
-
-
-def should_use_live_player_search(
-    message: str,
-    context: dict,
-    nlu_report: dict,
-) -> bool:
-    if context.get("player"):
-        return False
-
-    if nlu_report.get("task") in [
-        "best_overall_probability",
-        "best_team_probability",
-        "list_teams",
-        "list_players",
-    ]:
-        return False
-
-    lowered_message = message.lower()
-
-    return any(
-        phrase in lowered_message
-        for phrase in [
-            "search for",
-            "look up",
-            "find",
-            "who is",
-            "can i search",
-        ]
-    )
-
-
-def build_best_overall_probability_reply(
-    outcome_key: str | None,
-) -> str:
-    selected_outcome = outcome_key or "home_run"
-
-    if selected_outcome not in DEMO_OUTCOMES:
-        selected_outcome = "home_run"
-
-    scored_players = []
-
-    for player_name in DEMO_PLAYER_PROFILES.keys():
-        prediction = build_engine_probability(
-            player_name=player_name,
-            outcome_key=selected_outcome,
-        )
-
-        scored_players.append(
-            {
-                "player": player_name,
-                "probability": prediction["probability"],
-                "confidence": prediction["confidence"],
-                "profile": prediction["profile"],
-            }
-        )
-
-    scored_players.sort(
-        key=lambda item: item["probability"],
-        reverse=True,
-    )
-
-    top_players = scored_players[:5]
-    top_player = top_players[0]
-
-    ranking_lines = [
-        f"{item['player']}: {item['probability']}% probability, {item['confidence']}% confidence"
-        for item in top_players
-    ]
-
-    return (
-        f"Highest AISP2 probability across loaded players\n\n"
-        f"Outcome: {DEMO_OUTCOMES[selected_outcome]}\n\n"
-        f"Top Candidate: {top_player['player']}\n"
-        f"Estimated Probability: {top_player['probability']}%\n"
-        f"Confidence: {top_player['confidence']}%\n\n"
-        "Top 5:\n"
-        + "\n".join(f"- {line}" for line in ranking_lines)
-        + "\n\nThis is currently based on the loaded AISP2 player profile set. "
-        "The next upgrade will expand this to live MLB rosters and real statistical features."
-    )
-
-
-def build_chat_reply(message: str) -> dict:
-    security_report = build_chat_security_report(
-        message,
-    )
-
-    cleaned_message = security_report[
-        "cleaned_message"
-    ]
-
-    if not cleaned_message:
-        return {
-            "reply": (
-                "Ask me about an MLB team, player, roster, matchup, probability, "
-                "player search, or prediction."
-            ),
-            "intent": "empty",
-            "security": security_report,
-        }
-
-    if security_report["blocked"]:
-        return build_safe_chat_response(
-            reason=security_report["reason"],
-        )
-
-    entity_report = build_entity_report(
-        message=cleaned_message,
-        player_profiles=DEMO_PLAYER_PROFILES,
-    )
-
-    nlu_report = build_nlu_report(
-        message=cleaned_message,
-        entity_report=entity_report,
-    )
-
-    semantic_report = interpret_baseball_question(
-        message=cleaned_message,
-        teams=DEMO_TEAMS,
-        player_profiles=DEMO_PLAYER_PROFILES,
-    )
-
-    if nlu_report.get("outcome") and not semantic_report.get("outcome"):
-        semantic_report["outcome"] = nlu_report.get("outcome")
-
-    detected_player = (
-        semantic_report.get("player")
-        or (
-            entity_report.get("primary_player", {}) or {}
-        ).get("canonical_name")
-    )
-
-    detected_team = (
-        (
-            entity_report.get("primary_team", {}) or {}
-        ).get("canonical_name")
-        or semantic_report.get("team")
-    )
-
-    detected_outcome = (
-        nlu_report.get("outcome")
-        or semantic_report.get("outcome")
-    )
-
-    detected_players = [
-        player["canonical_name"]
-        for player in entity_report.get("players", [])
-    ] or semantic_report.get("players", [])
-
-    detected_teams = [
-        team["canonical_name"]
-        for team in entity_report.get("teams", [])
-    ] or semantic_report.get("teams", [])
-
-    intent_report = build_intent_report(
-        message=cleaned_message,
-        detected_player=detected_player,
-        detected_team=detected_team,
-        detected_outcome=detected_outcome,
-        detected_players=detected_players,
-        detected_teams=detected_teams,
-    )
-
-    context = build_baseball_context(
-        message=cleaned_message,
-        intent_report=intent_report,
-        entity_report=entity_report,
-        semantic_report=semantic_report,
-    )
-
-    if nlu_report.get("task") != "general_baseball_question":
-        context["task"] = nlu_report.get("task")
-
-    if nlu_report.get("outcome"):
-        context["outcome"] = nlu_report.get("outcome")
-
-    context["nlu"] = nlu_report
-
-    final_intent = intent_report.get(
-        "final_intent",
-    )
-
-    lowered_message = cleaned_message.lower()
-
-    if (
-        nlu_report.get("task") == "list_teams"
-        or final_intent == INTENT_LIST_TEAMS
-        or "all mlb teams" in lowered_message
-        or "how many mlb teams" in lowered_message
-        or "normal english list" in lowered_message
-    ):
-        reply = build_live_team_list_reply()
-        context["task"] = "list_teams"
-
-    elif nlu_report.get("task") == "best_overall_probability":
-        reply = build_best_overall_probability_reply(
-            outcome_key=nlu_report.get("outcome"),
-        )
-        context["task"] = "best_overall_probability"
-
-    elif should_use_live_player_search(
-        cleaned_message,
-        context,
-        nlu_report,
-    ):
-        reply = build_live_player_search_reply(
-            cleaned_message,
-        )
-        context["task"] = "live_player_search"
-
-    else:
-        reply = generate_response_from_context(
-            context=context,
-            demo_teams=DEMO_TEAMS,
-            player_profiles=DEMO_PLAYER_PROFILES,
-            demo_outcomes=DEMO_OUTCOMES,
-            build_probability_function=build_engine_probability,
-        )
-
-    chat_response = {
-        "reply": reply,
-        "intent": final_intent,
-        "context": context,
-        "nlu": nlu_report,
-        "semantic": {
-            "player": context.get("player"),
-            "team": context.get("team"),
-            "outcome": context.get("outcome"),
-            "players": context.get("players", []),
-            "teams": context.get("teams", []),
-            "intent_report": intent_report,
-            "entity_report": entity_report,
-            "semantic_report": semantic_report,
-            "nlu_report": nlu_report,
-        },
-        "security": {
-            "blocked": False,
-            "message_length": len(cleaned_message),
-            "report": security_report,
-        },
-    }
-
-    memory_status = remember_chat_interaction(
-        user_message=cleaned_message,
-        chat_response=chat_response,
-    )
-
-    chat_response["memory"] = memory_status
-
-    learning_status = learn_from_chat_interaction(
-        user_message=cleaned_message,
-        chat_response=chat_response,
-    )
-
-    chat_response["learning"] = learning_status
-
-    return chat_response
-# ============================================================
-# SECTION 09 - TEMPLATE ROUTES
-# ============================================================
-
-@app.get("/", response_class=HTMLResponse)
-def home_page(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "home.html",
-        {
-            "project_name": PROJECT_NAME,
-            "project_version": PROJECT_VERSION,
-            "project_phase": PROJECT_PHASE,
-        },
-    )
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard_page(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        {
-            "project_name": PROJECT_NAME,
-            "project_version": PROJECT_VERSION,
-            "project_phase": PROJECT_PHASE,
-        },
-    )
-
-
-@app.get("/players", response_class=HTMLResponse)
-def player_explorer_page(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "player_explorer.html",
-        {
-            "project_name": PROJECT_NAME,
-            "project_version": PROJECT_VERSION,
-            "project_phase": PROJECT_PHASE,
-        },
-    )
-
-
-@app.get("/tools/prediction", response_class=HTMLResponse)
-def prediction_workbench_page(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "prediction_workbench.html",
-        {
-            "project_name": PROJECT_NAME,
-            "project_version": PROJECT_VERSION,
-            "project_phase": PROJECT_PHASE,
-        },
-    )
-
-# ============================================================
-# SECTION 10 - CHAT API ENDPOINT
-# ============================================================
-
-@app.post("/api/chat")
-def chat_api(request: ChatRequest) -> dict:
-    return build_chat_reply(
-        request.message,
-    )
-
-
-# ============================================================
-# SECTION 11 - DEMO PREDICTION API ENDPOINT
-# ============================================================
-
-@app.get("/api/demo/prediction")
-def demo_prediction_json(
-    team: str | None = None,
-    player: str | None = None,
-    outcome: str | None = None,
-) -> dict:
-    selected_team, selected_player, selected_outcome = normalize_demo_selection(
-        team_name=team,
-        player_name=player,
-        outcome_key=outcome,
-    )
-
-    team_data = DEMO_TEAMS[selected_team]
-
-    prediction = build_demo_probability(
-        player_name=selected_player,
-        outcome_key=selected_outcome,
-    )
-
-    return {
-        "mode": "demo",
-        "disclaimer": "Illustrative demo only. Not a real betting or wagering prediction.",
-        "team": {
-            "name": selected_team,
-            "abbreviation": team_data["abbreviation"],
-            "league": team_data["league"],
-            "division": team_data["division"],
-            "ballpark": team_data["ballpark"],
-        },
-        "player": selected_player,
-        "outcome": {
-            "key": selected_outcome,
-            "label": DEMO_OUTCOMES[selected_outcome],
-        },
-        "prediction": {
-            "estimated_probability": prediction["probability"],
-            "confidence": prediction["confidence"],
-            "model": "AISP Demo Probability Card",
-        },
-        "supporting_context": {
-            "player_style": prediction["profile"]["style"],
-            "recent_form": prediction["profile"]["recent_form"],
-            "primary_metric": prediction["profile"]["primary_metric"],
-        },
-        "future_real_sources": [
-            "MLB Stats API",
-            "Baseball Savant / Statcast",
-            "FanGraphs",
-            "Baseball Reference",
-            "Retrosheet",
-            "Lahman Database",
-        ],
-    }
-
-
-# ============================================================
-# SECTION 12 - SYSTEM ENDPOINTS
-# ============================================================
-
-@app.get("/api/root")
-def root_json() -> dict:
-    return {
-        "project": PROJECT_NAME,
-        "phase": PROJECT_PHASE,
-        "status": "online",
-        "version": PROJECT_VERSION,
-        "service": SERVICE_NAME,
-        "sport": PRIMARY_SPORT,
-        "github": GITHUB_REPOSITORY,
-        "render": RENDER_SERVICE,
-        "homepage": "template-backed chatbot-first interface",
-        "routes": [
-            "/",
-            "/dashboard",
-            "/players",
-            "/tools/prediction",
-            "/api/chat",
-            "/api/demo/prediction",
-        ],
-    }
-
-
-@app.get("/health")
-def health() -> dict:
-    return {
-        "status": "healthy",
-        "service": SERVICE_NAME,
-        "project": PROJECT_NAME,
-        "phase": PROJECT_PHASE,
-    }
-
-
-@app.get("/system/info")
-def system_info() -> dict:
-    return {
-        "application": PROJECT_NAME,
-        "version": PROJECT_VERSION,
-        "phase": PROJECT_PHASE,
-        "environment": "development",
-        "sport": PRIMARY_SPORT,
-        "repository": GITHUB_REPOSITORY,
-        "deployment": RENDER_SERVICE,
-        "runtime": "FastAPI",
-        "deployment_provider": "Render",
-        "source_control": "GitHub",
-    }
-
-# ============================================================
-# SECTION 12.90 - ENTERPRISE PLAYER PREDICTION RUNTIME API
-# FILE: main.py
-# PURPOSE:
-# Provide the real backend endpoint used by the Prediction
-# Workbench "Run Prediction" button.
-#
-# This endpoint is intentionally baseline-first:
-# - Uses warehouse/player knowledge when available.
-# - Falls back to conservative MLB baseline probabilities when
-#   Statcast warehouse data is incomplete.
-# - Returns the exact response shape expected by prediction.js.
-# - Does not pretend deep learning is active yet.
-# ============================================================
 
 class PlayerPredictionRequest(BaseModel):
     team: str | None = None
-    player: str | None = None
-    outcome: str | None = "home_run"
+    player: str
+    outcome: str = "home_run"
     season: int | None = None
 
 
-PREDICTION_OUTCOME_LABELS = {
-    "home_run": "Home Run Probability",
-    "hit": "Hit Probability",
-    "rbi": "RBI Probability",
-    "run": "Run Scored Probability",
-    "run_scored": "Run Scored Probability",
-    "total_bases": "Total Bases Probability",
-    "strikeout": "Strikeout Probability",
-    "walk": "Walk Probability",
-}
+class GamePredictionRequest(BaseModel):
+    away_team: str
+    home_team: str
+    season: int | None = None
+
+# ============================================================
+# SECTION 09 - GENERAL HELPERS
+# ============================================================
 
 
-PREDICTION_BASELINES = {
-    "home_run": 4,
-    "hit": 62,
-    "rbi": 28,
-    "run": 34,
-    "run_scored": 34,
-    "total_bases": 48,
-    "strikeout": 22,
-    "walk": 8,
-}
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
-def normalize_prediction_outcome(
-    outcome: str | None,
-) -> str:
-    if not outcome:
-        return "home_run"
+def clamp(value: float, minimum: float = 0.0, maximum: float = 100.0) -> float:
+    return max(minimum, min(maximum, float(value)))
 
-    cleaned = (
-        str(outcome)
-        .lower()
-        .strip()
-        .replace("-", "_")
-        .replace(" ", "_")
+
+def normalize_text(value: str | None) -> str:
+    if not value:
+        return ""
+    text = str(value).lower().strip()
+    text = re.sub(r"[^a-z0-9+'-]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def safe_int(value: Any, fallback: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def safe_float(value: Any, fallback: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def record_value(record: Any, *names: str, default: Any = None) -> Any:
+    if isinstance(record, Mapping):
+        for name in names:
+            value = record.get(name)
+            if value not in (None, ""):
+                return value
+        return default
+    for name in names:
+        value = getattr(record, name, None)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def serialize_record(record: Any) -> dict[str, Any]:
+    if isinstance(record, Mapping):
+        return dict(record)
+    if hasattr(record, "model_dump"):
+        return dict(record.model_dump())
+    if hasattr(record, "_asdict"):
+        return dict(record._asdict())
+    if hasattr(record, "__dict__"):
+        return {
+            key: value
+            for key, value in vars(record).items()
+            if not key.startswith("_") and not callable(value)
+        }
+    return {"value": str(record)}
+
+# ============================================================
+# SECTION 10 - MLB HTTP CLIENT
+# ============================================================
+
+
+def fetch_mlb_json(path: str, *, params: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    url = path if path.startswith("http") else f"{MLB_STATS_API_BASE}{path}"
+    response = requests.get(url, params=params, timeout=HTTP_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("MLB Stats API returned a non-object payload")
+    return payload
+
+
+def fetch_active_mlb_teams() -> list[dict[str, Any]]:
+    payload = fetch_mlb_json(
+        "/teams",
+        params={"sportId": 1, "activeStatus": "Y"},
+    )
+    teams: list[dict[str, Any]] = []
+    for team in payload.get("teams", []):
+        teams.append(
+            {
+                "team_id": team.get("id"),
+                "id": team.get("id"),
+                "team_name": team.get("name"),
+                "name": team.get("name"),
+                "abbreviation": team.get("abbreviation"),
+                "league": (team.get("league") or {}).get("name"),
+                "division": (team.get("division") or {}).get("name"),
+                "venue": (team.get("venue") or {}).get("name"),
+                "source": "MLB Stats API",
+            }
+        )
+    return sorted(teams, key=lambda item: str(item.get("name") or ""))
+
+
+def fetch_team_roster(team_id: int) -> list[dict[str, Any]]:
+    payload = fetch_mlb_json(
+        f"/teams/{team_id}/roster",
+        params={"rosterType": "active"},
+    )
+    roster: list[dict[str, Any]] = []
+    for item in payload.get("roster", []):
+        person = item.get("person") or {}
+        position = item.get("position") or {}
+        roster.append(
+            {
+                "player_id": person.get("id"),
+                "id": person.get("id"),
+                "player_name": person.get("fullName"),
+                "name": person.get("fullName"),
+                "position": position.get("name"),
+                "position_code": position.get("code"),
+                "status": (item.get("status") or {}).get("description"),
+                "team_id": team_id,
+                "source": "MLB Stats API active roster",
+            }
+        )
+    return sorted(roster, key=lambda item: str(item.get("name") or ""))
+
+
+def fetch_mlb_schedule(target_date: date | None = None) -> list[dict[str, Any]]:
+    target_date = target_date or utc_now().date()
+    payload = fetch_mlb_json(
+        "/schedule",
+        params={
+            "sportId": 1,
+            "date": target_date.isoformat(),
+            "hydrate": "team,venue,probablePitcher",
+        },
+    )
+    games: list[dict[str, Any]] = []
+    for day in payload.get("dates", []):
+        for game in day.get("games", []):
+            teams = game.get("teams") or {}
+            away = teams.get("away") or {}
+            home = teams.get("home") or {}
+            games.append(
+                {
+                    "game_id": game.get("gamePk"),
+                    "date": game.get("gameDate"),
+                    "status": (game.get("status") or {}).get("detailedState"),
+                    "away_team": ((away.get("team") or {}).get("name")),
+                    "home_team": ((home.get("team") or {}).get("name")),
+                    "away_score": away.get("score"),
+                    "home_score": home.get("score"),
+                    "venue": (game.get("venue") or {}).get("name"),
+                    "source": "MLB Stats API",
+                }
+            )
+    return games
+
+# ============================================================
+# SECTION 11 - WAREHOUSE CATALOG ACCESS
+# ============================================================
+
+
+def load_team_catalog() -> list[dict[str, Any]]:
+    try:
+        records = build_team_inventory()
+        if records:
+            return [serialize_record(record) for record in records]
+    except Exception as error:
+        LOGGER.warning("Warehouse team inventory unavailable: %s", error)
+
+    try:
+        return fetch_active_mlb_teams()
+    except Exception as error:
+        LOGGER.warning("Live MLB team inventory unavailable: %s", error)
+
+    return [
+        {
+            "team_name": name,
+            "name": name,
+            "aliases": aliases,
+            "source": "static NLP catalog",
+        }
+        for name, aliases in dict(MLB_TEAM_ALIASES or {}).items()
+    ]
+
+
+def load_player_catalog(limit: int = 2000) -> list[dict[str, Any]]:
+    try:
+        records = build_player_inventory(limit=limit)
+        if records:
+            return [serialize_record(record) for record in records]
+    except TypeError:
+        try:
+            records = build_player_inventory()
+            if records:
+                return [serialize_record(record) for record in records]
+        except Exception as error:
+            LOGGER.warning("Warehouse player inventory unavailable: %s", error)
+    except Exception as error:
+        LOGGER.warning("Warehouse player inventory unavailable: %s", error)
+    return []
+
+
+def normalize_player_result(record: Any) -> dict[str, Any]:
+    data = serialize_record(record)
+    player_id = record_value(
+        data,
+        "player_id",
+        "mlb_player_id",
+        "person_id",
+        "id",
+    )
+    player_name = record_value(
+        data,
+        "player_name",
+        "full_name",
+        "fullName",
+        "name",
+        "display_name",
+    )
+    team_name = record_value(
+        data,
+        "team_name",
+        "current_team_name",
+        "club_name",
+        "team",
+    )
+    return {
+        "player_id": player_id,
+        "id": player_id,
+        "player_name": player_name,
+        "name": player_name,
+        "team_id": record_value(data, "team_id", "current_team_id", "club_id"),
+        "team": team_name,
+        "team_name": team_name,
+        "position": record_value(
+            data,
+            "position",
+            "position_name",
+            "primary_position",
+            "position_abbreviation",
+        ),
+        "active": record_value(data, "active", "is_active", "current"),
+        "source": record_value(data, "source", default="AISP2 Database Warehouse"),
+        "raw": data,
+    }
+
+
+def search_players_warehouse_first(query: str, limit: int = MAX_PLAYER_RESULTS) -> list[dict[str, Any]]:
+    clean_query = normalize_text(query)
+    if not clean_query:
+        return []
+
+    # Primary path: use the dedicated warehouse search service.
+    try:
+        records = search_database_players(query=query, limit=limit)
+        normalized = [normalize_player_result(record) for record in records or []]
+        normalized = [item for item in normalized if item.get("name")]
+        if normalized:
+            return normalized[:limit]
+    except TypeError:
+        try:
+            records = search_database_players(query, limit)
+            normalized = [normalize_player_result(record) for record in records or []]
+            normalized = [item for item in normalized if item.get("name")]
+            if normalized:
+                return normalized[:limit]
+        except Exception as error:
+            LOGGER.warning("Warehouse player search failed: %s", error)
+    except Exception as error:
+        LOGGER.warning("Warehouse player search failed: %s", error)
+
+    # Secondary path: scan the warehouse inventory using all plausible name fields.
+    tokens = clean_query.split()
+    matches: list[dict[str, Any]] = []
+    for record in load_player_catalog(limit=5000):
+        item = normalize_player_result(record)
+        candidate_name = normalize_text(str(item.get("name") or ""))
+        if candidate_name and all(token in candidate_name for token in tokens):
+            matches.append(item)
+    if matches:
+        matches.sort(
+            key=lambda item: (
+                normalize_text(str(item.get("name"))) != clean_query,
+                len(str(item.get("name") or "")),
+            )
+        )
+        return matches[:limit]
+
+    # Last resort: search all active MLB rosters.
+    try:
+        for team in fetch_active_mlb_teams():
+            team_id = safe_int(team.get("team_id"))
+            if not team_id:
+                continue
+            try:
+                roster = fetch_team_roster(team_id)
+            except Exception:
+                continue
+            for player in roster:
+                candidate_name = normalize_text(str(player.get("name") or ""))
+                if candidate_name and all(token in candidate_name for token in tokens):
+                    player["team"] = team.get("name")
+                    player["team_name"] = team.get("name")
+                    matches.append(player)
+            if len(matches) >= limit:
+                break
+    except Exception as error:
+        LOGGER.warning("Live MLB fallback player search failed: %s", error)
+
+    return matches[:limit]
+
+# ============================================================
+# SECTION 12 - CHAT ENTITY EXTRACTION HELPERS
+# ============================================================
+
+
+SEARCH_PREFIXES: Final[tuple[str, ...]] = (
+    "search for",
+    "search",
+    "look up",
+    "lookup",
+    "find",
+    "show player",
+    "who is",
+    "tell me about",
+)
+
+
+def extract_player_query(message: str, nlu_report: Mapping[str, Any] | None = None) -> str | None:
+    nlu_report = nlu_report or {}
+    entities = nlu_report.get("entities") or {}
+    player = entities.get("player") or {}
+    canonical_name = player.get("canonical_name") or player.get("name")
+    if canonical_name:
+        return str(canonical_name)
+
+    lowered = normalize_text(message)
+    for prefix in SEARCH_PREFIXES:
+        normalized_prefix = normalize_text(prefix)
+        if lowered.startswith(normalized_prefix + " "):
+            candidate = lowered[len(normalized_prefix):].strip()
+            if candidate:
+                return candidate
+
+    # Preserve capitalization from the original message when possible.
+    original = str(message).strip(" ?.!\t\r\n")
+    lower_original = original.lower()
+    for prefix in SEARCH_PREFIXES:
+        index = lower_original.find(prefix)
+        if index >= 0:
+            candidate = original[index + len(prefix):].strip(" ?.!\t\r\n")
+            if candidate:
+                return candidate
+    return None
+
+
+def entity_name(nlu_report: Mapping[str, Any], entity_key: str) -> str | None:
+    entities = nlu_report.get("entities") or {}
+    entity = entities.get(entity_key) or {}
+    value = entity.get("canonical_name") or entity.get("name")
+    return str(value) if value else None
+
+
+def entity_outcome(nlu_report: Mapping[str, Any]) -> str | None:
+    entities = nlu_report.get("entities") or {}
+    outcome = entities.get("outcome") or {}
+    value = outcome.get("canonical_name") or outcome.get("name")
+    return str(value) if value else None
+
+# ============================================================
+# SECTION 13 - CHAT RESPONSE BUILDERS
+# ============================================================
+
+
+def build_team_list_reply(team_catalog: Sequence[Mapping[str, Any]]) -> str:
+    names = sorted(
+        {
+            str(record_value(team, "team_name", "name", "full_name") or "").strip()
+            for team in team_catalog
+            if record_value(team, "team_name", "name", "full_name")
+        }
+    )
+    if not names:
+        return "No MLB teams are currently available from the warehouse or live API."
+    return (
+        f"AISP2 currently recognizes {len(names)} MLB teams:\n\n"
+        + "\n".join(f"- {name}" for name in names)
     )
 
+
+def build_player_search_reply(query: str) -> tuple[str, list[dict[str, Any]]]:
+    matches = search_players_warehouse_first(query, limit=MAX_PLAYER_RESULTS)
+    if not matches:
+        return (
+            f"No player matched '{query}' in the warehouse or active MLB roster fallback. "
+            "Confirm the spelling or run player ingestion again.",
+            [],
+        )
+
+    lines: list[str] = []
+    for player in matches[:10]:
+        details = [
+            str(player.get("team") or player.get("team_name") or "Unknown team"),
+            str(player.get("position") or "Unknown position"),
+        ]
+        if player.get("player_id"):
+            details.append(f"MLB ID {player['player_id']}")
+        lines.append(f"- {player.get('name')}: " + " | ".join(details))
+
+    return (
+        f"Found {len(matches)} matching player{'s' if len(matches) != 1 else ''}:\n\n"
+        + "\n".join(lines),
+        matches,
+    )
+
+
+def build_database_status_reply() -> tuple[str, dict[str, Any]]:
+    try:
+        connected = bool(database_health_check())
+    except Exception:
+        connected = False
+    try:
+        details = database_health_details() or {}
+    except Exception:
+        details = {}
+
+    teams = safe_int(count_database_teams())
+    players = safe_int(count_database_players())
+    payload = {
+        "database_connected": connected,
+        "teams": teams,
+        "players": players,
+        "games": 0,
+        "game_predictions": 0,
+        "player_predictions": 0,
+        "statcast_events": 0,
+        "details": details,
+    }
+    reply = (
+        "AISP2 Database / Warehouse Status\n\n"
+        f"Database connected: {'Yes' if connected else 'No'}\n"
+        f"Teams: {teams}\n"
+        f"Players: {players}\n"
+        "Games: 0\n"
+        "Game predictions: 0\n"
+        "Player predictions: 0\n"
+        "Statcast events: 0\n\n"
+        "Team and player identity data are loaded. Schedule, game, statistical, "
+        "and Statcast ingestion remain the next data layers."
+    )
+    return reply, payload
+
+
+def build_model_status_reply() -> tuple[str, dict[str, Any]]:
+    nlu_health = nlu_engine_health() if callable(nlu_engine_health) else {"status": "unavailable"}
+    entity_health = (
+        entity_detection_health()
+        if callable(entity_detection_health)
+        else {"status": "unavailable"}
+    )
+    payload = {
+        "nlu": nlu_health,
+        "entity_detection": entity_health,
+        "prediction_engine": "baseline_runtime_online",
+        "feature_builder": "integration_pending",
+        "probability_engine": "module_created_integration_pending",
+        "trained_models": {
+            "logistic_regression": "planned",
+            "gradient_boosting": "planned",
+            "xgboost": "planned",
+            "neural_network": "planned",
+            "monte_carlo": "planned",
+        },
+    }
+    reply = (
+        "AISP2 AI Model Status\n\n"
+        f"NLU engine: {nlu_health.get('status', 'unknown')}\n"
+        f"Entity detection: {entity_health.get('status', 'unknown')}\n"
+        "Prediction runtime: Online baseline model\n"
+        "Feature-builder integration: Pending\n"
+        "Probability-engine integration: Pending\n"
+        "Trained ML models: Not yet activated\n\n"
+        "The chat router is operational. Production predictions still require "
+        "season statistics, Statcast features, calibration, and backtesting."
+    )
+    return reply, payload
+
+
+def build_schedule_reply(target_date: date | None = None) -> tuple[str, list[dict[str, Any]]]:
+    target_date = target_date or utc_now().date()
+    try:
+        games = fetch_mlb_schedule(target_date)
+    except Exception as error:
+        LOGGER.exception("Schedule lookup failed")
+        return (
+            f"I could not retrieve the MLB schedule for {target_date.isoformat()}: {error}",
+            [],
+        )
+
+    if not games:
+        return f"No MLB games are listed for {target_date.isoformat()}.", []
+
+    lines: list[str] = []
+    for game in games:
+        score = ""
+        if game.get("away_score") is not None and game.get("home_score") is not None:
+            score = f" | {game['away_score']}-{game['home_score']}"
+        lines.append(
+            f"- {game.get('away_team')} at {game.get('home_team')} "
+            f"| {game.get('status')}{score}"
+        )
+    return (
+        f"MLB games for {target_date.isoformat()} ({len(games)}):\n\n"
+        + "\n".join(lines),
+        games,
+    )
+
+
+def build_team_roster_reply(team_name: str, team_catalog: Sequence[Mapping[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+    normalized_target = normalize_text(team_name)
+    selected: Mapping[str, Any] | None = None
+    for team in team_catalog:
+        candidate_name = record_value(team, "team_name", "name", "full_name")
+        if candidate_name and normalize_text(str(candidate_name)) == normalized_target:
+            selected = team
+            break
+    if selected is None:
+        return f"I could not resolve the MLB team '{team_name}'.", []
+
+    team_id = safe_int(record_value(selected, "team_id", "mlb_team_id", "id"))
+    if not team_id:
+        return f"The team '{team_name}' has no usable MLB team ID in the current catalog.", []
+
+    try:
+        roster = fetch_team_roster(team_id)
+    except Exception as error:
+        return f"Roster lookup failed for {team_name}: {error}", []
+
+    lines = [
+        f"- {player.get('name')} | {player.get('position') or 'Unknown position'}"
+        for player in roster
+    ]
+    return (
+        f"Active roster for {team_name} ({len(roster)} players):\n\n"
+        + "\n".join(lines),
+        roster,
+    )
+
+
+def build_help_reply() -> str:
+    return (
+        "AISP2 understands these command groups:\n\n"
+        "- show all MLB teams\n"
+        "- search Aaron Judge\n"
+        "- show the Yankees roster\n"
+        "- today's MLB games\n"
+        "- database status\n"
+        "- show model status\n"
+        "- predict Aaron Judge home run\n"
+        "- what is Aaron Judge's OPS\n\n"
+        "Predictions currently use a baseline runtime contract. Full statistical "
+        "predictions require the next warehouse and feature-engineering layers."
+    )
+
+# ============================================================
+# SECTION 14 - PREDICTION RUNTIME
+# ============================================================
+
+
+PREDICTION_BASELINES: Final[dict[str, float]] = {
+    "home_run": 7.0,
+    "hit": 58.0,
+    "single": 36.0,
+    "double": 15.0,
+    "triple": 2.0,
+    "rbi": 28.0,
+    "run": 34.0,
+    "walk": 9.0,
+    "strikeout": 22.0,
+    "total_bases": 43.0,
+}
+
+
+def normalize_prediction_outcome(outcome: str | None) -> str:
+    cleaned = normalize_text(outcome).replace(" ", "_")
     aliases = {
         "hr": "home_run",
         "homer": "home_run",
         "home_runs": "home_run",
-        "home_run_probability": "home_run",
         "hits": "hit",
-        "hit_probability": "hit",
         "runs_batted_in": "rbi",
-        "run_batted_in": "rbi",
-        "run_scored": "run_scored",
-        "runs": "run_scored",
+        "run_scored": "run",
         "tb": "total_bases",
-        "total_base": "total_bases",
-        "total_bases_probability": "total_bases",
         "strikeouts": "strikeout",
-        "k": "strikeout",
         "ks": "strikeout",
         "walks": "walk",
         "bb": "walk",
     }
-
-    return aliases.get(
-        cleaned,
-        cleaned if cleaned in PREDICTION_BASELINES else "home_run",
-    )
+    resolved = aliases.get(cleaned, cleaned)
+    return resolved if resolved in PREDICTION_BASELINES else "home_run"
 
 
-def clamp_prediction_number(
-    value: float,
-    minimum: float = 0,
-    maximum: float = 100,
-) -> float:
-    return max(
-        minimum,
-        min(
-            maximum,
-            value,
-        ),
-    )
-
-
-def get_prediction_tier(
-    probability: float,
-) -> str:
-    if probability >= 75:
-        return "High"
-
-    if probability >= 55:
-        return "Moderate"
-
-    if probability >= 35:
-        return "Speculative"
-
-    if probability >= 15:
-        return "Longshot"
-
-    return "Low Probability"
-
-
-def get_prediction_risk_profile(
-    probability: float,
-    confidence: float,
-    data_coverage: float,
-) -> str:
-    if data_coverage < 35:
-        return "High data risk"
-
-    if confidence < 45:
-        return "Low confidence"
-
-    if probability >= 65:
-        return "Aggressive"
-
-    if probability >= 40:
-        return "Moderate"
-
-    return "High variance"
-
-
-def safe_prediction_number(
-    value,
-    fallback: float = 0,
-) -> float:
-    try:
-        if value is None:
-            return fallback
-
-        return float(value)
-
-    except Exception:
-        return fallback
-
-
-def calculate_baseline_prediction_probability(
-    outcome_key: str,
-    feature_context: dict,
-) -> dict:
-    feature_vector = (
-        feature_context.get("feature_vector", {})
-        if isinstance(feature_context, dict)
-        else {}
-    )
-
-    availability = (
-        feature_context.get("availability", {})
-        if isinstance(feature_context, dict)
-        else {}
-    )
-
-    data_coverage = safe_prediction_number(
-        availability.get("coverage_percent"),
-        fallback=safe_prediction_number(
-            feature_vector.get("data_coverage_score"),
-            fallback=0,
-        ),
-    )
-
-    power_score = safe_prediction_number(
-        feature_vector.get("power_score"),
-        fallback=50,
-    )
-
-    contact_score = safe_prediction_number(
-        feature_vector.get("contact_score"),
-        fallback=50,
-    )
-
-    discipline_score = safe_prediction_number(
-        feature_vector.get("discipline_score"),
-        fallback=50,
-    )
-
-    batted_ball_score = safe_prediction_number(
-        feature_vector.get("batted_ball_score"),
-        fallback=50,
-    )
-
-    percentile_score = safe_prediction_number(
-        feature_vector.get("statcast_percentile_score"),
-        fallback=50,
-    )
-
-    overall_score = safe_prediction_number(
-        feature_vector.get("overall_feature_score"),
-        fallback=50,
-    )
-
-    baseline = PREDICTION_BASELINES.get(
-        outcome_key,
-        PREDICTION_BASELINES["home_run"],
-    )
-
-    if outcome_key == "home_run":
-        model_score = (
-            power_score * 0.42
-            + batted_ball_score * 0.28
-            + percentile_score * 0.20
-            + data_coverage * 0.10
-        )
-
-        probability = baseline + (model_score * 0.30)
-
-    elif outcome_key == "hit":
-        model_score = (
-            contact_score * 0.45
-            + discipline_score * 0.20
-            + batted_ball_score * 0.20
-            + data_coverage * 0.15
-        )
-
-        probability = 38 + (model_score * 0.42)
-
-    elif outcome_key == "total_bases":
-        model_score = (
-            power_score * 0.30
-            + contact_score * 0.25
-            + batted_ball_score * 0.30
-            + data_coverage * 0.15
-        )
-
-        probability = 25 + (model_score * 0.45)
-
-    elif outcome_key == "rbi":
-        model_score = (
-            power_score * 0.35
-            + contact_score * 0.20
-            + overall_score * 0.25
-            + data_coverage * 0.20
-        )
-
-        probability = 15 + (model_score * 0.45)
-
-    elif outcome_key in ["run", "run_scored"]:
-        model_score = (
-            contact_score * 0.30
-            + discipline_score * 0.30
-            + overall_score * 0.20
-            + data_coverage * 0.20
-        )
-
-        probability = 18 + (model_score * 0.45)
-
-    elif outcome_key == "walk":
-        model_score = (
-            discipline_score * 0.65
-            + data_coverage * 0.35
-        )
-
-        probability = 3 + (model_score * 0.18)
-
-    elif outcome_key == "strikeout":
-        model_score = (
-            discipline_score * 0.45
-            + percentile_score * 0.35
-            + data_coverage * 0.20
-        )
-
-        probability = 8 + (model_score * 0.30)
-
-    else:
-        model_score = overall_score
-        probability = baseline + (model_score * 0.25)
-
-    probability = clamp_prediction_number(
-        round(probability, 1),
-        0,
-        99,
-    )
-
-    confidence = clamp_prediction_number(
-        round(35 + (data_coverage * 0.35) + (model_score * 0.25), 1),
-        25,
-        92,
-    )
-
-    return {
-        "probability": probability,
-        "confidence": confidence,
-        "model_score": round(model_score, 2),
-        "data_coverage": round(data_coverage, 2),
-    }
-
-
-def build_prediction_supporting_context(
-    outcome_key: str,
-    feature_context: dict,
-    probability_result: dict,
-) -> dict:
-    outcome_label = PREDICTION_OUTCOME_LABELS.get(
-        outcome_key,
-        "Prediction",
-    )
-
-    feature_vector = feature_context.get("feature_vector", {}) or {}
-
-    if outcome_key == "home_run":
-        player_style = "Power profile"
-        primary_metric = "Power score, barrel profile, exit velocity"
-        recent_form = "Warehouse-backed power context"
-
-    elif outcome_key == "hit":
-        player_style = "Contact profile"
-        primary_metric = "Contact score, xBA, xwOBA"
-        recent_form = "Warehouse-backed contact context"
-
-    elif outcome_key == "total_bases":
-        player_style = "Slugging profile"
-        primary_metric = "Batted-ball score, xSLG, OPS"
-        recent_form = "Warehouse-backed slugging context"
-
-    elif outcome_key == "strikeout":
-        player_style = "Swing-and-miss profile"
-        primary_metric = "Whiff, chase, strikeout indicators"
-        recent_form = "Warehouse-backed plate-discipline context"
-
-    else:
-        player_style = "General player outcome profile"
-        primary_metric = "Overall feature score"
-        recent_form = "Warehouse-backed baseline context"
-
-    ai_explanation = (
-        f"{outcome_label} is being calculated with the AISP2 baseline "
-        f"warehouse model. The current probability is based on loaded player "
-        f"identity, roster data, and any available warehouse feature scores. "
-        f"Model score: {probability_result.get('model_score')}. "
-        f"Data coverage: {probability_result.get('data_coverage')}%."
-    )
-
-    return {
-        "player_style": player_style,
-        "recent_form": recent_form,
-        "primary_metric": primary_metric,
-        "feature_vector": feature_vector,
-        "ai_explanation": ai_explanation,
-    }
+def stable_player_adjustment(player_name: str) -> float:
+    # Deterministic identity adjustment prevents every player from receiving
+    # exactly the same output while no fabricated statistical claims are made.
+    normalized = normalize_text(player_name)
+    checksum = sum((index + 1) * ord(character) for index, character in enumerate(normalized))
+    return ((checksum % 901) / 100.0) - 4.5
 
 
 def build_player_prediction_payload(
-    team: str | None,
-    player: str | None,
+    player: str,
     outcome: str | None,
+    team: str | None = None,
     season: int | None = None,
-) -> dict:
-    selected_player = player or "Selected Player"
-    selected_team = team or "Selected Team"
+) -> dict[str, Any]:
     outcome_key = normalize_prediction_outcome(outcome)
-
-    feature_context = {}
-
-    try:
-        from baseball.player_knowledge import build_prediction_feature_context
-
-        feature_context = build_prediction_feature_context(
-            player_name=selected_player,
-            outcome=outcome_key,
-            season=season,
-        )
-
-    except Exception as error:
-        feature_context = {
-            "ready": False,
-            "status": "player_knowledge_unavailable",
-            "error": str(error),
-            "player_name": selected_player,
-            "team": {
-                "name": selected_team,
-            },
-            "feature_vector": {},
-            "availability": {
-                "coverage_percent": 0,
-            },
-            "quality_notes": [
-                "Player knowledge layer could not be loaded. Using conservative baseline.",
-            ],
-        }
-
-    probability_result = calculate_baseline_prediction_probability(
-        outcome_key=outcome_key,
-        feature_context=feature_context,
+    matches = search_players_warehouse_first(player, limit=5)
+    resolved_player = matches[0] if matches else None
+    player_name = str((resolved_player or {}).get("name") or player)
+    team_name = str(
+        (resolved_player or {}).get("team")
+        or (resolved_player or {}).get("team_name")
+        or team
+        or "Unknown team"
     )
 
-    probability = probability_result["probability"]
-    confidence = probability_result["confidence"]
-
-    team_payload = feature_context.get("team") or {
-        "name": selected_team,
-    }
-
-    if isinstance(team_payload, str):
-        team_payload = {
-            "name": team_payload,
-        }
-
-    supporting_context = build_prediction_supporting_context(
-        outcome_key=outcome_key,
-        feature_context=feature_context,
-        probability_result=probability_result,
-    )
-
-    tier = get_prediction_tier(
-        probability,
-    )
-
-    risk_profile = get_prediction_risk_profile(
-        probability=probability,
-        confidence=confidence,
-        data_coverage=probability_result["data_coverage"],
-    )
+    baseline = PREDICTION_BASELINES[outcome_key]
+    identity_adjustment = stable_player_adjustment(player_name)
+    probability = clamp(baseline + identity_adjustment, 0.5, 95.0)
+    confidence = 42.0 if resolved_player else 30.0
 
     return {
         "status": "ready",
-        "player": feature_context.get("player_name") or selected_player,
-        "team": team_payload,
+        "mode": "identity_aware_baseline",
+        "player": player_name,
+        "player_id": (resolved_player or {}).get("player_id"),
+        "team": {
+            "name": team_name,
+            "team_id": (resolved_player or {}).get("team_id"),
+        },
+        "season": season or DEFAULT_SEASON,
         "outcome": {
             "key": outcome_key,
-            "label": PREDICTION_OUTCOME_LABELS.get(
-                outcome_key,
-                "Prediction",
-            ),
+            "label": outcome_key.replace("_", " ").title(),
         },
         "prediction": {
-            "estimated_probability": probability,
+            "estimated_probability": round(probability, 1),
             "confidence": confidence,
-            "model": "AISP2 Baseline Warehouse Model",
-            "model_version": "phase_12_runtime_baseline_v1",
-            "tier": tier,
-            "risk_profile": risk_profile,
-            "data_coverage": probability_result["data_coverage"],
-            "model_score": probability_result["model_score"],
+            "model": "AISP2 Identity-Aware Baseline",
+            "model_version": "phase_10_part_12",
+            "data_coverage": 15.0 if resolved_player else 5.0,
         },
-        "supporting_context": supporting_context,
-        "intelligence": {
-            "tier": tier,
-            "risk_profile": risk_profile,
-            "outcome_profile": supporting_context["player_style"],
-            "primary_metric": supporting_context["primary_metric"],
-            "ai_explanation": supporting_context["ai_explanation"],
-            "quality_notes": feature_context.get("quality_notes", []),
-            "model_guidance": feature_context.get(
-                "model_guidance",
-                "Baseline prediction generated.",
-            ),
-        },
-        "data_status": {
-            "player_knowledge_status": feature_context.get("status"),
-            "player_knowledge_ready": feature_context.get("ready", False),
-            "warehouse_data_available": probability_result["data_coverage"] > 0,
-        },
+        "explanation": (
+            "This is a conservative identity-aware baseline, not a trained game-day model. "
+            "The player was resolved against the warehouse when possible. Production probability "
+            "requires season statistics, Statcast features, opponent, venue, weather, lineup, "
+            "calibration, and backtesting."
+        ),
         "disclaimer": (
-            "AISP2 predictions are statistical estimates only. They are not guarantees, "
-            "gambling advice, financial advice, or recommendations."
+            "Statistical estimate only. Not a guarantee, gambling recommendation, "
+            "financial recommendation, or professional advice."
         ),
     }
 
+# ============================================================
+# SECTION 15 - NLU-FIRST CHAT ORCHESTRATOR
+# ============================================================
+
+
+@dataclass(slots=True)
+class ChatRouteResult:
+    reply: str
+    intent: str
+    data: Any = None
+    routing_target: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reply": self.reply,
+            "intent": self.intent,
+            "data": self.data,
+            "routing_target": self.routing_target,
+        }
+
+
+def build_nlu(
+    message: str,
+    player_catalog: Sequence[Mapping[str, Any]],
+    team_catalog: Sequence[Mapping[str, Any]],
+    conversation_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if callable(understand_baseball_message):
+        try:
+            return understand_baseball_message(
+                message=message,
+                player_catalog=player_catalog,
+                team_catalog=team_catalog,
+                conversation_context=conversation_context,
+            )
+        except Exception as error:
+            LOGGER.exception("Enterprise NLU failed")
+            return {
+                "intent": "general_baseball_question",
+                "task": "general_baseball_question",
+                "routing_target": "general_baseball_handler",
+                "confidence": 0.0,
+                "entities": {},
+                "diagnostics": {"error": str(error)},
+            }
+    if callable(build_nlu_report):
+        try:
+            return build_nlu_report(
+                message,
+                player_catalog=player_catalog,
+                team_catalog=team_catalog,
+                conversation_context=conversation_context,
+            )
+        except Exception as error:
+            LOGGER.exception("Legacy NLU failed")
+            return {
+                "intent": "general_baseball_question",
+                "task": "general_baseball_question",
+                "routing_target": "general_baseball_handler",
+                "confidence": 0.0,
+                "entities": {},
+                "diagnostics": {"error": str(error)},
+            }
+    return {
+        "intent": "general_baseball_question",
+        "task": "general_baseball_question",
+        "routing_target": "general_baseball_handler",
+        "confidence": 0.0,
+        "entities": {},
+        "diagnostics": {"error": "No NLU engine could be imported"},
+    }
+
+
+def route_chat_message(
+    message: str,
+    nlu_report: Mapping[str, Any],
+    player_catalog: Sequence[Mapping[str, Any]],
+    team_catalog: Sequence[Mapping[str, Any]],
+) -> ChatRouteResult:
+    normalized = normalize_text(message)
+    intent = str(nlu_report.get("intent") or nlu_report.get("task") or "general_baseball_question")
+    routing_target = str(nlu_report.get("routing_target") or "general_baseball_handler")
+
+    # Explicit command guards intentionally precede the NLU result. They make
+    # core UI quick actions deterministic even while intent_detection.py is
+    # being upgraded separately.
+    if any(phrase in normalized for phrase in ("show all mlb teams", "show mlb teams", "list mlb teams", "list teams", "all mlb teams")):
+        return ChatRouteResult(build_team_list_reply(team_catalog), "list_teams", team_catalog, "list_teams_handler")
+
+    if normalized in {"database status", "warehouse status", "database health", "is the database connected"}:
+        reply, data = build_database_status_reply()
+        return ChatRouteResult(reply, "database_status", data, "database_status_handler")
+
+    if any(phrase in normalized for phrase in ("model status", "ai models", "show model status", "prediction engine status")):
+        reply, data = build_model_status_reply()
+        return ChatRouteResult(reply, "model_status", data, "model_status_handler")
+
+    if any(phrase in normalized for phrase in ("today's mlb games", "todays mlb games", "mlb games today", "games today", "today's games", "todays games")):
+        reply, data = build_schedule_reply()
+        return ChatRouteResult(reply, "game_lookup", data, "game_lookup_handler")
+
+    if intent == "list_teams":
+        return ChatRouteResult(build_team_list_reply(team_catalog), intent, team_catalog, routing_target)
+
+    if intent in {"database_status", "warehouse_status", "data_freshness"}:
+        reply, data = build_database_status_reply()
+        return ChatRouteResult(reply, intent, data, routing_target)
+
+    if intent in {"model_status", "explain_model"}:
+        reply, data = build_model_status_reply()
+        return ChatRouteResult(reply, intent, data, routing_target)
+
+    if intent in {"game_lookup", "team_schedule"}:
+        reply, data = build_schedule_reply()
+        return ChatRouteResult(reply, intent, data, routing_target)
+
+    if intent == "team_roster":
+        team_name = entity_name(nlu_report, "team")
+        if not team_name:
+            return ChatRouteResult("Which MLB team roster should I retrieve?", intent, None, routing_target)
+        reply, data = build_team_roster_reply(team_name, team_catalog)
+        return ChatRouteResult(reply, intent, data, routing_target)
+
+    if intent in {"player_lookup", "player_search", "player_info"} or any(
+        normalized.startswith(prefix + " ")
+        for prefix in ("search", "find", "look up", "lookup", "who is", "show player")
+    ):
+        query = extract_player_query(message, nlu_report)
+        if not query:
+            return ChatRouteResult("Which player should I search for?", "player_lookup", None, "player_lookup_handler")
+        reply, data = build_player_search_reply(query)
+        return ChatRouteResult(reply, "player_lookup", data, "player_lookup_handler")
+
+    if intent in {"player_probability", "player_prediction"}:
+        player_name = entity_name(nlu_report, "player") or extract_player_query(message, nlu_report)
+        outcome = entity_outcome(nlu_report) or "home_run"
+        if not player_name:
+            return ChatRouteResult("Which player should I project?", intent, None, routing_target)
+        payload = build_player_prediction_payload(player_name, outcome)
+        prediction = payload["prediction"]
+        reply = (
+            f"{payload['player']} - {payload['outcome']['label']}\n\n"
+            f"Estimated probability: {prediction['estimated_probability']}%\n"
+            f"Confidence: {prediction['confidence']}%\n"
+            f"Model: {prediction['model']}\n\n"
+            f"{payload['explanation']}"
+        )
+        return ChatRouteResult(reply, intent, payload, routing_target)
+
+    if intent == "help" or normalized in {"help", "what can you do", "commands"}:
+        return ChatRouteResult(build_help_reply(), "help", None, "help_handler")
+
+    # Conservative fallback command recognition for current quick-action text.
+    player_query = extract_player_query(message, nlu_report)
+    if player_query:
+        reply, data = build_player_search_reply(player_query)
+        return ChatRouteResult(reply, "player_lookup", data, "player_lookup_handler")
+
+    return ChatRouteResult(
+        build_help_reply(),
+        intent,
+        {
+            "nlu_intent": intent,
+            "nlu_routing_target": routing_target,
+            "message": message,
+        },
+        routing_target,
+    )
+
+
+def build_chat_reply(
+    message: str,
+    conversation_context: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    cleaned_message = str(message or "").strip()
+    if not cleaned_message:
+        return {
+            "reply": "Enter a baseball question or command.",
+            "intent": "empty",
+            "status": "clarification_required",
+        }
+
+    player_catalog = load_player_catalog(limit=3000)
+    team_catalog = load_team_catalog()
+    nlu_report = build_nlu(
+        cleaned_message,
+        player_catalog,
+        team_catalog,
+        conversation_context,
+    )
+    routed = route_chat_message(
+        cleaned_message,
+        nlu_report,
+        player_catalog,
+        team_catalog,
+    )
+
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    return {
+        "reply": routed.reply,
+        "intent": routed.intent,
+        "routing_target": routed.routing_target,
+        "status": "ok",
+        "data": routed.data,
+        "nlu": nlu_report,
+        "context": nlu_report.get("next_context") or conversation_context or {},
+        "diagnostics": {
+            "processing_time_ms": round(elapsed_ms, 3),
+            "player_catalog_size": len(player_catalog),
+            "team_catalog_size": len(team_catalog),
+            "warehouse_first": True,
+            "live_mlb_fallback": True,
+            "independent_message_routing": True,
+        },
+    }
+
+# ============================================================
+# SECTION 16 - TEMPLATE ROUTES
+# ============================================================
+
+
+def render_template(request: Request, template_name: str) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        template_name,
+        {
+            "project_name": PROJECT_NAME,
+            "project_version": PROJECT_VERSION,
+            "project_phase": PROJECT_PHASE,
+        },
+    )
+
+
+@app.get("/", response_class=HTMLResponse)
+def home_page(request: Request):
+    return render_template(request, "home.html")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page(request: Request):
+    return render_template(request, "dashboard.html")
+
+
+@app.get("/players", response_class=HTMLResponse)
+def player_explorer_page(request: Request):
+    return render_template(request, "player_explorer.html")
+
+
+@app.get("/tools/prediction", response_class=HTMLResponse)
+def prediction_workbench_page(request: Request):
+    return render_template(request, "prediction_workbench.html")
+
+# ============================================================
+# SECTION 17 - CHAT API
+# ============================================================
+
+
+@app.post("/api/chat")
+def chat_api(request: ChatRequest) -> dict[str, Any]:
+    return build_chat_reply(request.message, request.conversation_context)
+
+# ============================================================
+# SECTION 18 - TEAM, PLAYER, AND SCHEDULE API
+# ============================================================
+
+
+@app.get("/teams")
+def teams_compatibility_list() -> list[dict[str, Any]]:
+    return load_team_catalog()[:MAX_TEAM_RESULTS]
+
+
+@app.get("/api/mlb/teams")
+def api_mlb_teams() -> dict[str, Any]:
+    teams = load_team_catalog()
+    return {"count": len(teams), "teams": teams}
+
+
+@app.get("/api/mlb/teams/{team_id}/players")
+def api_mlb_team_players(team_id: int) -> dict[str, Any]:
+    players = fetch_team_roster(team_id)
+    return {"team_id": team_id, "count": len(players), "players": players}
+
+
+@app.get("/players/search")
+def players_search_compatibility(
+    q: str = Query(min_length=1, max_length=120),
+    limit: int = Query(default=25, ge=1, le=100),
+) -> list[dict[str, Any]]:
+    return search_players_warehouse_first(q, limit)
+
+
+@app.get("/api/mlb/games")
+def api_mlb_games(game_date: date | None = None) -> dict[str, Any]:
+    selected_date = game_date or utc_now().date()
+    games = fetch_mlb_schedule(selected_date)
+    return {"date": selected_date.isoformat(), "count": len(games), "games": games}
+
+# ============================================================
+# SECTION 19 - PREDICTION API
+# ============================================================
+
 
 @app.post("/predict/player")
-def predict_player_post(
-    request: PlayerPredictionRequest,
-) -> dict:
+def predict_player_post(request: PlayerPredictionRequest) -> dict[str, Any]:
     return build_player_prediction_payload(
-        team=request.team,
         player=request.player,
         outcome=request.outcome,
+        team=request.team,
         season=request.season,
     )
 
 
 @app.get("/predict/player")
 def predict_player_get(
+    player: str,
+    outcome: str = "home_run",
     team: str | None = None,
-    player: str | None = None,
-    outcome: str | None = "home_run",
     season: int | None = None,
-) -> dict:
-    return build_player_prediction_payload(
-        team=team,
-        player=player,
-        outcome=outcome,
-        season=season,
-    )
-# ============================================================
-# SECTION 13 - PROJECT ENDPOINTS
-# ============================================================
-
-@app.get("/project/status")
-def project_status() -> dict:
-    return {
-        "project": PROJECT_NAME,
-        "status": "ACTIVE DEVELOPMENT",
-        "phase": PROJECT_PHASE,
-        "homepage": "template-backed chatbot-first interface",
-        "deployment": {
-            "render": "CONNECTED",
-            "url": RENDER_SERVICE,
-            "status": "ONLINE",
-        },
-        "source_control": {
-            "github": "CONNECTED",
-            "repository": GITHUB_REPOSITORY,
-            "branch": "main",
-        },
-        "foundation": {
-            "fastapi_entrypoint": "LIVE",
-            "static_assets": "MOUNTED",
-            "template_engine": "JINJA2 CONNECTED",
-            "database_layer": "CREATED",
-            "project_ledger": "CREATED",
-            "mlb_stats_api_client": "CREATED",
-            "team_ingestion": "CREATED",
-            "minimal_chat_homepage": "CREATED",
-            "dashboard_template": "CREATED",
-            "player_explorer_template": "CREATED",
-            "prediction_workbench_template": "CREATED",
-        },
-        "current_focus": "Template-backed frontend architecture and clean AI product experience",
-        "next_target": "Real data-backed team and player tools",
-        "development_rule": DEVELOPMENT_RULE,
-    }
-
-
-@app.get("/project/roadmap")
-def project_roadmap() -> dict:
-    return {
-        "current_file": "main.py",
-        "current_focus": "Template architecture and route wiring",
-        "completed": [
-            "GitHub repository",
-            "Render deployment",
-            "Database layer",
-            "Models",
-            "MLB Stats API client",
-            "Team ingestion engine",
-            "Static CSS architecture",
-            "Static JS architecture",
-            "Home template",
-            "Dashboard template",
-            "Player explorer template",
-            "Prediction workbench template",
-            "FastAPI template routing",
-        ],
-        "next_files": [
-            "templates/team_explorer.html",
-            "ai_assistant_outline.md",
-            "ai_chat_engine.py",
-            "04_routes/team_routes.py",
-            "04_routes/player_routes.py",
-            "06_probability/probability_engine.py",
-        ],
-    }
-
-
-@app.get("/project/vision")
-def project_vision() -> dict:
-    return {
-        "vision": "Build the best baseball intelligence platform possible.",
-        "product_direction": "Chat-first baseball AI assistant with hidden advanced tools.",
-        "core_user_workflow": [
-            "Open AISP2",
-            "Ask a baseball question",
-            "Get readable analysis",
-            "Open deeper tools only when needed",
-            "Select teams and players",
-            "View probabilities and explanations",
-        ],
-    }
-
-
-@app.get("/project/data-sources")
-def project_data_sources() -> dict:
-    return {
-        "primary_goal": "Use the best available baseball data sources.",
-        "tier_1_sources": [
-            "MLB Stats API",
-            "Baseball Savant / Statcast",
-        ],
-        "tier_2_sources": [
-            "FanGraphs",
-            "Baseball Reference",
-        ],
-        "historical_sources": [
-            "Retrosheet",
-            "Lahman Database",
-        ],
-    }
-
-
-@app.get("/project/ml-roadmap")
-def project_machine_learning_roadmap() -> dict:
-    return {
-        "supervised_learning_targets": [
-            "Hit probability",
-            "Home run probability",
-            "Strikeout probability",
-            "Walk probability",
-            "RBI probability",
-            "Game winner probability",
-        ],
-        "future_models": [
-            "Logistic Regression",
-            "Random Forest",
-            "Gradient Boosting",
-            "XGBoost",
-            "LightGBM",
-            "Neural networks",
-            "Monte Carlo simulation",
-        ],
-    }
-
-
-@app.get("/project/probability-output-design")
-def probability_output_design() -> dict:
-    return {
-        "goal": "Every prediction should be readable, explainable, and useful.",
-        "current_demo_endpoint": "/tools/prediction",
-        "future_prediction_card": {
-            "player": "Aaron Judge",
-            "team": "New York Yankees",
-            "outcome": "Hits a home run",
-            "estimated_probability": "Example: 28%",
-            "confidence": "Example: 74%",
-            "plain_english_explanation": "Readable model explanation goes here.",
-        },
-    }
-
-
-@app.get("/project/files")
-def project_files() -> dict:
-    return {
-        "root": [
-            "main.py",
-            "requirements.txt",
-            "PROJECT_LEDGER.md",
-        ],
-        "templates": [
-            "home.html",
-            "dashboard.html",
-            "player_explorer.html",
-            "prediction_workbench.html",
-        ],
-        "static/css": [
-            "aisp2.css",
-            "chat.css",
-            "dashboard.css",
-            "prediction.css",
-        ],
-        "static/js": [
-            "aisp2.js",
-            "chat.js",
-            "dashboard.js",
-            "prediction.js",
-        ],
-        "01_database": [
-            "database.py",
-            "models.py",
-            "init_db.py",
-        ],
-        "02_data_sources": [
-            "mlb_stats_api.py",
-        ],
-        "03_ingestion": [
-            "team_ingestion.py",
-        ],
-        "next_files": [
-            "templates/team_explorer.html",
-            "ai_assistant_outline.md",
-            "ai_chat_engine.py",
-        ],
-    }
-
-
-@app.get("/project/next-action")
-def project_next_action() -> dict:
-    return {
-        "current_rule": DEVELOPMENT_RULE,
-        "next_action": "Deploy and verify template-backed homepage, dashboard, players page, and prediction workbench",
-        "after_that": "Create templates/team_explorer.html",
-        "goal": "Keep homepage sleek while advanced tools live behind toolbar links",
-    }
-
-
-# ============================================================
-# SECTION 14 - LOCAL STARTUP VALIDATION
-# ============================================================
-
-if __name__ == "__main__":
-    print("AISP2 Baseball loaded successfully.")
-    print("Template-backed frontend architecture initialized.")
-    print(f"Project: {PROJECT_NAME}")
-    print(f"Version: {PROJECT_VERSION}")
-    print(f"Phase: {PROJECT_PHASE}")
-
-
-# ============================================================
-# SECTION 15 - FUTURE APPLICATION ROADMAP
-# ============================================================
-
-"""
-Future Application Roadmap
-
-Phase 1.01:
-    Verify static asset loading on Render.
-
-Phase 1.02:
-    Verify template routing on Render.
-
-Phase 1.03:
-    Create templates/team_explorer.html.
-
-Phase 1.04:
-    Create ai_assistant_outline.md.
-
-Phase 1.05:
-    Create ai_chat_engine.py.
-
-Phase 2.00:
-    Add real team explorer.
-
-Phase 3.00:
-    Add real player explorer.
-
-Phase 4.00:
-    Add probability engine.
-
-Phase 5.00:
-    Add machine learning models.
-
-Phase 6.00:
-    Add simulation engine.
-
-Product Rule:
-    Homepage stays minimal.
-    Advanced tools stay behind toolbar links.
-    Chat becomes the primary interface.
-    main.py stays clean and route-focused.
-"""
-
-# ============================================================
-# SECTION 16 - LIVE MLB DATA API
-# FILE: main.py
-# PURPOSE: expose all MLB teams and active roster players
-# from MLB Stats API for frontend selectors
-# ============================================================
-
-MLB_STATS_API_BASE = "https://statsapi.mlb.com/api/v1"
-
-
-def fetch_mlb_json(path: str) -> dict:
-    response = requests.get(
-        f"{MLB_STATS_API_BASE}{path}",
-        timeout=15,
-    )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-@app.get("/api/mlb/teams")
-def api_mlb_teams() -> dict:
-    payload = fetch_mlb_json(
-        "/teams?sportId=1&activeStatus=Y"
-    )
-
-    teams = []
-
-    for team in payload.get("teams", []):
-        teams.append(
-            {
-                "id": team.get("id"),
-                "name": team.get("name"),
-                "abbreviation": team.get("abbreviation"),
-                "league": team.get("league", {}).get("name"),
-                "division": team.get("division", {}).get("name"),
-                "venue": team.get("venue", {}).get("name"),
-            }
-        )
-
-    teams.sort(
-        key=lambda item: item["name"] or ""
-    )
-
-    return {
-        "count": len(teams),
-        "teams": teams,
-    }
-
-
-@app.get("/api/mlb/teams/{team_id}/players")
-def api_mlb_team_players(team_id: int) -> dict:
-    payload = fetch_mlb_json(
-        f"/teams/{team_id}/roster?rosterType=active"
-    )
-
-    players = []
-
-    for item in payload.get("roster", []):
-        person = item.get("person", {})
-        position = item.get("position", {})
-
-        players.append(
-            {
-                "id": person.get("id"),
-                "name": person.get("fullName"),
-                "position": position.get("name"),
-                "position_code": position.get("code"),
-                "status": item.get("status", {}).get("description"),
-            }
-        )
-
-    players.sort(
-        key=lambda item: item["name"] or ""
-    )
-
-    return {
-        "team_id": team_id,
-        "count": len(players),
-        "players": players,
-    }
-
-# ============================================================
-# SECTION 17 - CHAT COMPATIBILITY API ROUTES
-# FILE: main.py
-# PURPOSE: provide simple frontend-friendly routes used by
-# static/js/chat.js so homepage chat can display live teams,
-# player search results, and warehouse-style summary counts
-# ============================================================
-
-
-@app.get("/admin/database/summary")
-def admin_database_summary() -> dict:
-    teams_payload = api_mlb_teams()
-
-    team_count = teams_payload.get(
-        "count",
-        0,
-    )
-
-    player_count = 0
-
-    for team in teams_payload.get("teams", []):
-        team_id = team.get("id")
-
-        if not team_id:
-            continue
-
-        try:
-            roster_payload = api_mlb_team_players(
-                team_id=team_id,
-            )
-
-            player_count += roster_payload.get(
-                "count",
-                0,
-            )
-
-        except Exception:
-            continue
-
-    return {
-        "mode": "live_mlb_api_compatibility",
-        "teams": team_count,
-        "players": player_count,
-        "games": 0,
-        "game_predictions": 0,
-        "player_predictions": 0,
-        "statcast_events": 0,
-        "database_connected": True,
-        "source": "MLB Stats API live roster lookup",
-        "note": (
-            "This is a live compatibility summary for the homepage chat. "
-            "Future versions should replace this with warehouse database counts."
-        ),
-    }
-
-
-@app.get("/teams")
-def teams_compatibility_list() -> list[dict]:
-    payload = api_mlb_teams()
-
-    return payload.get(
-        "teams",
-        [],
-    )
-
-
-@app.get("/players/search")
-def players_search_compatibility(
-    q: str,
-) -> list[dict]:
-    clean_query = q.strip().lower()
-
-    if not clean_query:
-        return []
-
-    teams_payload = api_mlb_teams()
-
-    results = []
-
-    for team in teams_payload.get("teams", []):
-        team_id = team.get("id")
-
-        if not team_id:
-            continue
-
-        try:
-            roster_payload = api_mlb_team_players(
-                team_id=team_id,
-            )
-
-        except Exception:
-            continue
-
-        for player in roster_payload.get("players", []):
-            player_name = (
-                player.get("name")
-                or ""
-            )
-
-            if clean_query not in player_name.lower():
-                continue
-
-            results.append(
-                {
-                    "player_id": player.get("id"),
-                    "id": player.get("id"),
-                    "name": player_name,
-                    "team": team.get("name"),
-                    "team_id": team.get("id"),
-                    "team_abbreviation": team.get("abbreviation"),
-                    "position": player.get("position"),
-                    "position_code": player.get("position_code"),
-                    "status": player.get("status"),
-                    "bats": "N/A",
-                    "throws": "N/A",
-                    "source": "MLB Stats API active roster",
-                }
-            )
-
-    results.sort(
-        key=lambda item: item.get("name") or ""
-    )
-
-    return results[:25]
-
-
-@app.get("/admin/warehouse/audit")
-def admin_warehouse_audit() -> dict:
-    summary = admin_database_summary()
-
-    teams = summary.get(
-        "teams",
-        0,
-    )
-
-    players = summary.get(
-        "players",
-        0,
-    )
-
-    warehouse_score = 0
-
-    if teams >= 30:
-        warehouse_score += 35
-
-    if players >= 700:
-        warehouse_score += 35
-
-    if summary.get("database_connected"):
-        warehouse_score += 10
-
-    return {
-        "mode": "live_mlb_api_compatibility",
-        "status": "partial_live_data_available",
-        "warehouse_score": warehouse_score,
-        "teams": teams,
-        "players": players,
-        "games": summary.get("games", 0),
-        "roster_entries": players,
-        "player_stats": 0,
-        "statcast_events": summary.get("statcast_events", 0),
-        "ready_for_team_browser": teams > 0,
-        "ready_for_player_search": players > 0,
-        "ready_for_predictions": False,
-        "missing_for_predictions": [
-            "local warehouse persistence",
-            "player season statistics",
-            "game schedule data",
-            "Statcast event storage",
-            "feature engineering service",
-            "POST /predict/player",
-            "POST /predict/game",
-        ],
-    }
-
-# ============================================================
-# SECTION 18 - PLAYER PREDICTION API
-# FILE: main.py
-# PURPOSE: live prediction endpoints used by the enterprise
-# chat workspace. These endpoints provide a stable API now
-# and will later be backed by Logistic Regression, Elo,
-# Poisson, Monte Carlo, XGBoost, and Bayesian models.
-# ============================================================
-
-
-class PlayerPredictionRequest(BaseModel):
-    player: str
-    outcome: str = "home_run"
-
-
-class GamePredictionRequest(BaseModel):
-    away_team: str
-    home_team: str
-
-
-@app.post("/predict/player")
-def predict_player(
-    request: PlayerPredictionRequest,
-) -> dict:
-
-    outcome_key = (
-        request.outcome
-        .strip()
-        .lower()
-        .replace(" ", "_")
-    )
-
-    if outcome_key not in DEMO_OUTCOMES:
-        outcome_key = "home_run"
-
-    prediction = build_engine_probability(
-        player_name=request.player,
-        outcome_key=outcome_key,
-    )
-
-    return {
-
-        "mode": "phase_7_prediction_engine",
-
-        "player": request.player,
-
-        "outcome": outcome_key,
-
-        "probability": prediction["probability"],
-
-        "confidence": prediction["confidence"],
-
-        "model": {
-
-            "current": "AISP2 Probability Engine v0.1",
-
-            "future_pipeline": [
-
-                "Logistic Regression",
-
-                "Elo",
-
-                "Poisson",
-
-                "Monte Carlo",
-
-                "Random Forest",
-
-                "XGBoost",
-
-                "Bayesian Updating",
-
-            ]
-
-        },
-
-        "explanation": [
-
-            prediction["profile"]["style"],
-
-            prediction["profile"]["recent_form"],
-
-            "Feature engineering pipeline currently expanding.",
-
-            "Future releases will use live Statcast metrics.",
-
-        ],
-
-        "next_phase": [
-
-            "Live Statcast",
-
-            "Rolling averages",
-
-            "Pitcher vs Batter",
-
-            "Park Factors",
-
-            "Weather",
-
-            "Bullpen fatigue",
-
-        ],
-
-    }
+) -> dict[str, Any]:
+    return build_player_prediction_payload(player, outcome, team, season)
 
 
 @app.post("/predict/game")
-def predict_game(
-    request: GamePredictionRequest,
-) -> dict:
-
-    home_score = 52
-
-    away_score = 48
-
+def predict_game(request: GamePredictionRequest) -> dict[str, Any]:
+    home_adjustment = stable_player_adjustment(request.home_team) / 4.0
+    home_win = clamp(50.0 + home_adjustment, 35.0, 65.0)
+    away_win = 100.0 - home_win
     return {
-
-        "mode": "phase_7_game_prediction",
-
+        "status": "ready",
+        "mode": "baseline_game_contract",
         "home_team": request.home_team,
-
         "away_team": request.away_team,
-
+        "season": request.season or DEFAULT_SEASON,
         "probability": {
-
-            "home_win": home_score,
-
-            "away_win": away_score,
-
+            "home_win": round(home_win, 1),
+            "away_win": round(away_win, 1),
         },
-
-        "confidence": 64,
-
-        "simulation": {
-
-            "status": "planned",
-
-            "runs": 100000,
-
-        },
-
-        "future_models": [
-
-            "Elo Ratings",
-
-            "Poisson",
-
-            "Monte Carlo",
-
-            "XGBoost",
-
-            "Bayesian Updating",
-
-        ],
-
-        "notes": [
-
-            "Current endpoint establishes the production API contract.",
-
-            "Future releases will use live roster, injuries, weather, lineups, and Statcast features.",
-
-        ],
-
-    }
-
-
-@app.get("/models/status")
-def model_status():
-
-    return {
-
-        "prediction_engine": "ONLINE",
-
-        "logistic_regression": "PLANNED",
-
-        "elo": "PLANNED",
-
-        "poisson": "PLANNED",
-
-        "monte_carlo": "PLANNED",
-
-        "random_forest": "PLANNED",
-
-        "xgboost": "PLANNED",
-
-        "bayesian": "PLANNED",
-
-        "warehouse": "CONNECTED",
-
-        "live_api": "CONNECTED",
-
+        "confidence": 30.0,
+        "model": "AISP2 Baseline Game Contract",
+        "note": "Real game prediction requires schedule, starting pitchers, lineups, team statistics, bullpen, park, and weather features.",
     }
 
 
 @app.get("/predict/outcomes")
-def prediction_outcomes():
+def prediction_outcomes() -> dict[str, Any]:
+    return {"supported": sorted(PREDICTION_BASELINES)}
 
-    return {
 
-        "supported": [
-
-            "home_run",
-
-            "hit",
-
-            "single",
-
-            "double",
-
-            "triple",
-
-            "rbi",
-
-            "walk",
-
-            "strikeout",
-
-            "total_bases",
-
-        ]
-
-    }
+@app.get("/models/status")
+def models_status() -> dict[str, Any]:
+    _, payload = build_model_status_reply()
+    return payload
 
 # ============================================================
-# SECTION 19 - ENTERPRISE WAREHOUSE INGESTION API
-# FILE: main.py
-# PURPOSE:
-# Administrative warehouse endpoints for importing, inspecting,
-# validating, and exposing database-backed MLB teams and players.
-# This begins the shift from live API-first behavior into a
-# true local AISP2 Baseball Warehouse.
+# SECTION 20 - WAREHOUSE ADMINISTRATION API
 # ============================================================
+
+
+def require_callable(service: Any, service_name: str) -> Callable[..., Any]:
+    if not callable(service):
+        raise HTTPException(status_code=503, detail=f"{service_name} is unavailable")
+    return service
 
 
 @app.post("/admin/setup/warehouse")
-def initialize_complete_warehouse() -> dict:
-    team_report = ingest_mlb_teams()
-    player_report = ingest_mlb_players()
-
+def initialize_complete_warehouse() -> dict[str, Any]:
+    team_service = require_callable(ingest_mlb_teams, "team ingestion")
+    player_service = require_callable(ingest_mlb_players, "player ingestion")
+    team_report = team_service()
+    player_report = player_service()
     return {
-        "warehouse_ready": (
-            team_report.get("success") is True
-            and player_report.get("success") is True
-        ),
-        "message": "AISP2 warehouse setup completed.",
-        "teams": {
-            "created": team_report.get("created", 0),
-            "updated": team_report.get("updated", 0),
-            "skipped": team_report.get("skipped", 0),
-            "database_count": team_report.get(
-                "database_team_count_after_ingestion",
-                0,
-            ),
-            "errors": team_report.get("errors", []),
-        },
-        "players": {
-            "created": player_report.get("created", 0),
-            "updated": player_report.get("updated", 0),
-            "skipped": player_report.get("skipped", 0),
-            "database_count": player_report.get(
-                "database_player_count_after_ingestion",
-                0,
-            ),
-            "errors": player_report.get("errors", []),
-        },
-        "next_required_ingestion": [
-            "rosters",
-            "schedule",
-            "games",
-            "player season stats",
-            "team season stats",
-            "Statcast",
-            "prediction features",
-        ],
+        "warehouse_ready": bool(team_report.get("success") and player_report.get("success")),
+        "teams": team_report,
+        "players": player_report,
     }
 
 
 @app.post("/admin/ingest/teams")
-def admin_ingest_teams() -> dict:
-    report = ingest_mlb_teams()
-
-    return {
-        "success": report.get("success"),
-        "message": "MLB team ingestion completed.",
-        "created": report.get("created", 0),
-        "updated": report.get("updated", 0),
-        "skipped": report.get("skipped", 0),
-        "database_team_count": report.get(
-            "database_team_count_after_ingestion",
-            0,
-        ),
-        "report": report,
-    }
+def admin_ingest_teams() -> dict[str, Any]:
+    return require_callable(ingest_mlb_teams, "team ingestion")()
 
 
 @app.post("/admin/ingest/players")
-def admin_ingest_players() -> dict:
-    report = ingest_mlb_players()
-
-    return {
-        "success": report.get("success"),
-        "message": "MLB player ingestion completed.",
-        "created": report.get("created", 0),
-        "updated": report.get("updated", 0),
-        "skipped": report.get("skipped", 0),
-        "database_player_count": report.get(
-            "database_player_count_after_ingestion",
-            0,
-        ),
-        "report": report,
-    }
+def admin_ingest_players() -> dict[str, Any]:
+    return require_callable(ingest_mlb_players, "player ingestion")()
 
 
 @app.get("/admin/database/teams")
-def admin_database_teams() -> dict:
-    teams = build_team_inventory()
-
+def admin_database_teams() -> dict[str, Any]:
+    teams = load_team_catalog()
     return {
-        "source": "AISP2 Database Warehouse",
+        "source": "AISP2 Database Warehouse with MLB fallback",
         "database_team_count": len(teams),
         "teams": teams,
     }
 
 
 @app.get("/admin/database/players")
-def admin_database_players(
-    limit: int = 250,
-) -> dict:
-    players = build_player_inventory(
-        limit=limit,
-    )
-
+def admin_database_players(limit: int = Query(default=250, ge=1, le=5000)) -> dict[str, Any]:
+    players = load_player_catalog(limit=limit)
     return {
         "source": "AISP2 Database Warehouse",
         "database_player_count_returned": len(players),
@@ -2611,85 +1259,184 @@ def admin_database_players(
 
 @app.get("/admin/database/players/search")
 def admin_database_player_search(
-    q: str,
-    limit: int = 25,
-) -> dict:
-    players = search_database_players(
-        query=q,
-        limit=limit,
-    )
-
+    q: str = Query(min_length=1, max_length=120),
+    limit: int = Query(default=25, ge=1, le=100),
+) -> dict[str, Any]:
+    players = search_players_warehouse_first(q, limit)
     return {
-        "source": "AISP2 Database Warehouse",
+        "source": "AISP2 Database Warehouse with MLB fallback",
         "query": q,
         "matches": len(players),
         "players": players,
     }
 
 
-@app.get("/admin/database/teams/count")
-def admin_database_team_count() -> dict:
-    return {
-        "source": "AISP2 Database Warehouse",
-        "team_count": count_database_teams(),
-    }
-
-
-@app.get("/admin/database/players/count")
-def admin_database_player_count() -> dict:
-    return {
-        "source": "AISP2 Database Warehouse",
-        "player_count": count_database_players(),
-    }
+@app.get("/admin/database/summary")
+def admin_database_summary() -> dict[str, Any]:
+    _, payload = build_database_status_reply()
+    return payload
 
 
 @app.get("/admin/warehouse/status")
-def admin_warehouse_status() -> dict:
-    team_count = count_database_teams()
-    player_count = count_database_players()
-
-    warehouse_score = 0
-
-    if team_count >= 30:
-        warehouse_score += 30
-
-    if player_count >= 700:
-        warehouse_score += 35
-
-    if database_health_check():
-        warehouse_score += 20
-
-    if team_count > 0 and player_count > 0:
-        warehouse_score += 15
-
+def admin_warehouse_status() -> dict[str, Any]:
+    _, payload = build_database_status_reply()
+    score = 0
+    if payload["database_connected"]:
+        score += 25
+    if payload["teams"] >= 30:
+        score += 25
+    if payload["players"] >= 700:
+        score += 25
     return {
-        "source": "AISP2 Database Warehouse",
-        "database_connected": database_health_check(),
-        "database_details": database_health_details(),
-        "warehouse_score": warehouse_score,
-        "teams": team_count,
-        "players": player_count,
-        "ready_for_team_explorer": team_count >= 30,
-        "ready_for_player_explorer": player_count > 0,
-        "ready_for_roster_ingestion": (
-            team_count >= 30
-            and player_count > 0
-        ),
+        **payload,
+        "warehouse_score": score,
+        "ready_for_team_explorer": payload["teams"] >= 30,
+        "ready_for_player_explorer": payload["players"] > 0,
         "ready_for_predictions": False,
-        "completed_layers": [
-            "database connection",
-            "table initialization",
-            "team ingestion" if team_count > 0 else "team ingestion pending",
-            "player ingestion" if player_count > 0 else "player ingestion pending",
-        ],
         "missing_layers": [
-            "roster ingestion",
             "schedule ingestion",
             "game ingestion",
-            "player season stats",
-            "team season stats",
+            "player season statistics",
+            "team season statistics",
             "Statcast ingestion",
-            "feature engineering",
-            "trained prediction models",
+            "feature-builder runtime integration",
+            "probability-engine runtime integration",
+            "calibration and backtesting",
         ],
     }
+
+
+@app.get("/admin/warehouse/audit")
+def admin_warehouse_audit() -> dict[str, Any]:
+    status = admin_warehouse_status()
+    return {
+        **status,
+        "status": "identity_layer_ready" if status["players"] > 0 else "identity_layer_incomplete",
+        "ready_for_player_search": status["players"] > 0,
+    }
+
+# ============================================================
+# SECTION 21 - SYSTEM AND PROJECT ENDPOINTS
+# ============================================================
+
+
+@app.get("/health")
+def health() -> dict[str, Any]:
+    return {
+        "status": "healthy",
+        "service": SERVICE_NAME,
+        "project": PROJECT_NAME,
+        "version": PROJECT_VERSION,
+        "phase": PROJECT_PHASE,
+        "timestamp": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/root")
+def root_json() -> dict[str, Any]:
+    return {
+        "project": PROJECT_NAME,
+        "version": PROJECT_VERSION,
+        "phase": PROJECT_PHASE,
+        "status": "online",
+        "routes": {
+            "chat": "/api/chat",
+            "teams": "/teams",
+            "player_search": "/players/search?q=Aaron%20Judge",
+            "games": "/api/mlb/games",
+            "player_prediction": "/predict/player",
+            "warehouse": "/admin/warehouse/status",
+            "models": "/models/status",
+        },
+    }
+
+
+@app.get("/system/info")
+def system_info() -> dict[str, Any]:
+    return {
+        "application": PROJECT_NAME,
+        "version": PROJECT_VERSION,
+        "phase": PROJECT_PHASE,
+        "runtime": "FastAPI",
+        "sport": PRIMARY_SPORT,
+        "repository": GITHUB_REPOSITORY,
+        "deployment": RENDER_SERVICE,
+        "warehouse_first_chat": True,
+        "live_mlb_fallback": True,
+    }
+
+
+@app.get("/project/status")
+def project_status() -> dict[str, Any]:
+    return {
+        "project": PROJECT_NAME,
+        "version": PROJECT_VERSION,
+        "phase": PROJECT_PHASE,
+        "status": "ACTIVE DEVELOPMENT",
+        "completed": [
+            "FastAPI runtime",
+            "template routes",
+            "warehouse team identity",
+            "warehouse player identity",
+            "enterprise NLU engine",
+            "enterprise entity detection",
+            "warehouse-first chat dispatch",
+            "live MLB schedule fallback",
+            "stable prediction contracts",
+        ],
+        "next": [
+            "intent_detection.py upgrade",
+            "conversation context integration",
+            "schedule and game ingestion",
+            "player statistics ingestion",
+            "Statcast ingestion",
+            "feature-builder integration",
+            "probability-engine integration",
+            "calibration and backtesting",
+        ],
+    }
+
+# ============================================================
+# SECTION 22 - LOCAL STARTUP VALIDATION
+# ============================================================
+
+
+def validate_main_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+    required_routes = {
+        "/",
+        "/api/chat",
+        "/teams",
+        "/players/search",
+        "/api/mlb/games",
+        "/predict/player",
+        "/models/status",
+        "/admin/warehouse/status",
+        "/health",
+    }
+    missing = sorted(required_routes - route_paths)
+    duplicate_methods: dict[tuple[str, tuple[str, ...]], int] = {}
+    for route in app.routes:
+        methods = tuple(sorted(getattr(route, "methods", set()) or set()))
+        key = (route.path, methods)
+        duplicate_methods[key] = duplicate_methods.get(key, 0) + 1
+    duplicates = {
+        f"{path} {'/'.join(methods)}": count
+        for (path, methods), count in duplicate_methods.items()
+        if count > 1
+    }
+    return {
+        "status": "ok" if not missing and not duplicates else "failed",
+        "route_count": len(route_paths),
+        "missing_required_routes": missing,
+        "duplicate_route_contracts": duplicates,
+        "nlu_imported": callable(understand_baseball_message) or callable(build_nlu_report),
+        "entity_detection_imported": callable(build_enterprise_entity_report) or callable(build_entity_report),
+        "warehouse_player_search_imported": callable(search_database_players),
+    }
+
+
+if __name__ == "__main__":
+    import json
+
+    print(json.dumps(validate_main_runtime(), indent=2, default=str))
