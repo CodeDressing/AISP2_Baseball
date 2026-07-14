@@ -1,4 +1,3 @@
-﻿# ============================================================
 # AISP2 BASEBALL INTELLIGENCE PLATFORM
 # PACKAGE: 04_ai/nlp
 # FILE: nlu_engine.py
@@ -64,8 +63,8 @@ LOGGER = logging.getLogger(__name__)
 # ============================================================
 
 NLU_ENGINE_NAME: Final[str] = "AISP2 Enterprise Baseball NLU Engine"
-NLU_ENGINE_VERSION: Final[str] = "4.0.0"
-NLU_ENGINE_PHASE: Final[str] = "Phase 10 Part 10.0"
+NLU_ENGINE_VERSION: Final[str] = "4.1.0"
+NLU_ENGINE_PHASE: Final[str] = "Phase 10 Part 12.0"
 NLU_ENGINE_PATH: Final[str] = "04_ai/nlp/nlu_engine.py"
 NLU_ENGINE_STATUS: Final[str] = "enterprise_ready"
 
@@ -1272,7 +1271,7 @@ BUILTIN_MLB_TEAMS: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
     ("Minnesota Twins", "MIN", ("twins", "minnesota")),
     ("New York Mets", "NYM", ("mets", "ny mets")),
     ("New York Yankees", "NYY", ("yankees", "yanks", "bronx bombers", "ny yanks")),
-    ("Athletics", "ATH", ("athletics", "as", "a's", "oakland athletics")),
+    ("Athletics", "ATH", ("athletics", "a's", "oakland athletics")),
     ("Philadelphia Phillies", "PHI", ("phillies", "phils", "philadelphia")),
     ("Pittsburgh Pirates", "PIT", ("pirates", "bucs", "pittsburgh")),
     ("San Diego Padres", "SD", ("padres", "san diego")),
@@ -2111,8 +2110,26 @@ class BaseballNLUEngine:
 
         players_catalog = normalize_player_catalog(player_catalog)
         teams_catalog = normalize_team_catalog(team_catalog)
-        if not teams_catalog:
-            teams_catalog = builtin_team_catalog()
+
+        # Always merge the canonical MLB fallback catalog with database-backed
+        # teams. This prevents partial or temporarily empty warehouse catalogs
+        # from breaking team comparison and game-prediction recognition.
+        catalog_by_name = {
+            normalize_nlu_text(str(item.get("name") or "")): item
+            for item in teams_catalog
+            if item.get("name")
+        }
+
+        for fallback_team in builtin_team_catalog():
+            normalized_team_name = normalize_nlu_text(
+                str(fallback_team.get("name") or "")
+            )
+            catalog_by_name.setdefault(
+                normalized_team_name,
+                fallback_team,
+            )
+
+        teams_catalog = list(catalog_by_name.values())
 
         # Every request starts from the current message. No previous intent is
         # passed into scoring or classification.
@@ -2172,7 +2189,31 @@ class BaseballNLUEngine:
 
         # Deterministic post-selection rules handle structures that are clearer
         # than generic phrase scores.
-        if len(players) >= 2 and contains_any(normalized_message.normalized, ("compare", "versus", "vs", "between", "better")):
+        if (
+            teams
+            and (
+                contains_any(
+                    normalized_message.normalized,
+                    (
+                        "search players",
+                        "find players",
+                        "team players",
+                        "players on",
+                        "players for",
+                    ),
+                )
+                or (
+                    "players" in normalized_message.token_set
+                    and bool(
+                        normalized_message.token_set
+                        & {"search", "find", "show", "list", "browse"}
+                    )
+                )
+            )
+        ):
+            intent = NLU_TASK_TEAM_ROSTER
+            confidence = max(confidence, 0.92)
+        elif len(players) >= 2 and contains_any(normalized_message.normalized, ("compare", "versus", "vs", "between", "better")):
             intent = NLU_TASK_COMPARE_PLAYERS
             confidence = max(confidence, 0.94)
         elif len(teams) >= 2 and contains_any(normalized_message.normalized, ("compare", "versus", "vs", "who wins", "predict", "probability")):
