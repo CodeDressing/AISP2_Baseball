@@ -418,11 +418,343 @@ The next NLP file should be:
 
 That upgrade will connect full warehouse-backed player and team catalogs, improve ambiguity handling, and stop entity detection from relying on limited demo-player dictionaries.
 
+
+
+2. 04_ai/nlp/entity_detection.py
+   - Add database-backed player and team catalogs
+   - Improve boundary-safe matching
+   - Support IDs, aliases, nicknames, and ambiguity results
+   - Prevent team questions from becoming player searches
+Worked for 2m 31s
+
+Master Wayne, the full replacement for 04_ai/nlp/entity_detection.py is complete. It preserves the existing public functions while replacing static substring matching with warehouse-aware, boundary-safe entity resolution.
+
+entity_detection.py
+
+Verification completed
+1,312 lines
+59,405 bytes
+Python compilation passed
+Enterprise entity validation passed
+6 of 6 routing tests passed
+Ambiguous surname handling passed
+Generic team-list queries no longer invent a specific team
+Player-ID questions no longer trigger false team matches
+Team roster questions suppress player searching
+Exact player names and player IDs resolve correctly
+Confirmed behavior
+show all MLB teams
+→ no specific team selected
+→ player search suppressed
+→ ready for list_teams routing
+show the Yankees roster
+→ team: New York Yankees
+→ player search suppressed
+find Corbin Carroll
+→ player: Corbin Carroll
+predict Aaron Judge home run
+→ player: Aaron Judge
+→ outcome: home_run
+what is player 682998 ops
+→ player ID 682998
+→ Corbin Carroll
+→ statistic: OPS
+show smith
+→ ambiguous
+→ returns multiple ranked Smith candidates
+→ does not silently choose the wrong player
+Major upgrades
+Database and warehouse catalog support
+
+The NLP layer no longer needs hard-coded demo-player dictionaries. It accepts already-fetched warehouse or database records through:
+
+from nlp.entity_detection import (
+    build_player_catalog_from_records,
+    build_team_catalog_from_records,
+    build_enterprise_entity_report,
+)
+
+Example:
+
+player_catalog = build_player_catalog_from_records(
+    database_players,
+)
+
+team_catalog = build_team_catalog_from_records(
+    database_teams,
+)
+
+report = build_enterprise_entity_report(
+    message=user_message,
+    player_catalog=player_catalog,
+    team_catalog=team_catalog,
+)
+
+Supported record formats include:
+
+dictionaries;
+SQLAlchemy ORM objects;
+dataclasses;
+Pydantic objects;
+named tuples;
+lists;
+name-keyed dictionaries;
+plain strings.
+
+The module does not import SQLAlchemy or own a database session. The database service retrieves records; this engine resolves them.
+
+Boundary-safe matching
+
+The original logic used checks resembling:
+
+alias in message
+
+That can create severe false positives. The upgrade uses token boundaries, so:
+
+as
+
+does not automatically resolve the Athletics, and abbreviations or names do not match inside unrelated words.
+
+Resolution precedence
+
+Entity candidates are ranked in this order:
+
+explicit ID
+↓
+exact canonical name
+↓
+exact alias
+↓
+nickname
+↓
+abbreviation
+↓
+surname
+↓
+conservative fuzzy match
+IDs, aliases, and nicknames
+
+Supported player records may include:
+
+{
+    "player_id": 592450,
+    "player_name": "Aaron Judge",
+    "team_id": 147,
+    "team_name": "New York Yankees",
+    "position": "RF",
+    "aliases": ["A. Judge"],
+    "nicknames": ["The Judge"],
+}
+
+Supported team records may include:
+
+{
+    "team_id": 147,
+    "team_name": "New York Yankees",
+    "abbreviation": "NYY",
+    "aliases": ["Yankees", "Yanks"],
+    "nicknames": ["Bronx Bombers"],
+}
+Ambiguity reporting
+
+A surname request such as:
+
+show smith
+
+can now return:
+
+{
+    "status": "ambiguous",
+    "resolved": False,
+    "candidates": [
+        {
+            "canonical_name": "Will Smith",
+            "team_name": "Los Angeles Dodgers",
+            "position": "C",
+        },
+        {
+            "canonical_name": "John Smith",
+            "team_name": "Boston Red Sox",
+            "position": "P",
+        },
+    ],
+}
+
+A readable clarification can be generated with:
+
+from nlp.entity_detection import build_ambiguity_prompt
+
+prompt = build_ambiguity_prompt(
+    report["player_resolution"],
+)
+Team-to-player routing protection
+
+The new resolver explicitly suppresses player searching for team-scoped requests such as:
+
+show all MLB teams
+show the Yankees roster
+when do the Mets play next
+what is the Dodgers record
+
+This addresses the current failure where team commands were incorrectly routed into player searches.
+
+Primary report API
+from nlp.entity_detection import build_enterprise_entity_report
+
+report = build_enterprise_entity_report(
+    message=user_message,
+    player_catalog=player_catalog,
+    team_catalog=team_catalog,
+)
+
+The report includes:
+
+{
+    "request_id": "...",
+    "original_message": "...",
+    "normalized_message": "...",
+    "primary_team": {...},
+    "primary_player": {...},
+    "primary_outcome": {...},
+    "primary_statistic": {...},
+    "team_resolution": {
+        "status": "resolved",
+        "primary": {...},
+        "candidates": [...],
+    },
+    "player_resolution": {
+        "status": "ambiguous",
+        "primary": None,
+        "candidates": [...],
+    },
+    "clarification_required": True,
+    "diagnostics": {
+        "team_catalog_size": 30,
+        "player_catalog_size": ...,
+        "player_resolution_suppressed": False,
+        "independent_message_resolution": True,
+    },
+}
+
+Place the file at:
+
+04_ai/nlp/entity_detection.py
+
+Recommended commit:
+
+git add 04_ai/nlp/entity_detection.py
+git commit -m "Phase 10 Part 11.0 - Enterprise Warehouse Entity Resolution and Ambiguity Handling Upgrade - July 14 2026"
+git push
+
+The next file is:
+
+04_ai/nlp/intent_detection.py
+
+That upgrade should replace broad substring scoring with weighted intent evidence, negative evidence, strict priority rules, and distinct player-stat, team-stat, schedule, roster, and prediction intents.
+
+before comit n push; ==> Running 'uvicorn main:app --host 0.0.0.0 --port $PORT'
+Traceback (most recent call last):
+  File "/opt/render/project/src/.venv/bin/uvicorn", line 7, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/click/core.py", line 1569, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/click/core.py", line 1490, in main
+    rv = self.invoke(ctx)
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/click/core.py", line 1353, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/click/core.py", line 907, in invoke
+    return callback(*args, **kwargs)
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/uvicorn/main.py", line 440, in main
+    run(
+    ~~~^
+        app,
+        ^^^^
+    ...<48 lines>...
+        reset_contextvars=reset_contextvars,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/uvicorn/main.py", line 609, in run
+    config.load_app()
+    ~~~~~~~~~~~~~~~^^
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/uvicorn/config.py", line 427, in load_app
+    return import_from_string(self.app)
+  File "/opt/render/project/src/.venv/lib/python3.14/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/opt/render/project/python/Python-3.14.3/lib/python3.14/importlib/__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "/opt/render/project/src/main.py", line 105, in <module>
+    from nlp.nlu_engine import build_nlu_report
+  File "/opt/render/project/src/04_ai/nlp/nlu_engine.py", line 7
+    ↓
+    ^
+SyntaxError: invalid character '↓' (U+2193)
+==> Exited with status 1
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+==> Running 'uvicorn main:app --host 0.0.0.0 --port $PORT'
+Worked for 22s
+
+The Render failure is a syntax error in the deployed copy of 04_ai/nlp/nlu_engine.py:
+
+Line 7: ↓
+SyntaxError: invalid character '↓'
+
+That arrow was pasted into the Python file as executable text rather than inside a comment or docstring. FastAPI never reached startup.
+
+Use this corrected Render-safe replacement:
+
+nlu_engine_render_safe.py
+
+Replace:
+
+04_ai/nlp/nlu_engine.py
+
+with the downloaded file.
+
+Verification completed
+Python compilation passed
+build_nlu_report imports correctly
+understand_baseball_message imports correctly
+Internal NLU validation passed
+12 of 12 tests passed
+Smart punctuation and the stray arrow were removed from executable source
+
+Then run locally before committing:
+
+python -m py_compile 04_ai/nlp/nlu_engine.py
+
+Then test the import:
+
+python -c "import sys; sys.path.insert(0, '04_ai'); from nlp.nlu_engine import build_nlu_report, understand_baseball_message; print('NLU import passed')"
+
+Expected result:
+
+NLU import passed
+
+Then commit both corrected NLP files:
+
+git add 04_ai/nlp/nlu_engine.py
+git add 04_ai/nlp/entity_detection.py
+git commit -m "Phase 10 Part 11.1 - Fix NLU Render Syntax and Add Enterprise Entity Resolution - July 14 2026"
+git push
+
+Do not commit until both local commands pass.
+
 Library
 /
 Sports Predicti.
 /
-nlu_engine.py
+nlu_engine_render_safe.py
 # ============================================================
 # AISP2 BASEBALL INTELLIGENCE PLATFORM
 # PACKAGE: 04_ai/nlp
@@ -1510,7 +1842,7 @@ def normalize_nlu_text(value: str | None) -> str:
     if value is None:
         return ""
     text = strip_accents(str(value)).lower().strip()
-    text = text.replace("’", "'").replace("`", "'")
+    text = text.replace("'", "'").replace("`", "'")
     text = re.sub(r"[^a-z0-9+.%'\-/\s]", " ", text)
     text = text.replace("/", " ").replace("_", " ")
     text, _ = _replace_phrases(text, PHRASE_REPLACEMENTS)
@@ -3130,7 +3462,7 @@ Library
 /
 Sports Predicti.
 /
-nlu_engine.py
+nlu_engine_render_safe.py
 # ============================================================
 # AISP2 BASEBALL INTELLIGENCE PLATFORM
 # PACKAGE: 04_ai/nlp
@@ -4218,7 +4550,7 @@ def normalize_nlu_text(value: str | None) -> str:
     if value is None:
         return ""
     text = strip_accents(str(value)).lower().strip()
-    text = text.replace("’", "'").replace("`", "'")
+    text = text.replace("'", "'").replace("`", "'")
     text = re.sub(r"[^a-z0-9+.%'\-/\s]", " ", text)
     text = text.replace("/", " ").replace("_", " ")
     text, _ = _replace_phrases(text, PHRASE_REPLACEMENTS)
