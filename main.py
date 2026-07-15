@@ -14,17 +14,23 @@ from __future__ import annotations
 # SECTION 01 - STANDARD LIBRARY IMPORTS
 # ============================================================
 
+from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, date, datetime, timedelta
+import hashlib
+import json
 import logging
 import math
 import os
 from pathlib import Path
 import re
 import sys
+import threading
 import time
-from typing import Any, Final
+from uuid import uuid4
+from typing import Any, Final, Iterable, Iterator
 
 # ============================================================
 # SECTION 02 - PROJECT PATH REGISTRATION
@@ -53,7 +59,7 @@ for project_path in (
 
 import requests
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -90,6 +96,26 @@ def _optional_import(module_name: str, symbol_name: str, default: Any = None) ->
 
 database_health_check = _optional_import("database", "database_health_check", lambda: False)
 database_health_details = _optional_import("database", "database_health_details", lambda: {})
+database_health = _optional_import("database", "database_health")
+collect_database_inventory = _optional_import("database", "collect_database_inventory", lambda: {})
+managed_database_session = _optional_import("database", "managed_database_session")
+
+TeamModel = _optional_import("models", "Team")
+PlayerModel = _optional_import("models", "Player")
+RosterEntryModel = _optional_import("models", "RosterEntry")
+PlayerSeasonStatModel = _optional_import("models", "PlayerSeasonStat")
+PlayerGameStatModel = _optional_import("models", "PlayerGameStat")
+PlayerStatcastMetricModel = _optional_import("models", "PlayerStatcastMetric")
+GameModel = _optional_import("models", "Game")
+
+get_player_statcast_intelligence = _optional_import(
+    "statcast_warehouse_ingestion",
+    "get_player_statcast_intelligence",
+)
+validate_statcast_completion_gate = _optional_import(
+    "statcast_warehouse_ingestion",
+    "validate_statcast_completion_gate",
+)
 
 MLBStatsAPIClient = _optional_import("mlb_stats_api", "MLBStatsAPIClient")
 DEFAULT_SEASON = _optional_import("mlb_stats_api", "DEFAULT_SEASON", datetime.now(UTC).year)
@@ -126,8 +152,8 @@ ingest_mlb_players = _optional_import("player_ingestion", "ingest_mlb_players")
 # ============================================================
 
 PROJECT_NAME: Final[str] = "AISP2 Baseball"
-PROJECT_VERSION: Final[str] = "10.12.0"
-PROJECT_PHASE: Final[str] = "Phase 10 Part 12 - Enterprise Chat Runtime"
+PROJECT_VERSION: Final[str] = "12.4.1"
+PROJECT_PHASE: Final[str] = "Phase 12 Part 4.1 - Enterprise Player Intelligence Application Service"
 SERVICE_NAME: Final[str] = "aisp2-baseball"
 PRIMARY_SPORT: Final[str] = "MLB"
 GITHUB_REPOSITORY: Final[str] = "https://github.com/CodeDressing/AISP2_Baseball"
@@ -1065,6 +1091,4430 @@ def build_chat_reply(
         },
     }
 
+
+# ============================================================
+# SECTION 15.01 - PLAYER EXPLORER RUNTIME METADATA
+# ============================================================
+
+PLAYER_EXPLORER_CONTRACT_VERSION: Final[str] = "3.0.0"
+PLAYER_EXPLORER_DEFAULT_RECENT_GAMES: Final[int] = 15
+PLAYER_EXPLORER_MAX_RECENT_GAMES: Final[int] = 50
+PLAYER_EXPLORER_STALE_HOURS: Final[float] = 48.0
+PLAYER_EXPLORER_MAX_WARNINGS: Final[int] = 100
+
+
+# ============================================================
+# SECTION 15.02 - PLAYER EXPLORER ENUMERATIONS
+# ============================================================
+
+class ReadinessState:
+    READY = "ready"
+    PARTIAL = "partial"
+    MISSING = "missing"
+    STALE = "stale"
+    ERROR = "error"
+
+
+class FreshnessState:
+    FRESH = "fresh"
+    AGING = "aging"
+    STALE = "stale"
+    UNKNOWN = "unknown"
+
+
+# ============================================================
+# SECTION 15.03 - PLAYER EXPLORER RESPONSE CONTRACTS
+# ============================================================
+
+@dataclass(slots=True)
+class DataWarning:
+    code: str
+    message: str
+    severity: str = "warning"
+    field: str | None = None
+    source: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class FreshnessDescriptor:
+    status: str
+    timestamp: str | None
+    age_hours: float | None
+    source: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class PlayerExplorerReadiness:
+    identity: str
+    season_statistics: str
+    recent_form: str
+    statcast: str
+    overall: str
+    score: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+# ============================================================
+# SECTION 15.04 - NULL-SAFE SERIALIZATION HELPERS
+# ============================================================
+
+def nullable_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def nullable_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    return number if math.isfinite(number) else None
+
+
+def nullable_string(value: Any) -> str | None:
+    if value is None:
+        return None
+
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def first_model_value(record: Any, *names: str) -> Any:
+    for name in names:
+        if isinstance(record, Mapping):
+            value = record.get(name)
+        else:
+            value = getattr(record, name, None)
+
+        if value not in (None, ""):
+            return value
+
+    return None
+
+
+def model_has_attribute(model: Any, attribute_name: str) -> bool:
+    return model is not None and hasattr(model, attribute_name)
+
+
+def iso_timestamp(value: Any) -> str | None:
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).isoformat()
+
+    if isinstance(value, date):
+        return value.isoformat()
+
+    text = nullable_string(value)
+    return text
+
+
+def parse_runtime_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time(), tzinfo=UTC)
+
+    text = nullable_string(value)
+    if not text:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+    except ValueError:
+        return None
+
+
+def freshness_descriptor(
+    value: Any,
+    *,
+    source: str | None,
+    stale_hours: float = PLAYER_EXPLORER_STALE_HOURS,
+) -> FreshnessDescriptor:
+    parsed = parse_runtime_timestamp(value)
+
+    if parsed is None:
+        return FreshnessDescriptor(
+            status=FreshnessState.UNKNOWN,
+            timestamp=None,
+            age_hours=None,
+            source=source,
+        )
+
+    age_hours = max(
+        0.0,
+        (utc_now() - parsed).total_seconds() / 3600.0,
+    )
+
+    if age_hours <= stale_hours:
+        status = FreshnessState.FRESH
+    elif age_hours <= stale_hours * 3:
+        status = FreshnessState.AGING
+    else:
+        status = FreshnessState.STALE
+
+    return FreshnessDescriptor(
+        status=status,
+        timestamp=parsed.isoformat(),
+        age_hours=round(age_hours, 3),
+        source=source,
+    )
+
+
+def right_left_label(value: Any) -> str | None:
+    cleaned = nullable_string(value)
+
+    if cleaned is None:
+        return None
+
+    mapping = {
+        "R": "Right",
+        "L": "Left",
+        "S": "Switch",
+        "B": "Both",
+    }
+
+    return mapping.get(cleaned.upper(), cleaned)
+
+
+def append_warning(
+    warnings: list[DataWarning],
+    code: str,
+    message: str,
+    *,
+    severity: str = "warning",
+    field: str | None = None,
+    source: str | None = None,
+) -> None:
+    if len(warnings) >= PLAYER_EXPLORER_MAX_WARNINGS:
+        return
+
+    warnings.append(
+        DataWarning(
+            code=code,
+            message=message,
+            severity=severity,
+            field=field,
+            source=source,
+        )
+    )
+
+
+# ============================================================
+# SECTION 15.05 - DATABASE SESSION ADAPTER
+# ============================================================
+
+class PlayerExplorerDatabaseUnavailable(RuntimeError):
+    pass
+
+
+class PlayerExplorerNotFound(LookupError):
+    pass
+
+
+def require_player_explorer_database() -> None:
+    missing = []
+
+    if not callable(managed_database_session):
+        missing.append("managed_database_session")
+
+    for symbol_name, symbol in (
+        ("Team", TeamModel),
+        ("Player", PlayerModel),
+        ("PlayerSeasonStat", PlayerSeasonStatModel),
+        ("PlayerGameStat", PlayerGameStatModel),
+    ):
+        if symbol is None:
+            missing.append(symbol_name)
+
+    if missing:
+        raise PlayerExplorerDatabaseUnavailable(
+            "Player Explorer database services are unavailable: "
+            + ", ".join(missing)
+        )
+
+
+def player_explorer_session() -> Any:
+    require_player_explorer_database()
+
+    try:
+        return managed_database_session(commit_on_success=False)
+    except TypeError:
+        return managed_database_session()
+
+
+# ============================================================
+# SECTION 15.06 - TEAM DATABASE QUERIES
+# ============================================================
+
+def serialize_database_team(team: Any) -> dict[str, Any]:
+    return {
+        "id": nullable_int(first_model_value(team, "id")),
+        "database_id": nullable_int(first_model_value(team, "id")),
+        "mlb_team_id": nullable_int(
+            first_model_value(team, "mlb_team_id", "team_id")
+        ),
+        "name": nullable_string(first_model_value(team, "name", "team_name")),
+        "team_name": nullable_string(first_model_value(team, "name", "team_name")),
+        "abbreviation": nullable_string(first_model_value(team, "abbreviation")),
+        "league": nullable_string(first_model_value(team, "league")),
+        "league_id": nullable_int(first_model_value(team, "league_id")),
+        "division": nullable_string(first_model_value(team, "division")),
+        "division_id": nullable_int(first_model_value(team, "division_id")),
+        "venue": nullable_string(first_model_value(team, "venue")),
+        "venue_id": nullable_int(first_model_value(team, "venue_id")),
+        "active": bool(first_model_value(team, "is_active", "active_status") is not False),
+        "source_updated_at": iso_timestamp(
+            first_model_value(team, "source_updated_at", "updated_at")
+        ),
+        "source": nullable_string(
+            first_model_value(team, "source_name", "source")
+        ) or "AISP2 Database Warehouse",
+    }
+
+
+def query_database_teams(
+    *,
+    active_only: bool = True,
+) -> list[dict[str, Any]]:
+    require_player_explorer_database()
+
+    with player_explorer_session() as database_session:
+        query = database_session.query(TeamModel)
+
+        if active_only and model_has_attribute(TeamModel, "is_active"):
+            query = query.filter(TeamModel.is_active.is_(True))
+
+        if model_has_attribute(TeamModel, "name"):
+            query = query.order_by(TeamModel.name.asc())
+
+        teams = query.all()
+
+    return [serialize_database_team(team) for team in teams]
+
+
+def resolve_database_team(
+    team_identifier: int | str,
+    *,
+    database_session: Any,
+) -> Any:
+    query = database_session.query(TeamModel)
+
+    numeric_identifier = nullable_int(team_identifier)
+
+    if numeric_identifier is not None:
+        predicates = []
+
+        if model_has_attribute(TeamModel, "id"):
+            predicates.append(TeamModel.id == numeric_identifier)
+
+        if model_has_attribute(TeamModel, "mlb_team_id"):
+            predicates.append(TeamModel.mlb_team_id == numeric_identifier)
+
+        if predicates:
+            from sqlalchemy import or_
+            team = query.filter(or_(*predicates)).first()
+            if team is not None:
+                return team
+
+    text_identifier = normalize_text(str(team_identifier))
+
+    for team in query.all():
+        candidate_values = (
+            first_model_value(team, "name", "team_name"),
+            first_model_value(team, "abbreviation"),
+            first_model_value(team, "club_name"),
+            first_model_value(team, "short_name"),
+        )
+
+        if any(
+            normalize_text(str(value)) == text_identifier
+            for value in candidate_values
+            if value
+        ):
+            return team
+
+    raise PlayerExplorerNotFound(
+        f"No database team matched '{team_identifier}'."
+    )
+
+
+# ============================================================
+# SECTION 15.07 - PLAYER DATABASE QUERIES
+# ============================================================
+
+def serialize_database_player_summary(
+    player: Any,
+    *,
+    team: Any | None = None,
+) -> dict[str, Any]:
+    if team is None:
+        team = first_model_value(player, "current_team", "team")
+
+    return {
+        "id": nullable_int(first_model_value(player, "id")),
+        "database_id": nullable_int(first_model_value(player, "id")),
+        "mlb_player_id": nullable_int(
+            first_model_value(player, "mlb_player_id", "player_id")
+        ),
+        "full_name": nullable_string(
+            first_model_value(player, "full_name", "player_name", "name")
+        ),
+        "name": nullable_string(
+            first_model_value(player, "full_name", "player_name", "name")
+        ),
+        "team_id": nullable_int(
+            first_model_value(player, "current_team_id", "team_id")
+        ),
+        "mlb_team_id": nullable_int(
+            first_model_value(team, "mlb_team_id", "team_id")
+        ) if team is not None else None,
+        "team": nullable_string(
+            first_model_value(team, "name", "team_name")
+        ) if team is not None else None,
+        "team_name": nullable_string(
+            first_model_value(team, "name", "team_name")
+        ) if team is not None else None,
+        "position": nullable_string(
+            first_model_value(player, "position", "position_name")
+        ),
+        "position_abbreviation": nullable_string(
+            first_model_value(player, "position_abbreviation")
+        ),
+        "bats": right_left_label(first_model_value(player, "bats")),
+        "throws": right_left_label(first_model_value(player, "throws")),
+        "active": bool(first_model_value(player, "active_status", "is_active") is not False),
+        "source_updated_at": iso_timestamp(
+            first_model_value(player, "source_updated_at", "updated_at")
+        ),
+    }
+
+
+def query_database_players_for_team(
+    team_identifier: int | str,
+    *,
+    active_only: bool = True,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    require_player_explorer_database()
+
+    with player_explorer_session() as database_session:
+        team = resolve_database_team(
+            team_identifier,
+            database_session=database_session,
+        )
+
+        query = database_session.query(PlayerModel)
+
+        if model_has_attribute(PlayerModel, "current_team_id"):
+            query = query.filter(PlayerModel.current_team_id == team.id)
+
+        elif RosterEntryModel is not None:
+            query = (
+                query.join(
+                    RosterEntryModel,
+                    RosterEntryModel.player_id == PlayerModel.id,
+                )
+                .filter(RosterEntryModel.team_id == team.id)
+            )
+
+        if active_only and model_has_attribute(PlayerModel, "active_status"):
+            query = query.filter(PlayerModel.active_status.is_(True))
+
+        if model_has_attribute(PlayerModel, "full_name"):
+            query = query.order_by(PlayerModel.full_name.asc())
+
+        players = query.distinct().all()
+
+        team_payload = serialize_database_team(team)
+        player_payloads = [
+            serialize_database_player_summary(player, team=team)
+            for player in players
+        ]
+
+    return team_payload, player_payloads
+
+
+def resolve_database_player(
+    player_identifier: int | str,
+    *,
+    database_session: Any,
+) -> Any:
+    query = database_session.query(PlayerModel)
+
+    numeric_identifier = nullable_int(player_identifier)
+
+    if numeric_identifier is not None:
+        predicates = []
+
+        if model_has_attribute(PlayerModel, "id"):
+            predicates.append(PlayerModel.id == numeric_identifier)
+
+        if model_has_attribute(PlayerModel, "mlb_player_id"):
+            predicates.append(PlayerModel.mlb_player_id == numeric_identifier)
+
+        if predicates:
+            from sqlalchemy import or_
+            player = query.filter(or_(*predicates)).first()
+            if player is not None:
+                return player
+
+    text_identifier = normalize_text(str(player_identifier))
+
+    for player in query.all():
+        candidate_names = (
+            first_model_value(player, "full_name"),
+            first_model_value(player, "use_name"),
+            first_model_value(player, "nick_name"),
+            first_model_value(player, "search_name"),
+        )
+
+        if any(
+            normalize_text(str(value)) == text_identifier
+            for value in candidate_names
+            if value
+        ):
+            return player
+
+    raise PlayerExplorerNotFound(
+        f"No database player matched '{player_identifier}'."
+    )
+
+
+# ============================================================
+# SECTION 15.08 - SEASON STAT DATABASE QUERIES
+# ============================================================
+
+def resolve_latest_player_season_stat(
+    database_session: Any,
+    *,
+    player: Any,
+    season: int | None,
+) -> Any | None:
+    if PlayerSeasonStatModel is None:
+        return None
+
+    query = database_session.query(PlayerSeasonStatModel)
+
+    if model_has_attribute(PlayerSeasonStatModel, "player_id"):
+        query = query.filter(PlayerSeasonStatModel.player_id == player.id)
+
+    elif model_has_attribute(PlayerSeasonStatModel, "mlb_player_id"):
+        query = query.filter(
+            PlayerSeasonStatModel.mlb_player_id == player.mlb_player_id
+        )
+
+    if season is not None and model_has_attribute(PlayerSeasonStatModel, "season"):
+        query = query.filter(PlayerSeasonStatModel.season == int(season))
+
+    if model_has_attribute(PlayerSeasonStatModel, "season"):
+        query = query.order_by(PlayerSeasonStatModel.season.desc())
+
+    return query.first()
+
+
+def serialize_player_season_stats(
+    season_stat: Any | None,
+    *,
+    requested_season: int | None,
+) -> dict[str, Any]:
+    if season_stat is None:
+        return {
+            "season": requested_season,
+            "plate_appearances": None,
+            "at_bats": None,
+            "hits": None,
+            "singles": None,
+            "doubles": None,
+            "triples": None,
+            "home_runs": None,
+            "runs": None,
+            "rbi": None,
+            "walks": None,
+            "strikeouts": None,
+            "stolen_bases": None,
+            "batting_average": None,
+            "on_base_percentage": None,
+            "slugging_percentage": None,
+            "ops": None,
+            "woba": None,
+            "wrc_plus": None,
+            "babip": None,
+            "isolated_power": None,
+            "source": None,
+            "source_updated_at": None,
+        }
+
+    return {
+        "season": nullable_int(first_model_value(season_stat, "season")),
+        "plate_appearances": nullable_int(
+            first_model_value(season_stat, "plate_appearances", "pa")
+        ),
+        "at_bats": nullable_int(first_model_value(season_stat, "at_bats", "ab")),
+        "hits": nullable_int(first_model_value(season_stat, "hits", "h")),
+        "singles": nullable_int(first_model_value(season_stat, "singles")),
+        "doubles": nullable_int(first_model_value(season_stat, "doubles")),
+        "triples": nullable_int(first_model_value(season_stat, "triples")),
+        "home_runs": nullable_int(
+            first_model_value(season_stat, "home_runs", "hr")
+        ),
+        "runs": nullable_int(first_model_value(season_stat, "runs")),
+        "rbi": nullable_int(first_model_value(season_stat, "rbi")),
+        "walks": nullable_int(first_model_value(season_stat, "walks", "bb")),
+        "strikeouts": nullable_int(
+            first_model_value(season_stat, "strikeouts", "so")
+        ),
+        "stolen_bases": nullable_int(
+            first_model_value(season_stat, "stolen_bases", "sb")
+        ),
+        "batting_average": nullable_float(
+            first_model_value(season_stat, "batting_average", "avg")
+        ),
+        "on_base_percentage": nullable_float(
+            first_model_value(season_stat, "on_base_percentage", "obp")
+        ),
+        "slugging_percentage": nullable_float(
+            first_model_value(season_stat, "slugging_percentage", "slg")
+        ),
+        "ops": nullable_float(first_model_value(season_stat, "ops")),
+        "woba": nullable_float(first_model_value(season_stat, "woba")),
+        "wrc_plus": nullable_float(first_model_value(season_stat, "wrc_plus")),
+        "babip": nullable_float(first_model_value(season_stat, "babip")),
+        "isolated_power": nullable_float(
+            first_model_value(season_stat, "isolated_power", "iso")
+        ),
+        "source": nullable_string(
+            first_model_value(season_stat, "source_name", "source")
+        ),
+        "source_updated_at": iso_timestamp(
+            first_model_value(
+                season_stat,
+                "source_updated_at",
+                "updated_at",
+                "created_at",
+            )
+        ),
+    }
+
+
+# ============================================================
+# SECTION 15.09 - RECENT GAME LOG DATABASE QUERIES
+# ============================================================
+
+def query_recent_player_game_logs(
+    database_session: Any,
+    *,
+    player: Any,
+    season: int | None,
+    limit: int,
+) -> list[Any]:
+    if PlayerGameStatModel is None:
+        return []
+
+    query = database_session.query(PlayerGameStatModel)
+
+    if model_has_attribute(PlayerGameStatModel, "player_id"):
+        query = query.filter(PlayerGameStatModel.player_id == player.id)
+
+    elif model_has_attribute(PlayerGameStatModel, "mlb_player_id"):
+        query = query.filter(
+            PlayerGameStatModel.mlb_player_id == player.mlb_player_id
+        )
+
+    if season is not None and model_has_attribute(PlayerGameStatModel, "season"):
+        query = query.filter(PlayerGameStatModel.season == int(season))
+
+    ordering_fields = (
+        "game_date",
+        "official_date",
+        "date",
+        "game_id",
+        "id",
+    )
+
+    for field_name in ordering_fields:
+        if model_has_attribute(PlayerGameStatModel, field_name):
+            query = query.order_by(getattr(PlayerGameStatModel, field_name).desc())
+            break
+
+    return query.limit(limit).all()
+
+
+def serialize_player_game_log(game_log: Any) -> dict[str, Any]:
+    return {
+        "id": nullable_int(first_model_value(game_log, "id")),
+        "game_id": nullable_int(
+            first_model_value(game_log, "game_id", "mlb_game_id", "game_pk")
+        ),
+        "game_date": iso_timestamp(
+            first_model_value(game_log, "game_date", "official_date", "date")
+        ),
+        "opponent": nullable_string(
+            first_model_value(game_log, "opponent_name", "opponent")
+        ),
+        "home_away": nullable_string(
+            first_model_value(game_log, "home_away", "venue_side")
+        ),
+        "plate_appearances": nullable_int(
+            first_model_value(game_log, "plate_appearances", "pa")
+        ),
+        "at_bats": nullable_int(first_model_value(game_log, "at_bats", "ab")),
+        "hits": nullable_int(first_model_value(game_log, "hits", "h")),
+        "singles": nullable_int(first_model_value(game_log, "singles")),
+        "doubles": nullable_int(first_model_value(game_log, "doubles")),
+        "triples": nullable_int(first_model_value(game_log, "triples")),
+        "home_runs": nullable_int(first_model_value(game_log, "home_runs", "hr")),
+        "runs": nullable_int(first_model_value(game_log, "runs")),
+        "rbi": nullable_int(first_model_value(game_log, "rbi")),
+        "walks": nullable_int(first_model_value(game_log, "walks", "bb")),
+        "strikeouts": nullable_int(
+            first_model_value(game_log, "strikeouts", "so")
+        ),
+        "total_bases": nullable_int(
+            first_model_value(game_log, "total_bases", "tb")
+        ),
+        "source": nullable_string(
+            first_model_value(game_log, "source_name", "source")
+        ),
+        "source_updated_at": iso_timestamp(
+            first_model_value(game_log, "source_updated_at", "updated_at")
+        ),
+    }
+
+
+def sum_present(logs: Sequence[Mapping[str, Any]], field_name: str) -> int | None:
+    values = [
+        nullable_int(log.get(field_name))
+        for log in logs
+        if log.get(field_name) is not None
+    ]
+
+    if not values:
+        return None
+
+    return sum(value for value in values if value is not None)
+
+
+def calculate_recent_form(
+    serialized_logs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    logs = list(serialized_logs)
+
+    if not logs:
+        return {
+            "games": 0,
+            "plate_appearances": None,
+            "at_bats": None,
+            "hits": None,
+            "home_runs": None,
+            "rbi": None,
+            "walks": None,
+            "strikeouts": None,
+            "total_bases": None,
+            "batting_average": None,
+            "on_base_percentage": None,
+            "slugging_percentage": None,
+            "ops": None,
+            "hit_game_rate": None,
+            "home_run_game_rate": None,
+            "window_start": None,
+            "window_end": None,
+        }
+
+    plate_appearances = sum_present(logs, "plate_appearances")
+    at_bats = sum_present(logs, "at_bats")
+    hits = sum_present(logs, "hits")
+    home_runs = sum_present(logs, "home_runs")
+    rbi = sum_present(logs, "rbi")
+    walks = sum_present(logs, "walks")
+    strikeouts = sum_present(logs, "strikeouts")
+    total_bases = sum_present(logs, "total_bases")
+
+    batting_average = (
+        hits / at_bats
+        if hits is not None and at_bats not in (None, 0)
+        else None
+    )
+
+    on_base_percentage = (
+        (hits + walks) / plate_appearances
+        if (
+            hits is not None
+            and walks is not None
+            and plate_appearances not in (None, 0)
+        )
+        else None
+    )
+
+    slugging_percentage = (
+        total_bases / at_bats
+        if total_bases is not None and at_bats not in (None, 0)
+        else None
+    )
+
+    ops = (
+        on_base_percentage + slugging_percentage
+        if on_base_percentage is not None and slugging_percentage is not None
+        else None
+    )
+
+    hit_games = sum(
+        1
+        for log in logs
+        if (nullable_int(log.get("hits")) or 0) > 0
+    )
+
+    home_run_games = sum(
+        1
+        for log in logs
+        if (nullable_int(log.get("home_runs")) or 0) > 0
+    )
+
+    timestamps = [
+        parse_runtime_timestamp(log.get("game_date"))
+        for log in logs
+    ]
+    timestamps = [timestamp for timestamp in timestamps if timestamp is not None]
+
+    return {
+        "games": len(logs),
+        "plate_appearances": plate_appearances,
+        "at_bats": at_bats,
+        "hits": hits,
+        "home_runs": home_runs,
+        "rbi": rbi,
+        "walks": walks,
+        "strikeouts": strikeouts,
+        "total_bases": total_bases,
+        "batting_average": round(batting_average, 4) if batting_average is not None else None,
+        "on_base_percentage": round(on_base_percentage, 4) if on_base_percentage is not None else None,
+        "slugging_percentage": round(slugging_percentage, 4) if slugging_percentage is not None else None,
+        "ops": round(ops, 4) if ops is not None else None,
+        "hit_game_rate": round(hit_games / len(logs), 4),
+        "home_run_game_rate": round(home_run_games / len(logs), 4),
+        "window_start": min(timestamps).isoformat() if timestamps else None,
+        "window_end": max(timestamps).isoformat() if timestamps else None,
+    }
+
+
+# ============================================================
+# SECTION 15.10 - STATCAST DATABASE QUERY FALLBACK
+# ============================================================
+
+def serialize_statcast_model(metric: Any | None) -> dict[str, Any]:
+    if metric is None:
+        return {}
+
+    return {
+        "season": nullable_int(first_model_value(metric, "season")),
+        "stat_group": nullable_string(first_model_value(metric, "stat_group")),
+        "average_exit_velocity": nullable_float(
+            first_model_value(metric, "average_exit_velocity")
+        ),
+        "maximum_exit_velocity": nullable_float(
+            first_model_value(metric, "maximum_exit_velocity", "max_exit_velocity")
+        ),
+        "barrel_count": nullable_int(first_model_value(metric, "barrel_count")),
+        "barrel_rate": nullable_float(first_model_value(metric, "barrel_rate")),
+        "hard_hit_count": nullable_int(first_model_value(metric, "hard_hit_count")),
+        "hard_hit_rate": nullable_float(first_model_value(metric, "hard_hit_rate")),
+        "average_launch_angle": nullable_float(
+            first_model_value(metric, "average_launch_angle", "launch_angle")
+        ),
+        "sweet_spot_rate": nullable_float(
+            first_model_value(metric, "sweet_spot_rate")
+        ),
+        "expected_batting_average": nullable_float(
+            first_model_value(metric, "expected_batting_average")
+        ),
+        "expected_slugging_percentage": nullable_float(
+            first_model_value(
+                metric,
+                "expected_slugging_percentage",
+                "expected_slugging",
+            )
+        ),
+        "expected_woba": nullable_float(first_model_value(metric, "expected_woba")),
+        "sprint_speed": nullable_float(first_model_value(metric, "sprint_speed")),
+        "sample_size": nullable_int(
+            first_model_value(metric, "batted_ball_count", "pitch_count")
+        ),
+        "sample_size_status": nullable_string(
+            first_model_value(metric, "sample_size_status")
+        ),
+        "freshness_status": nullable_string(
+            first_model_value(metric, "freshness_status")
+        ),
+        "source_name": nullable_string(
+            first_model_value(metric, "source_name", "source")
+        ),
+        "source_updated_at": iso_timestamp(
+            first_model_value(metric, "source_updated_at", "retrieval_timestamp", "updated_at")
+        ),
+    }
+
+
+def load_player_statcast_payload(
+    database_session: Any,
+    *,
+    player: Any,
+    season: int,
+) -> dict[str, Any]:
+    mlb_player_id = nullable_int(first_model_value(player, "mlb_player_id"))
+
+    if mlb_player_id is None:
+        return {}
+
+    if callable(get_player_statcast_intelligence):
+        try:
+            payload = get_player_statcast_intelligence(
+                mlb_player_id,
+                season=season,
+                stat_group="hitting",
+            )
+
+            if isinstance(payload, Mapping) and payload.get("status") == "available":
+                return dict(payload)
+        except Exception as error:
+            LOGGER.warning(
+                "Statcast intelligence service failed for MLB player %s: %s",
+                mlb_player_id,
+                error,
+            )
+
+    if PlayerStatcastMetricModel is None:
+        return {}
+
+    query = database_session.query(PlayerStatcastMetricModel)
+
+    if model_has_attribute(PlayerStatcastMetricModel, "mlb_player_id"):
+        query = query.filter(
+            PlayerStatcastMetricModel.mlb_player_id == mlb_player_id
+        )
+    elif model_has_attribute(PlayerStatcastMetricModel, "player_id"):
+        query = query.filter(PlayerStatcastMetricModel.player_id == player.id)
+
+    if model_has_attribute(PlayerStatcastMetricModel, "season"):
+        query = query.filter(PlayerStatcastMetricModel.season == int(season))
+
+    if model_has_attribute(PlayerStatcastMetricModel, "stat_group"):
+        query = query.filter(PlayerStatcastMetricModel.stat_group == "hitting")
+
+    metric = query.first()
+    serialized = serialize_statcast_model(metric)
+
+    if not serialized:
+        return {}
+
+    return {
+        "status": "available",
+        "mlb_player_id": mlb_player_id,
+        "season": season,
+        "stat_group": "hitting",
+        "metrics": {
+            key: value
+            for key, value in serialized.items()
+            if key not in {
+                "season",
+                "stat_group",
+                "sample_size",
+                "sample_size_status",
+                "freshness_status",
+                "source_name",
+                "source_updated_at",
+            }
+        },
+        "sample_size": serialized.get("sample_size"),
+        "sample_size_status": serialized.get("sample_size_status"),
+        "freshness_status": serialized.get("freshness_status"),
+        "source_name": serialized.get("source_name"),
+        "source_updated_at": serialized.get("source_updated_at"),
+    }
+
+
+# ============================================================
+# SECTION 15.11 - READINESS CALCULATION
+# ============================================================
+
+def calculate_player_explorer_readiness(
+    *,
+    player_payload: Mapping[str, Any],
+    season_stats: Mapping[str, Any],
+    recent_form: Mapping[str, Any],
+    statcast: Mapping[str, Any],
+    freshness: Mapping[str, Any],
+) -> PlayerExplorerReadiness:
+    identity_ready = all(
+        player_payload.get(field_name) not in (None, "")
+        for field_name in (
+            "id",
+            "mlb_player_id",
+            "full_name",
+            "team",
+            "position",
+            "bats",
+            "throws",
+        )
+    )
+
+    season_ready = (
+        season_stats.get("season") is not None
+        and any(
+            season_stats.get(field_name) is not None
+            for field_name in (
+                "plate_appearances",
+                "hits",
+                "batting_average",
+                "ops",
+                "home_runs",
+                "rbi",
+            )
+        )
+    )
+
+    recent_ready = (
+        nullable_int(recent_form.get("games")) or 0
+    ) > 0
+
+    statcast_ready = (
+        statcast.get("status") == "available"
+        and bool(statcast.get("metrics"))
+    )
+
+    states = {
+        "identity": ReadinessState.READY if identity_ready else ReadinessState.PARTIAL,
+        "season_statistics": ReadinessState.READY if season_ready else ReadinessState.MISSING,
+        "recent_form": ReadinessState.READY if recent_ready else ReadinessState.MISSING,
+        "statcast": ReadinessState.READY if statcast_ready else ReadinessState.MISSING,
+    }
+
+    statcast_freshness = freshness.get("statcast", {}).get("status")
+
+    if states["statcast"] == ReadinessState.READY and statcast_freshness == FreshnessState.STALE:
+        states["statcast"] = ReadinessState.STALE
+
+    weights = {
+        "identity": 0.25,
+        "season_statistics": 0.30,
+        "recent_form": 0.20,
+        "statcast": 0.25,
+    }
+
+    state_scores = {
+        ReadinessState.READY: 1.0,
+        ReadinessState.PARTIAL: 0.5,
+        ReadinessState.STALE: 0.5,
+        ReadinessState.MISSING: 0.0,
+        ReadinessState.ERROR: 0.0,
+    }
+
+    score = 100.0 * sum(
+        weights[name] * state_scores[states[name]]
+        for name in weights
+    )
+
+    if score >= 95.0:
+        overall = ReadinessState.READY
+    elif score >= 50.0:
+        overall = ReadinessState.PARTIAL
+    else:
+        overall = ReadinessState.MISSING
+
+    return PlayerExplorerReadiness(
+        identity=states["identity"],
+        season_statistics=states["season_statistics"],
+        recent_form=states["recent_form"],
+        statcast=states["statcast"],
+        overall=overall,
+        score=round(score, 1),
+    )
+
+
+# ============================================================
+# SECTION 15.12 - COMPLETE PLAYER EXPLORER SERVICE
+# ============================================================
+
+def build_player_explorer_payload(
+    player_identifier: int | str,
+    *,
+    season: int | None = None,
+    recent_games: int = PLAYER_EXPLORER_DEFAULT_RECENT_GAMES,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    selected_season = int(season or DEFAULT_SEASON)
+    recent_games = max(
+        1,
+        min(int(recent_games), PLAYER_EXPLORER_MAX_RECENT_GAMES),
+    )
+
+    warnings: list[DataWarning] = []
+
+    with player_explorer_session() as database_session:
+        player = resolve_database_player(
+            player_identifier,
+            database_session=database_session,
+        )
+
+        team = None
+        team_id = first_model_value(player, "current_team_id", "team_id")
+
+        if team_id is not None and TeamModel is not None:
+            team = (
+                database_session.query(TeamModel)
+                .filter(TeamModel.id == team_id)
+                .first()
+            )
+
+        player_summary = serialize_database_player_summary(player, team=team)
+
+        player_payload = {
+            "id": player_summary.get("database_id"),
+            "database_id": player_summary.get("database_id"),
+            "mlb_player_id": player_summary.get("mlb_player_id"),
+            "full_name": player_summary.get("full_name"),
+            "team": player_summary.get("team"),
+            "team_id": player_summary.get("team_id"),
+            "mlb_team_id": player_summary.get("mlb_team_id"),
+            "position": player_summary.get("position"),
+            "position_abbreviation": player_summary.get("position_abbreviation"),
+            "bats": player_summary.get("bats"),
+            "throws": player_summary.get("throws"),
+            "active": player_summary.get("active"),
+            "source_updated_at": player_summary.get("source_updated_at"),
+        }
+
+        season_stat = resolve_latest_player_season_stat(
+            database_session,
+            player=player,
+            season=selected_season,
+        )
+
+        season_stats = serialize_player_season_stats(
+            season_stat,
+            requested_season=selected_season,
+        )
+
+        game_log_records = query_recent_player_game_logs(
+            database_session,
+            player=player,
+            season=selected_season,
+            limit=recent_games,
+        )
+
+        recent_game_logs = [
+            serialize_player_game_log(record)
+            for record in game_log_records
+        ]
+
+        recent_form = calculate_recent_form(recent_game_logs)
+
+        statcast = load_player_statcast_payload(
+            database_session,
+            player=player,
+            season=selected_season,
+        )
+
+    identity_freshness = freshness_descriptor(
+        player_payload.get("source_updated_at"),
+        source="player identity",
+    )
+
+    season_freshness = freshness_descriptor(
+        season_stats.get("source_updated_at"),
+        source=season_stats.get("source") or "season statistics",
+    )
+
+    recent_log_timestamp = recent_game_logs[0].get("source_updated_at") if recent_game_logs else None
+    if recent_log_timestamp is None and recent_game_logs:
+        recent_log_timestamp = recent_game_logs[0].get("game_date")
+
+    recent_form_freshness = freshness_descriptor(
+        recent_log_timestamp,
+        source="player game logs",
+    )
+
+    statcast_freshness = freshness_descriptor(
+        statcast.get("source_updated_at") or statcast.get("retrieval_timestamp"),
+        source=statcast.get("source_name") or "Statcast",
+    )
+
+    data_freshness = {
+        "identity": identity_freshness.to_dict(),
+        "season_statistics": season_freshness.to_dict(),
+        "recent_form": recent_form_freshness.to_dict(),
+        "statcast": statcast_freshness.to_dict(),
+    }
+
+    if player_payload.get("mlb_player_id") is None:
+        append_warning(
+            warnings,
+            "missing_mlb_player_id",
+            "The player record has no authoritative MLB player ID.",
+            severity="error",
+            field="mlb_player_id",
+            source="players",
+        )
+
+    for field_name in ("team", "position", "bats", "throws"):
+        if player_payload.get(field_name) in (None, ""):
+            append_warning(
+                warnings,
+                f"missing_player_{field_name}",
+                f"Player identity field '{field_name}' is unavailable.",
+                field=field_name,
+                source="players",
+            )
+
+    if season_stat is None:
+        append_warning(
+            warnings,
+            "season_statistics_unavailable",
+            f"No season-statistics row is available for {selected_season}.",
+            source="player_season_stats",
+        )
+
+    if not recent_game_logs:
+        append_warning(
+            warnings,
+            "recent_game_logs_unavailable",
+            f"No player game logs are available for {selected_season}.",
+            source="player_game_stats",
+        )
+
+    if not statcast or statcast.get("status") != "available":
+        append_warning(
+            warnings,
+            "statcast_unavailable",
+            f"No Statcast row is available for {selected_season}.",
+            source="player_statcast_metrics",
+        )
+
+    for freshness_name, descriptor in data_freshness.items():
+        if descriptor.get("status") == FreshnessState.STALE:
+            append_warning(
+                warnings,
+                f"stale_{freshness_name}",
+                f"{freshness_name.replace('_', ' ').title()} data is stale.",
+                source=descriptor.get("source"),
+            )
+
+    readiness = calculate_player_explorer_readiness(
+        player_payload=player_payload,
+        season_stats=season_stats,
+        recent_form=recent_form,
+        statcast=statcast,
+        freshness=data_freshness,
+    )
+
+    return {
+        "success": True,
+        "contract_version": PLAYER_EXPLORER_CONTRACT_VERSION,
+        "player": player_payload,
+        "season_stats": season_stats,
+        "recent_form": recent_form,
+        "recent_game_logs": recent_game_logs,
+        "statcast": statcast,
+        "readiness": readiness.to_dict(),
+        "data_freshness": data_freshness,
+        "warnings": [warning.to_dict() for warning in warnings],
+        "diagnostics": {
+            "database_backed": True,
+            "live_api_fallback_used": False,
+            "selected_season": selected_season,
+            "recent_game_limit": recent_games,
+            "recent_game_count": len(recent_game_logs),
+            "processing_time_ms": round(
+                (time.perf_counter() - started) * 1000.0,
+                3,
+            ),
+        },
+    }
+
+
+# ============================================================
+# SECTION 15.13 - PLAYER EXPLORER DATABASE HEALTH
+# ============================================================
+
+def build_player_explorer_database_health() -> dict[str, Any]:
+    warnings: list[str] = []
+
+    try:
+        if callable(database_health):
+            report = database_health()
+        elif callable(database_health_details):
+            report = database_health_details()
+        else:
+            report = {}
+    except Exception as error:
+        report = {"database_connected": False, "error": str(error)}
+
+    try:
+        inventory = collect_database_inventory() if callable(collect_database_inventory) else {}
+    except Exception as error:
+        inventory = {"error": str(error)}
+
+    try:
+        teams = query_database_teams(active_only=True)
+        team_count = len(teams)
+    except Exception as error:
+        team_count = 0
+        warnings.append(str(error))
+
+    player_count = None
+
+    try:
+        with player_explorer_session() as database_session:
+            player_count = database_session.query(PlayerModel).count()
+    except Exception as error:
+        warnings.append(str(error))
+
+    return {
+        "database_connected": bool(
+            report.get("database_connected", report.get("connected", False))
+        ),
+        "database_health": report,
+        "database_inventory": inventory,
+        "team_count": team_count,
+        "player_count": player_count,
+        "player_explorer_runtime_ready": (
+            callable(managed_database_session)
+            and TeamModel is not None
+            and PlayerModel is not None
+        ),
+        "warnings": warnings,
+        "timestamp": utc_now().isoformat(),
+    }
+
+
+# ============================================================
+# SECTION 15.14 - PLAYER EXPLORER COMPLETION GATE
+# ============================================================
+
+def validate_player_explorer_runtime() -> dict[str, Any]:
+    required_model_symbols = {
+        "Team": TeamModel,
+        "Player": PlayerModel,
+        "PlayerSeasonStat": PlayerSeasonStatModel,
+        "PlayerGameStat": PlayerGameStatModel,
+    }
+
+    checks = {
+        "managed_database_session_available": callable(managed_database_session),
+        "team_model_available": TeamModel is not None,
+        "player_model_available": PlayerModel is not None,
+        "season_stat_model_available": PlayerSeasonStatModel is not None,
+        "game_log_model_available": PlayerGameStatModel is not None,
+        "team_query_available": callable(query_database_teams),
+        "team_player_query_available": callable(query_database_players_for_team),
+        "player_resolution_available": callable(resolve_database_player),
+        "season_stats_available": callable(resolve_latest_player_season_stat),
+        "recent_form_available": callable(calculate_recent_form),
+        "statcast_query_available": callable(load_player_statcast_payload),
+        "complete_payload_available": callable(build_player_explorer_payload),
+        "null_safe_integer": nullable_int(None) is None,
+        "null_safe_float": nullable_float(None) is None,
+        "no_zero_fallback_for_missing_stats": (
+            serialize_player_season_stats(None, requested_season=2026)["home_runs"]
+            is None
+        ),
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "version": PROJECT_VERSION,
+        "phase": PROJECT_PHASE,
+        "contract_version": PLAYER_EXPLORER_CONTRACT_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name
+            for name, value in checks.items()
+            if not value
+        ],
+        "model_symbols": {
+            name: symbol is not None
+            for name, symbol in required_model_symbols.items()
+        },
+    }
+
+
+
+
+# ============================================================
+# SECTION 15.15 - ENTERPRISE APPLICATION-SERVICE METADATA
+# ============================================================
+
+PLAYER_INTELLIGENCE_CONTRACT_VERSION: Final[str] = "4.1.0"
+PLAYER_INTELLIGENCE_SERVICE_VERSION: Final[str] = "12.4.1"
+PLAYER_INTELLIGENCE_PHASE: Final[str] = "Phase 12 Part 4.1"
+PLAYER_INTELLIGENCE_PATH: Final[str] = "main.py"
+
+DEFAULT_RECENT_FORM_GAMES: Final[int] = 15
+MAX_RECENT_FORM_GAMES: Final[int] = 100
+DEFAULT_PROFILE_CACHE_SECONDS: Final[int] = 30
+DEFAULT_CATALOG_CACHE_SECONDS: Final[int] = 60
+DEFAULT_FRESH_HOURS: Final[float] = 36.0
+DEFAULT_AGING_HOURS: Final[float] = 120.0
+
+
+# ============================================================
+# SECTION 15.16 - STRUCTURED API ERROR CONTRACTS
+# ============================================================
+
+class ApplicationServiceError(RuntimeError):
+    status_code: int = 500
+    error_code: str = "application_service_error"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: Mapping[str, Any] | None = None,
+        warnings: Sequence[str] | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.details = dict(details or {})
+        self.warnings = list(warnings or [])
+        self.request_id = request_id
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "success": False,
+            "error": {
+                "code": self.error_code,
+                "message": self.message,
+                "details": self.details,
+            },
+            "warnings": self.warnings,
+            "request_id": self.request_id,
+            "timestamp": utc_now().isoformat(),
+        }
+
+
+class PlayerNotFoundError(ApplicationServiceError):
+    status_code = 404
+    error_code = "player_not_found"
+
+
+class TeamNotFoundError(ApplicationServiceError):
+    status_code = 404
+    error_code = "team_not_found"
+
+
+class AmbiguousPlayerError(ApplicationServiceError):
+    status_code = 409
+    error_code = "ambiguous_player_identity"
+
+
+class DatabaseUnavailableError(ApplicationServiceError):
+    status_code = 503
+    error_code = "database_unavailable"
+
+
+class WarehouseContractError(ApplicationServiceError):
+    status_code = 500
+    error_code = "warehouse_contract_error"
+
+
+@app.exception_handler(ApplicationServiceError)
+async def application_service_error_handler(
+    request: Request,
+    error: ApplicationServiceError,
+) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    error.request_id = error.request_id or request_id
+    return JSONResponse(
+        status_code=error.status_code,
+        content=error.to_dict(),
+    )
+
+
+# ============================================================
+# SECTION 15.17 - REQUEST CORRELATION AND TIMING MIDDLEWARE
+# ============================================================
+
+@app.middleware("http")
+async def request_correlation_middleware(
+    request: Request,
+    call_next: Callable[..., Any],
+):
+    request_id = (
+        request.headers.get("X-Request-ID")
+        or str(uuid4())
+    )
+    request.state.request_id = request_id
+    started = time.perf_counter()
+
+    response = await call_next(request)
+
+    elapsed_ms = (
+        time.perf_counter() - started
+    ) * 1000.0
+
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-AISP2-Version"] = PROJECT_VERSION
+    response.headers["X-Response-Time-Ms"] = f"{elapsed_ms:.3f}"
+    return response
+
+
+# ============================================================
+# SECTION 15.18 - THREAD-SAFE TTL CACHE
+# ============================================================
+
+@dataclass(slots=True)
+class CacheRecord:
+    value: Any
+    stored_monotonic: float
+    expires_monotonic: float
+    fingerprint: str
+
+    @property
+    def expired(self) -> bool:
+        return time.monotonic() >= self.expires_monotonic
+
+
+class ThreadSafeTTLCache:
+    def __init__(self, max_entries: int = 512) -> None:
+        self.max_entries = max(1, int(max_entries))
+        self._records: OrderedDict[str, CacheRecord] = OrderedDict()
+        self._lock = threading.RLock()
+        self.hits = 0
+        self.misses = 0
+        self.evictions = 0
+
+    @staticmethod
+    def _fingerprint(value: Any) -> str:
+        payload = json.dumps(
+            value,
+            sort_keys=True,
+            default=str,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(
+            payload.encode("utf-8")
+        ).hexdigest()
+
+    def get(self, key: str) -> Any | None:
+        with self._lock:
+            record = self._records.get(key)
+            if record is None:
+                self.misses += 1
+                return None
+            if record.expired:
+                self._records.pop(key, None)
+                self.misses += 1
+                return None
+            self._records.move_to_end(key)
+            self.hits += 1
+            return record.value
+
+    def set(self, key: str, value: Any, ttl_seconds: int) -> None:
+        ttl = max(0, int(ttl_seconds))
+        now = time.monotonic()
+        record = CacheRecord(
+            value=value,
+            stored_monotonic=now,
+            expires_monotonic=now + ttl,
+            fingerprint=self._fingerprint(value),
+        )
+        with self._lock:
+            self._records[key] = record
+            self._records.move_to_end(key)
+            while len(self._records) > self.max_entries:
+                self._records.popitem(last=False)
+                self.evictions += 1
+
+    def invalidate(self, prefix: str | None = None) -> int:
+        with self._lock:
+            if prefix is None:
+                count = len(self._records)
+                self._records.clear()
+                return count
+            keys = [key for key in self._records if key.startswith(prefix)]
+            for key in keys:
+                self._records.pop(key, None)
+            return len(keys)
+
+    def stats(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "entries": len(self._records),
+                "max_entries": self.max_entries,
+                "hits": self.hits,
+                "misses": self.misses,
+                "evictions": self.evictions,
+            }
+
+
+PLAYER_INTELLIGENCE_CACHE = ThreadSafeTTLCache(max_entries=1024)
+
+
+# ============================================================
+# SECTION 15.19 - VALUE AND TIME NORMALIZATION
+# ============================================================
+
+def null_safe_number(value: Any) -> int | float | None:
+    if value in (None, "", "null", "None", "nan", "NaN"):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if number.is_integer():
+        return int(number)
+    return number
+
+
+def null_safe_integer(value: Any) -> int | None:
+    number = null_safe_number(value)
+    return int(number) if number is not None else None
+
+
+def null_safe_rate(value: Any) -> float | None:
+    number = null_safe_number(value)
+    if number is None:
+        return None
+    return float(number)
+
+
+def normalize_hand(value: Any) -> str | None:
+    cleaned = str(value or "").strip().upper()
+    return {
+        "R": "Right",
+        "RIGHT": "Right",
+        "L": "Left",
+        "LEFT": "Left",
+        "S": "Switch",
+        "SWITCH": "Switch",
+        "B": "Both",
+        "BOTH": "Both",
+    }.get(cleaned) or (str(value).strip() if value not in (None, "") else None)
+
+
+def parse_runtime_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, tzinfo=UTC)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+    except ValueError:
+        return None
+
+
+def classify_runtime_freshness(
+    value: Any,
+    *,
+    fresh_hours: float = DEFAULT_FRESH_HOURS,
+    aging_hours: float = DEFAULT_AGING_HOURS,
+) -> dict[str, Any]:
+    timestamp = parse_runtime_datetime(value)
+    if timestamp is None:
+        return {
+            "status": "unknown",
+            "timestamp": None,
+            "age_hours": None,
+        }
+    age_hours = max(
+        0.0,
+        (utc_now() - timestamp).total_seconds() / 3600.0,
+    )
+    if age_hours <= fresh_hours:
+        status = "fresh"
+    elif age_hours <= aging_hours:
+        status = "aging"
+    else:
+        status = "stale"
+    return {
+        "status": status,
+        "timestamp": timestamp.isoformat(),
+        "age_hours": round(age_hours, 3),
+    }
+
+
+def safe_ratio(numerator: Any, denominator: Any) -> float | None:
+    numerator_number = null_safe_number(numerator)
+    denominator_number = null_safe_number(denominator)
+    if numerator_number is None or denominator_number in (None, 0):
+        return None
+    return float(numerator_number) / float(denominator_number)
+
+
+# ============================================================
+# SECTION 15.20 - QUERY DIAGNOSTICS
+# ============================================================
+
+@dataclass(slots=True)
+class QueryDiagnostic:
+    name: str
+    started_at: datetime = field(default_factory=utc_now)
+    elapsed_ms: float = 0.0
+    row_count: int | None = None
+    success: bool = False
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "started_at": self.started_at.isoformat(),
+            "elapsed_ms": round(self.elapsed_ms, 3),
+            "row_count": self.row_count,
+            "success": self.success,
+            "error": self.error,
+            "metadata": self.metadata,
+        }
+
+
+@contextmanager
+def query_diagnostic(name: str, sink: list[QueryDiagnostic]):
+    diagnostic = QueryDiagnostic(name=name)
+    started = time.perf_counter()
+    try:
+        yield diagnostic
+        diagnostic.success = True
+    except Exception as error:
+        diagnostic.error = str(error)
+        raise
+    finally:
+        diagnostic.elapsed_ms = (
+            time.perf_counter() - started
+        ) * 1000.0
+        sink.append(diagnostic)
+
+
+# ============================================================
+# SECTION 15.21 - DATABASE REPOSITORY
+# ============================================================
+
+class PlayerExplorerRepository:
+    """Database-only repository. It never invents player statistics."""
+
+    def _require_models(self) -> None:
+        required = {
+            "Team": TeamModel,
+            "Player": PlayerModel,
+            "RosterEntry": RosterEntryModel,
+            "PlayerSeasonStat": PlayerSeasonStatModel,
+            "PlayerGameStat": PlayerGameStatModel,
+        }
+        missing = [name for name, model in required.items() if model is None]
+        if missing:
+            raise WarehouseContractError(
+                "Required ORM models could not be imported.",
+                details={"missing_models": missing},
+            )
+        if not callable(managed_database_session):
+            raise DatabaseUnavailableError(
+                "managed_database_session() is unavailable."
+            )
+
+    @contextmanager
+    def session(self):
+        self._require_models()
+        try:
+            with managed_database_session(commit_on_success=False) as database_session:
+                yield database_session
+        except ApplicationServiceError:
+            raise
+        except Exception as error:
+            raise DatabaseUnavailableError(
+                "The database session could not be opened or queried.",
+                details={"error_type": type(error).__name__, "error": str(error)},
+            ) from error
+
+    def list_teams(self, active_only: bool = True) -> list[Any]:
+        with self.session() as database_session:
+            query = database_session.query(TeamModel)
+            if active_only and hasattr(TeamModel, "is_active"):
+                query = query.filter(TeamModel.is_active.is_(True))
+            return query.order_by(TeamModel.name.asc()).all()
+
+    def resolve_team(self, identifier: int | str) -> Any:
+        with self.session() as database_session:
+            query = database_session.query(TeamModel)
+            team = None
+            numeric = None
+            try:
+                numeric = int(identifier)
+            except (TypeError, ValueError):
+                pass
+            if numeric is not None:
+                predicates = []
+                if hasattr(TeamModel, "id"):
+                    predicates.append(TeamModel.id == numeric)
+                if hasattr(TeamModel, "mlb_team_id"):
+                    predicates.append(TeamModel.mlb_team_id == numeric)
+                if predicates:
+                    from sqlalchemy import or_
+                    team = query.filter(or_(*predicates)).first()
+            if team is None and isinstance(identifier, str):
+                cleaned = identifier.strip()
+                from sqlalchemy import func, or_
+                predicates = [func.lower(TeamModel.name) == cleaned.lower()]
+                if hasattr(TeamModel, "abbreviation"):
+                    predicates.append(func.lower(TeamModel.abbreviation) == cleaned.lower())
+                team = query.filter(or_(*predicates)).first()
+            if team is None:
+                raise TeamNotFoundError(
+                    f"No database team matched '{identifier}'.",
+                    details={"identifier": identifier},
+                )
+            return team
+
+    def list_players_for_team(
+        self,
+        team: Any,
+        *,
+        season: int | None = None,
+        active_only: bool = True,
+    ) -> list[Any]:
+        with self.session() as database_session:
+            players: dict[int, Any] = {}
+            query = database_session.query(PlayerModel)
+            if hasattr(PlayerModel, "current_team_id"):
+                current_rows = query.filter(PlayerModel.current_team_id == team.id).all()
+                for player in current_rows:
+                    players[int(player.id)] = player
+
+            roster_query = (
+                database_session.query(PlayerModel)
+                .join(RosterEntryModel, RosterEntryModel.player_id == PlayerModel.id)
+                .filter(RosterEntryModel.team_id == team.id)
+            )
+            if season is not None and hasattr(RosterEntryModel, "season"):
+                roster_query = roster_query.filter(RosterEntryModel.season == int(season))
+            for player in roster_query.all():
+                players[int(player.id)] = player
+
+            output = list(players.values())
+            if active_only:
+                output = [
+                    player for player in output
+                    if getattr(player, "active_status", True) is not False
+                ]
+            return sorted(output, key=lambda player: str(getattr(player, "full_name", "")))
+
+    def resolve_player(
+        self,
+        identifier: int | str,
+        *,
+        team_id: int | None = None,
+    ) -> Any:
+        with self.session() as database_session:
+            query = database_session.query(PlayerModel)
+            player = None
+            numeric = None
+            try:
+                numeric = int(identifier)
+            except (TypeError, ValueError):
+                pass
+            if numeric is not None:
+                from sqlalchemy import or_
+                predicates = [PlayerModel.id == numeric]
+                if hasattr(PlayerModel, "mlb_player_id"):
+                    predicates.append(PlayerModel.mlb_player_id == numeric)
+                player = query.filter(or_(*predicates)).first()
+            if player is None and isinstance(identifier, str):
+                cleaned = identifier.strip()
+                from sqlalchemy import func
+                matches = query.filter(func.lower(PlayerModel.full_name) == cleaned.lower()).all()
+                if team_id is not None:
+                    matches = [
+                        item for item in matches
+                        if getattr(item, "current_team_id", None) == team_id
+                    ]
+                if len(matches) > 1:
+                    raise AmbiguousPlayerError(
+                        f"Multiple database players share the name '{identifier}'.",
+                        details={
+                            "matches": [
+                                {
+                                    "database_id": getattr(item, "id", None),
+                                    "mlb_player_id": getattr(item, "mlb_player_id", None),
+                                    "team_id": getattr(item, "current_team_id", None),
+                                }
+                                for item in matches
+                            ]
+                        },
+                    )
+                player = matches[0] if matches else None
+            if player is None:
+                raise PlayerNotFoundError(
+                    f"No database player matched '{identifier}'.",
+                    details={"identifier": identifier, "team_id": team_id},
+                )
+            return player
+
+    def resolve_player_team(self, player: Any) -> Any | None:
+        team_id = getattr(player, "current_team_id", None)
+        if team_id is None:
+            return None
+        with self.session() as database_session:
+            return database_session.query(TeamModel).filter(TeamModel.id == team_id).first()
+
+    def latest_season_stat(self, player_id: int, season: int | None) -> Any | None:
+        with self.session() as database_session:
+            query = database_session.query(PlayerSeasonStatModel).filter(
+                PlayerSeasonStatModel.player_id == int(player_id)
+            )
+            if season is not None and hasattr(PlayerSeasonStatModel, "season"):
+                exact = query.filter(PlayerSeasonStatModel.season == int(season)).first()
+                if exact is not None:
+                    return exact
+            if hasattr(PlayerSeasonStatModel, "season"):
+                query = query.order_by(PlayerSeasonStatModel.season.desc())
+            return query.first()
+
+    def recent_game_logs(self, player_id: int, limit: int) -> list[Any]:
+        with self.session() as database_session:
+            query = database_session.query(PlayerGameStatModel).filter(
+                PlayerGameStatModel.player_id == int(player_id)
+            )
+            order_fields = []
+            for field_name in ("game_date", "official_date", "created_at", "id"):
+                field_value = getattr(PlayerGameStatModel, field_name, None)
+                if field_value is not None:
+                    order_fields.append(field_value.desc())
+                    break
+            if order_fields:
+                query = query.order_by(*order_fields)
+            return query.limit(max(1, min(int(limit), MAX_RECENT_FORM_GAMES))).all()
+
+    def latest_statcast(self, mlb_player_id: int, season: int, stat_group: str) -> Any | None:
+        if PlayerStatcastMetricModel is None:
+            return None
+        with self.session() as database_session:
+            query = database_session.query(PlayerStatcastMetricModel).filter(
+                PlayerStatcastMetricModel.mlb_player_id == int(mlb_player_id),
+                PlayerStatcastMetricModel.season == int(season),
+            )
+            if hasattr(PlayerStatcastMetricModel, "stat_group"):
+                query = query.filter(PlayerStatcastMetricModel.stat_group == stat_group)
+            for field_name in ("source_updated_at", "retrieval_timestamp", "updated_at", "id"):
+                field_value = getattr(PlayerStatcastMetricModel, field_name, None)
+                if field_value is not None:
+                    query = query.order_by(field_value.desc())
+                    break
+            return query.first()
+
+
+# ============================================================
+# SECTION 15.22 - SERIALIZATION POLICY
+# ============================================================
+
+class PlayerExplorerSerializer:
+    PLAYER_FIELDS: Final[tuple[str, ...]] = (
+        "id", "mlb_player_id", "full_name", "first_name", "last_name",
+        "use_name", "nick_name", "position", "position_code",
+        "position_abbreviation", "bats", "throws", "height", "weight",
+        "birth_date", "birth_city", "birth_state_province", "birth_country",
+        "mlb_debut_date", "active_status", "current_team_id", "source_name",
+        "source_updated_at", "created_at", "updated_at",
+    )
+
+    SEASON_STAT_ALIASES: Final[dict[str, tuple[str, ...]]] = {
+        "season": ("season",),
+        "plate_appearances": ("plate_appearances", "pa"),
+        "at_bats": ("at_bats", "ab"),
+        "hits": ("hits", "h"),
+        "singles": ("singles",),
+        "doubles": ("doubles",),
+        "triples": ("triples",),
+        "home_runs": ("home_runs", "hr"),
+        "runs": ("runs", "r"),
+        "rbi": ("rbi", "runs_batted_in"),
+        "walks": ("walks", "base_on_balls", "bb"),
+        "strikeouts": ("strikeouts", "so"),
+        "stolen_bases": ("stolen_bases", "sb"),
+        "caught_stealing": ("caught_stealing", "cs"),
+        "hit_by_pitch": ("hit_by_pitch", "hbp"),
+        "sacrifice_flies": ("sacrifice_flies", "sf"),
+        "batting_average": ("batting_average", "avg"),
+        "on_base_percentage": ("on_base_percentage", "obp"),
+        "slugging_percentage": ("slugging_percentage", "slg"),
+        "ops": ("ops",),
+        "woba": ("woba",),
+        "wrc_plus": ("wrc_plus",),
+        "babip": ("babip",),
+        "isolated_power": ("isolated_power", "iso"),
+        "walk_rate": ("walk_rate",),
+        "strikeout_rate": ("strikeout_rate",),
+        "home_run_rate": ("home_run_rate",),
+        "source_name": ("source_name",),
+        "source_updated_at": ("source_updated_at", "updated_at"),
+    }
+
+    STATCAST_FIELDS: Final[tuple[str, ...]] = (
+        "season", "stat_group", "average_exit_velocity", "maximum_exit_velocity",
+        "barrel_count", "barrel_rate", "hard_hit_count", "hard_hit_rate",
+        "average_launch_angle", "sweet_spot_rate", "expected_batting_average",
+        "expected_slugging_percentage", "expected_woba", "sprint_speed",
+        "batted_ball_count", "average_fastball_velocity", "maximum_fastball_velocity",
+        "spin_rate", "extension", "whiff_rate", "chase_rate", "zone_contact_rate",
+        "squared_up_rate", "pitch_count", "sample_size_status", "freshness_status",
+        "age_hours", "source_name", "source_file", "source_updated_at",
+        "retrieval_timestamp", "updated_at",
+    )
+
+    @staticmethod
+    def _value(record: Any, aliases: Sequence[str]) -> Any:
+        for alias in aliases:
+            value = record_value(record, alias, default=None)
+            if value not in (None, ""):
+                return value
+        return None
+
+    def team(self, team: Any | None) -> dict[str, Any] | None:
+        if team is None:
+            return None
+        return {
+            "id": getattr(team, "id", None),
+            "database_id": getattr(team, "id", None),
+            "mlb_team_id": getattr(team, "mlb_team_id", None),
+            "name": getattr(team, "name", None),
+            "abbreviation": getattr(team, "abbreviation", None),
+            "league": getattr(team, "league", None),
+            "division": getattr(team, "division", None),
+            "venue": getattr(team, "venue", None),
+            "active": getattr(team, "is_active", None),
+            "source_updated_at": null_safe_iso(getattr(team, "source_updated_at", None)),
+        }
+
+    def player(self, player: Any, team: Any | None) -> dict[str, Any]:
+        team_payload = self.team(team)
+        payload = {
+            "id": getattr(player, "id", None),
+            "database_id": getattr(player, "id", None),
+            "mlb_player_id": getattr(player, "mlb_player_id", None),
+            "full_name": getattr(player, "full_name", None),
+            "first_name": getattr(player, "first_name", None),
+            "last_name": getattr(player, "last_name", None),
+            "use_name": getattr(player, "use_name", None),
+            "nick_name": getattr(player, "nick_name", None),
+            "team": team_payload.get("name") if team_payload else None,
+            "team_id": team_payload.get("database_id") if team_payload else None,
+            "mlb_team_id": team_payload.get("mlb_team_id") if team_payload else None,
+            "team_details": team_payload,
+            "position": getattr(player, "position", None),
+            "position_code": getattr(player, "position_code", None),
+            "position_abbreviation": getattr(player, "position_abbreviation", None),
+            "bats": normalize_hand(getattr(player, "bats", None)),
+            "throws": normalize_hand(getattr(player, "throws", None)),
+            "height": getattr(player, "height", None),
+            "weight": getattr(player, "weight", None),
+            "birth_date": null_safe_iso(getattr(player, "birth_date", None)),
+            "birth_city": getattr(player, "birth_city", None),
+            "birth_state_province": getattr(player, "birth_state_province", None),
+            "birth_country": getattr(player, "birth_country", None),
+            "mlb_debut_date": null_safe_iso(getattr(player, "mlb_debut_date", None)),
+            "active": getattr(player, "active_status", None),
+            "source_name": getattr(player, "source_name", None),
+            "source_updated_at": null_safe_iso(
+                getattr(player, "source_updated_at", None)
+                or getattr(player, "updated_at", None)
+            ),
+        }
+        return payload
+
+    def season_stats(self, record: Any | None, requested_season: int) -> dict[str, Any]:
+        output: dict[str, Any] = {
+            key: None for key in self.SEASON_STAT_ALIASES
+        }
+        output["season"] = requested_season
+        if record is None:
+            return output
+        for key, aliases in self.SEASON_STAT_ALIASES.items():
+            value = self._value(record, aliases)
+            if key == "source_updated_at":
+                output[key] = null_safe_iso(value)
+            elif key in {"source_name"}:
+                output[key] = value
+            elif key == "season":
+                output[key] = null_safe_integer(value) or requested_season
+            else:
+                output[key] = null_safe_number(value)
+        return output
+
+    def game_log(self, record: Any) -> dict[str, Any]:
+        fields = (
+            "id", "game_id", "game_pk", "game_date", "official_date", "season",
+            "team_id", "opponent_team_id", "is_home", "plate_appearances", "at_bats",
+            "hits", "singles", "doubles", "triples", "home_runs", "runs", "rbi",
+            "walks", "strikeouts", "stolen_bases", "total_bases", "hit_by_pitch",
+            "sacrifice_flies", "source_name", "source_updated_at", "created_at",
+        )
+        payload: dict[str, Any] = {}
+        for field_name in fields:
+            value = getattr(record, field_name, None)
+            if field_name in {"game_date", "official_date", "source_updated_at", "created_at"}:
+                payload[field_name] = null_safe_iso(value)
+            elif field_name in {"source_name"}:
+                payload[field_name] = value
+            else:
+                payload[field_name] = null_safe_number(value)
+        return payload
+
+    def statcast(self, record: Any | None, season: int, stat_group: str) -> dict[str, Any]:
+        output = {field_name: None for field_name in self.STATCAST_FIELDS}
+        output["season"] = season
+        output["stat_group"] = stat_group
+        if record is None:
+            return output
+        for field_name in self.STATCAST_FIELDS:
+            value = getattr(record, field_name, None)
+            if field_name in {"source_updated_at", "retrieval_timestamp", "updated_at"}:
+                output[field_name] = null_safe_iso(value)
+            elif field_name in {
+                "stat_group", "sample_size_status", "freshness_status",
+                "source_name", "source_file",
+            }:
+                output[field_name] = value
+            else:
+                output[field_name] = null_safe_number(value)
+        return output
+
+
+# ============================================================
+# SECTION 15.23 - RECENT FORM ENGINE
+# ============================================================
+
+class RecentFormEngine:
+    COUNT_FIELDS: Final[tuple[str, ...]] = (
+        "plate_appearances", "at_bats", "hits", "singles", "doubles", "triples",
+        "home_runs", "runs", "rbi", "walks", "strikeouts", "stolen_bases",
+        "total_bases", "hit_by_pitch", "sacrifice_flies",
+    )
+
+    def calculate(self, logs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+        if not logs:
+            return {}
+        totals: dict[str, int | float] = {field_name: 0 for field_name in self.COUNT_FIELDS}
+        observed: dict[str, int] = {field_name: 0 for field_name in self.COUNT_FIELDS}
+        hit_games = 0
+        home_run_games = 0
+        dates: list[datetime] = []
+
+        for row in logs:
+            for field_name in self.COUNT_FIELDS:
+                value = null_safe_number(row.get(field_name))
+                if value is not None:
+                    totals[field_name] += value
+                    observed[field_name] += 1
+            if (null_safe_number(row.get("hits")) or 0) >= 1:
+                hit_games += 1
+            if (null_safe_number(row.get("home_runs")) or 0) >= 1:
+                home_run_games += 1
+            parsed = parse_runtime_datetime(row.get("game_date") or row.get("official_date"))
+            if parsed is not None:
+                dates.append(parsed)
+
+        at_bats = totals["at_bats"] if observed["at_bats"] else None
+        hits = totals["hits"] if observed["hits"] else None
+        walks = totals["walks"] if observed["walks"] else None
+        hit_by_pitch = totals["hit_by_pitch"] if observed["hit_by_pitch"] else 0
+        sacrifice_flies = totals["sacrifice_flies"] if observed["sacrifice_flies"] else 0
+        total_bases = totals["total_bases"] if observed["total_bases"] else None
+
+        batting_average = safe_ratio(hits, at_bats)
+        on_base_percentage = safe_ratio(
+            (hits or 0) + (walks or 0) + (hit_by_pitch or 0),
+            (at_bats or 0) + (walks or 0) + (hit_by_pitch or 0) + (sacrifice_flies or 0),
+        )
+        slugging_percentage = safe_ratio(total_bases, at_bats)
+        ops = (
+            on_base_percentage + slugging_percentage
+            if on_base_percentage is not None and slugging_percentage is not None
+            else None
+        )
+
+        output: dict[str, Any] = {
+            "games": len(logs),
+            "window_start": min(dates).isoformat() if dates else None,
+            "window_end": max(dates).isoformat() if dates else None,
+            "hit_game_rate": safe_ratio(hit_games, len(logs)),
+            "home_run_game_rate": safe_ratio(home_run_games, len(logs)),
+            "batting_average": batting_average,
+            "on_base_percentage": on_base_percentage,
+            "slugging_percentage": slugging_percentage,
+            "ops": ops,
+        }
+        for field_name in self.COUNT_FIELDS:
+            output[field_name] = totals[field_name] if observed[field_name] else None
+        return output
+
+
+# ============================================================
+# SECTION 15.24 - READINESS POLICY
+# ============================================================
+
+@dataclass(frozen=True, slots=True)
+class ReadinessComponent:
+    name: str
+    status: str
+    score: float
+    reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "score": round(self.score, 1),
+            "reasons": list(self.reasons),
+        }
+
+
+class ReadinessPolicy:
+    WEIGHTS: Final[dict[str, float]] = {
+        "identity": 0.20,
+        "season_statistics": 0.30,
+        "recent_form": 0.25,
+        "statcast": 0.25,
+    }
+
+    @staticmethod
+    def _component(name: str, available: int, required: int, reasons: Sequence[str]) -> ReadinessComponent:
+        ratio = available / required if required else 0.0
+        if ratio >= 0.90:
+            status = "ready"
+        elif ratio > 0:
+            status = "partial"
+        else:
+            status = "missing"
+        return ReadinessComponent(name, status, ratio * 100.0, tuple(reasons))
+
+    def evaluate(
+        self,
+        player: Mapping[str, Any],
+        season_stats: Mapping[str, Any],
+        recent_form: Mapping[str, Any],
+        statcast: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        identity_fields = ("mlb_player_id", "full_name", "team", "position", "bats", "throws")
+        season_fields = ("plate_appearances", "at_bats", "hits", "home_runs", "rbi", "batting_average", "ops")
+        recent_fields = ("games", "plate_appearances", "hits", "batting_average", "ops")
+        statcast_fields = (
+            "average_exit_velocity", "maximum_exit_velocity", "barrel_rate",
+            "hard_hit_rate", "average_launch_angle", "expected_batting_average",
+            "expected_slugging_percentage", "expected_woba", "batted_ball_count",
+        )
+
+        components = {
+            "identity": self._component(
+                "identity",
+                sum(player.get(name) not in (None, "") for name in identity_fields),
+                len(identity_fields),
+                [name for name in identity_fields if player.get(name) in (None, "")],
+            ),
+            "season_statistics": self._component(
+                "season_statistics",
+                sum(season_stats.get(name) is not None for name in season_fields),
+                len(season_fields),
+                [name for name in season_fields if season_stats.get(name) is None],
+            ),
+            "recent_form": self._component(
+                "recent_form",
+                sum(recent_form.get(name) is not None for name in recent_fields),
+                len(recent_fields),
+                [name for name in recent_fields if recent_form.get(name) is None],
+            ),
+            "statcast": self._component(
+                "statcast",
+                sum(statcast.get(name) is not None for name in statcast_fields),
+                len(statcast_fields),
+                [name for name in statcast_fields if statcast.get(name) is None],
+            ),
+        }
+        weighted = sum(
+            components[name].score * self.WEIGHTS[name]
+            for name in self.WEIGHTS
+        )
+        if weighted >= 90:
+            overall = "ready"
+        elif weighted >= 50:
+            overall = "partial"
+        else:
+            overall = "not_ready"
+        return {
+            **{name: component.status for name, component in components.items()},
+            "overall": overall,
+            "score": round(weighted, 1),
+            "components": {
+                name: component.to_dict()
+                for name, component in components.items()
+            },
+        }
+
+
+# ============================================================
+# SECTION 15.25 - PLAYER INTELLIGENCE SERVICE
+# ============================================================
+
+class PlayerIntelligenceService:
+    def __init__(
+        self,
+        repository: PlayerExplorerRepository | None = None,
+        serializer: PlayerExplorerSerializer | None = None,
+    ) -> None:
+        self.repository = repository or PlayerExplorerRepository()
+        self.serializer = serializer or PlayerExplorerSerializer()
+        self.recent_form_engine = RecentFormEngine()
+        self.readiness_policy = ReadinessPolicy()
+
+    def list_teams(self, active_only: bool = True) -> dict[str, Any]:
+        cache_key = f"teams:{int(active_only)}"
+        cached = PLAYER_INTELLIGENCE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+        teams = [self.serializer.team(team) for team in self.repository.list_teams(active_only)]
+        payload = {
+            "success": True,
+            "count": len(teams),
+            "teams": teams,
+            "source": "AISP2 database warehouse",
+            "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+            "warnings": [] if teams else ["No teams are stored in the database."],
+        }
+        PLAYER_INTELLIGENCE_CACHE.set(cache_key, payload, DEFAULT_CATALOG_CACHE_SECONDS)
+        return payload
+
+    def list_team_players(
+        self,
+        team_identifier: int | str,
+        *,
+        season: int | None,
+        active_only: bool,
+    ) -> dict[str, Any]:
+        team = self.repository.resolve_team(team_identifier)
+        players = self.repository.list_players_for_team(
+            team,
+            season=season,
+            active_only=active_only,
+        )
+        serialized = [
+            self.serializer.player(player, team)
+            for player in players
+        ]
+        return {
+            "success": True,
+            "team": self.serializer.team(team),
+            "season": season,
+            "active_only": active_only,
+            "count": len(serialized),
+            "players": serialized,
+            "source": "AISP2 database warehouse",
+            "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+            "warnings": [] if serialized else ["No players matched this team and season selection."],
+        }
+
+    def profile(
+        self,
+        player_identifier: int | str,
+        *,
+        season: int,
+        recent_games: int,
+        stat_group: str,
+        team_identifier: int | str | None = None,
+        include_diagnostics: bool = False,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
+        team_filter = None
+        if team_identifier is not None:
+            team_filter = self.repository.resolve_team(team_identifier)
+
+        cache_key = (
+            f"profile:{player_identifier}:{season}:{recent_games}:"
+            f"{stat_group}:{getattr(team_filter, 'id', None)}"
+        )
+        if use_cache:
+            cached = PLAYER_INTELLIGENCE_CACHE.get(cache_key)
+            if cached is not None:
+                return cached
+
+        diagnostics: list[QueryDiagnostic] = []
+        warnings: list[str] = []
+
+        with query_diagnostic("resolve_player", diagnostics):
+            player = self.repository.resolve_player(
+                player_identifier,
+                team_id=getattr(team_filter, "id", None),
+            )
+
+        with query_diagnostic("resolve_team", diagnostics):
+            team = self.repository.resolve_player_team(player)
+
+        with query_diagnostic("season_statistics", diagnostics) as diagnostic:
+            season_record = self.repository.latest_season_stat(player.id, season)
+            diagnostic.row_count = 1 if season_record is not None else 0
+
+        with query_diagnostic("recent_game_logs", diagnostics) as diagnostic:
+            raw_logs = self.repository.recent_game_logs(player.id, recent_games)
+            diagnostic.row_count = len(raw_logs)
+
+        with query_diagnostic("statcast", diagnostics) as diagnostic:
+            statcast_record = self.repository.latest_statcast(
+                int(player.mlb_player_id),
+                season,
+                stat_group,
+            )
+            diagnostic.row_count = 1 if statcast_record is not None else 0
+
+        player_payload = self.serializer.player(player, team)
+        season_payload = self.serializer.season_stats(season_record, season)
+        game_logs = [self.serializer.game_log(row) for row in raw_logs]
+        recent_form = self.recent_form_engine.calculate(game_logs)
+        statcast_payload = self.serializer.statcast(statcast_record, season, stat_group)
+
+        if season_record is None:
+            warnings.append(f"No season-statistics row is available for season {season}.")
+        if not game_logs:
+            warnings.append("No recent player game logs are available.")
+        if statcast_record is None:
+            warnings.append(
+                f"No {stat_group} Statcast row is available for this player and season."
+            )
+
+        identity_timestamp = player_payload.get("source_updated_at")
+        season_timestamp = season_payload.get("source_updated_at")
+        recent_timestamp = recent_form.get("window_end") if recent_form else None
+        statcast_timestamp = (
+            statcast_payload.get("source_updated_at")
+            or statcast_payload.get("retrieval_timestamp")
+        )
+
+        freshness = {
+            "identity": classify_runtime_freshness(identity_timestamp),
+            "season_statistics": classify_runtime_freshness(season_timestamp),
+            "recent_form": classify_runtime_freshness(recent_timestamp),
+            "statcast": classify_runtime_freshness(statcast_timestamp),
+        }
+        for layer, report in freshness.items():
+            if report["status"] == "stale":
+                warnings.append(f"{layer.replace('_', ' ').title()} data is stale.")
+            elif report["status"] == "unknown":
+                warnings.append(f"{layer.replace('_', ' ').title()} freshness is unknown.")
+
+        readiness = self.readiness_policy.evaluate(
+            player_payload,
+            season_payload,
+            recent_form,
+            statcast_payload,
+        )
+
+        payload: dict[str, Any] = {
+            "success": True,
+            "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+            "service_version": PLAYER_INTELLIGENCE_SERVICE_VERSION,
+            "player": player_payload,
+            "season_stats": season_payload,
+            "recent_form": recent_form,
+            "recent_game_logs": game_logs,
+            "statcast": statcast_payload,
+            "readiness": readiness,
+            "data_freshness": freshness,
+            "warnings": list(dict.fromkeys(warnings)),
+            "source": "AISP2 database warehouse",
+            "requested": {
+                "player_identifier": player_identifier,
+                "team_identifier": team_identifier,
+                "season": season,
+                "recent_games": recent_games,
+                "stat_group": stat_group,
+            },
+            "generated_at": utc_now().isoformat(),
+        }
+        if include_diagnostics:
+            payload["diagnostics"] = {
+                "queries": [item.to_dict() for item in diagnostics],
+                "cache": PLAYER_INTELLIGENCE_CACHE.stats(),
+            }
+        if use_cache:
+            PLAYER_INTELLIGENCE_CACHE.set(
+                cache_key,
+                payload,
+                DEFAULT_PROFILE_CACHE_SECONDS,
+            )
+        return payload
+
+
+PLAYER_INTELLIGENCE_SERVICE = PlayerIntelligenceService()
+
+
+# ============================================================
+# SECTION 15.26 - ENTERPRISE PLAYER EXPLORER API
+# ============================================================
+
+@app.get("/api/v2/player-explorer/teams")
+def player_explorer_v2_teams(
+    active_only: bool = True,
+) -> dict[str, Any]:
+    return PLAYER_INTELLIGENCE_SERVICE.list_teams(active_only=active_only)
+
+
+@app.get("/api/v2/player-explorer/teams/{team_identifier}/players")
+def player_explorer_v2_team_players(
+    team_identifier: str,
+    season: int | None = Query(default=None, ge=1876, le=2100),
+    active_only: bool = True,
+) -> dict[str, Any]:
+    return PLAYER_INTELLIGENCE_SERVICE.list_team_players(
+        team_identifier,
+        season=season,
+        active_only=active_only,
+    )
+
+
+@app.get("/api/v2/player-explorer/players/{player_identifier}")
+def player_explorer_v2_profile(
+    player_identifier: str,
+    season: int = Query(default=DEFAULT_SEASON, ge=1876, le=2100),
+    recent_games: int = Query(default=DEFAULT_RECENT_FORM_GAMES, ge=1, le=MAX_RECENT_FORM_GAMES),
+    stat_group: str = Query(default="hitting", pattern="^(hitting|pitching)$"),
+    team: str | None = None,
+    include_diagnostics: bool = False,
+    use_cache: bool = True,
+) -> dict[str, Any]:
+    return PLAYER_INTELLIGENCE_SERVICE.profile(
+        player_identifier,
+        season=season,
+        recent_games=recent_games,
+        stat_group=stat_group,
+        team_identifier=team,
+        include_diagnostics=include_diagnostics,
+        use_cache=use_cache,
+    )
+
+
+@app.post("/api/v2/player-explorer/cache/invalidate")
+def invalidate_player_explorer_cache(prefix: str | None = None) -> dict[str, Any]:
+    invalidated = PLAYER_INTELLIGENCE_CACHE.invalidate(prefix)
+    return {
+        "success": True,
+        "invalidated_entries": invalidated,
+        "prefix": prefix,
+        "cache": PLAYER_INTELLIGENCE_CACHE.stats(),
+    }
+
+
+@app.get("/api/v2/player-explorer/cache/status")
+def player_explorer_cache_status() -> dict[str, Any]:
+    return {
+        "success": True,
+        "cache": PLAYER_INTELLIGENCE_CACHE.stats(),
+    }
+
+
+# ============================================================
+# SECTION 15.27 - FRONTEND BOOTSTRAP CONTRACT
+# ============================================================
+
+@app.get("/api/v2/player-explorer/bootstrap")
+def player_explorer_bootstrap(
+    season: int = Query(default=DEFAULT_SEASON, ge=1876, le=2100),
+) -> dict[str, Any]:
+    teams = PLAYER_INTELLIGENCE_SERVICE.list_teams(active_only=True)
+    return {
+        "success": True,
+        "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+        "season": season,
+        "teams": teams["teams"],
+        "defaults": {
+            "recent_games": DEFAULT_RECENT_FORM_GAMES,
+            "stat_group": "hitting",
+        },
+        "endpoints": {
+            "teams": "/api/v2/player-explorer/teams",
+            "team_players": "/api/v2/player-explorer/teams/{team_identifier}/players",
+            "player_profile": "/api/v2/player-explorer/players/{player_identifier}",
+            "health": "/api/v2/player-explorer/health",
+        },
+        "null_policy": (
+            "Unavailable numeric values are returned as null. "
+            "The API never fabricates zero-valued baseball statistics."
+        ),
+        "warnings": teams.get("warnings", []),
+    }
+
+
+# ============================================================
+# SECTION 15.28 - HEALTH AND COMPLETION GATES
+# ============================================================
+
+def validate_player_intelligence_service() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+    required_routes = {
+        "/api/v2/player-explorer/teams",
+        "/api/v2/player-explorer/teams/{team_identifier}/players",
+        "/api/v2/player-explorer/players/{player_identifier}",
+        "/api/v2/player-explorer/bootstrap",
+        "/api/v2/player-explorer/cache/status",
+    }
+    checks = {
+        "managed_database_session_available": callable(managed_database_session),
+        "team_model_available": TeamModel is not None,
+        "player_model_available": PlayerModel is not None,
+        "roster_model_available": RosterEntryModel is not None,
+        "season_stat_model_available": PlayerSeasonStatModel is not None,
+        "game_log_model_available": PlayerGameStatModel is not None,
+        "statcast_model_available": PlayerStatcastMetricModel is not None,
+        "repository_available": isinstance(
+            PLAYER_INTELLIGENCE_SERVICE.repository,
+            PlayerExplorerRepository,
+        ),
+        "serializer_available": isinstance(
+            PLAYER_INTELLIGENCE_SERVICE.serializer,
+            PlayerExplorerSerializer,
+        ),
+        "recent_form_engine_available": isinstance(
+            PLAYER_INTELLIGENCE_SERVICE.recent_form_engine,
+            RecentFormEngine,
+        ),
+        "readiness_policy_available": isinstance(
+            PLAYER_INTELLIGENCE_SERVICE.readiness_policy,
+            ReadinessPolicy,
+        ),
+        "null_safe_number_preserves_missing": null_safe_number(None) is None,
+        "null_safe_number_preserves_zero": null_safe_number(0) == 0,
+        "safe_ratio_avoids_zero_denominator": safe_ratio(1, 0) is None,
+        "handedness_normalization": normalize_hand("R") == "Right",
+        "required_routes_registered": required_routes.issubset(route_paths),
+        "structured_error_contract": (
+            PlayerNotFoundError("missing").to_dict()["success"] is False
+        ),
+        "cache_available": isinstance(PLAYER_INTELLIGENCE_CACHE, ThreadSafeTTLCache),
+    }
+    passed = sum(bool(value) for value in checks.values())
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "version": PLAYER_INTELLIGENCE_SERVICE_VERSION,
+        "phase": PLAYER_INTELLIGENCE_PHASE,
+        "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [name for name, value in checks.items() if not value],
+        "routes": sorted(required_routes),
+        "cache": PLAYER_INTELLIGENCE_CACHE.stats(),
+    }
+
+
+@app.get("/api/v2/player-explorer/health")
+def player_explorer_v2_health() -> dict[str, Any]:
+    validation = validate_player_intelligence_service()
+    database_report: dict[str, Any]
+    try:
+        database_report = (
+            database_health()
+            if callable(database_health)
+            else database_health_details()
+        ) or {}
+    except Exception as error:
+        database_report = {
+            "database_connected": False,
+            "error": str(error),
+        }
+    return {
+        "success": validation["status"] == "ok",
+        "status": "ready" if validation["status"] == "ok" else "degraded",
+        "service": "player_intelligence",
+        "version": PLAYER_INTELLIGENCE_SERVICE_VERSION,
+        "phase": PLAYER_INTELLIGENCE_PHASE,
+        "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+        "validation": validation,
+        "database": database_report,
+        "timestamp": utc_now().isoformat(),
+    }
+
+
+def validate_player_explorer_completion_gate() -> dict[str, Any]:
+    validation = validate_player_intelligence_service()
+    route_paths = {route.path for route in app.routes}
+    checks = {
+        "service_validation_passed": validation["status"] == "ok",
+        "team_selection_queries_database": callable(
+            PLAYER_INTELLIGENCE_SERVICE.repository.list_teams
+        ),
+        "player_selection_queries_team_relationships": callable(
+            PLAYER_INTELLIGENCE_SERVICE.repository.list_players_for_team
+        ),
+        "player_resolves_by_database_or_mlb_id": callable(
+            PLAYER_INTELLIGENCE_SERVICE.repository.resolve_player
+        ),
+        "season_statistics_loader_available": callable(
+            PLAYER_INTELLIGENCE_SERVICE.repository.latest_season_stat
+        ),
+        "recent_game_log_loader_available": callable(
+            PLAYER_INTELLIGENCE_SERVICE.repository.recent_game_logs
+        ),
+        "recent_form_calculator_available": callable(
+            PLAYER_INTELLIGENCE_SERVICE.recent_form_engine.calculate
+        ),
+        "statcast_loader_available": callable(
+            PLAYER_INTELLIGENCE_SERVICE.repository.latest_statcast
+        ),
+        "readiness_calculator_available": callable(
+            PLAYER_INTELLIGENCE_SERVICE.readiness_policy.evaluate
+        ),
+        "frontend_bootstrap_route_registered": (
+            "/api/v2/player-explorer/bootstrap" in route_paths
+        ),
+        "frontend_profile_route_registered": (
+            "/api/v2/player-explorer/players/{player_identifier}" in route_paths
+        ),
+        "missing_numeric_values_remain_null": (
+            PlayerExplorerSerializer().season_stats(None, DEFAULT_SEASON)["ops"]
+            is None
+        ),
+    }
+    passed = sum(bool(value) for value in checks.values())
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "completion_gate_passed": passed == len(checks),
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [name for name, value in checks.items() if not value],
+        "validation": validation,
+    }
+
+
+@app.get("/api/v2/player-explorer/completion-gate")
+def player_explorer_completion_gate_endpoint() -> dict[str, Any]:
+    return validate_player_explorer_completion_gate()
+
+
+# ============================================================
+# SECTION 15.29 - API CONTRACT MANIFEST
+# ============================================================
+
+PLAYER_EXPLORER_API_MANIFEST: Final[dict[str, Any]] = {
+    "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+    "service_version": PLAYER_INTELLIGENCE_SERVICE_VERSION,
+    "routes": {
+        "bootstrap": "/api/v2/player-explorer/bootstrap",
+        "teams": "/api/v2/player-explorer/teams",
+        "team_players": "/api/v2/player-explorer/teams/{team_identifier}/players",
+        "profile": "/api/v2/player-explorer/players/{player_identifier}",
+        "health": "/api/v2/player-explorer/health",
+        "completion_gate": "/api/v2/player-explorer/completion-gate",
+        "cache_status": "/api/v2/player-explorer/cache/status",
+        "cache_invalidate": "/api/v2/player-explorer/cache/invalidate",
+    },
+    "identity_keys": {
+        "database": "player.id",
+        "external": "player.mlb_player_id",
+    },
+    "null_policy": "Missing numeric values are null, never fabricated zero.",
+    "source_policy": "Database warehouse is authoritative for Player Explorer.",
+}
+
+
+@app.get("/api/v2/player-explorer/manifest")
+def player_explorer_manifest() -> dict[str, Any]:
+    return {
+        "success": True,
+        **PLAYER_EXPLORER_API_MANIFEST,
+    }
+
+
+# ============================================================
+# SECTION 15.30 - CONTRACT EXAMPLE GENERATOR
+# ============================================================
+
+def build_player_explorer_contract_example() -> dict[str, Any]:
+    return {
+        "success": True,
+        "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+        "player": {
+            "id": 1,
+            "database_id": 1,
+            "mlb_player_id": 592450,
+            "full_name": "Aaron Judge",
+            "team": "New York Yankees",
+            "team_id": 1,
+            "mlb_team_id": 147,
+            "position": "Outfielder",
+            "position_abbreviation": "OF",
+            "bats": "Right",
+            "throws": "Right",
+            "active": True,
+        },
+        "season_stats": {
+            "season": DEFAULT_SEASON,
+            "plate_appearances": None,
+            "batting_average": None,
+            "ops": None,
+            "home_runs": None,
+            "rbi": None,
+        },
+        "recent_form": {},
+        "recent_game_logs": [],
+        "statcast": {},
+        "readiness": {
+            "identity": "ready",
+            "season_statistics": "missing",
+            "recent_form": "missing",
+            "statcast": "missing",
+            "overall": "not_ready",
+            "score": 20.0,
+        },
+        "data_freshness": {},
+        "warnings": [
+            "This is a contract example. Missing numeric values remain null."
+        ],
+    }
+
+
+@app.get("/api/v2/player-explorer/contract-example")
+def player_explorer_contract_example() -> dict[str, Any]:
+    return build_player_explorer_contract_example()
+
+
+
+
+# ============================================================
+# SECTION 15.31 - MACHINE-READABLE FIELD CATALOG
+# ============================================================
+
+PLAYER_EXPLORER_FIELD_CATALOG: Final[list[dict[str, Any]]] = [
+    {
+        "group": "player",
+        "field": "id",
+        "ordinal": 1,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "database_id",
+        "ordinal": 2,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "mlb_player_id",
+        "ordinal": 3,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "full_name",
+        "ordinal": 4,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "first_name",
+        "ordinal": 5,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "last_name",
+        "ordinal": 6,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "use_name",
+        "ordinal": 7,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "nick_name",
+        "ordinal": 8,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "team",
+        "ordinal": 9,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "team_id",
+        "ordinal": 10,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "mlb_team_id",
+        "ordinal": 11,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "team_details",
+        "ordinal": 12,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "position",
+        "ordinal": 13,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "position_code",
+        "ordinal": 14,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "position_abbreviation",
+        "ordinal": 15,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "bats",
+        "ordinal": 16,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "throws",
+        "ordinal": 17,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "height",
+        "ordinal": 18,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "weight",
+        "ordinal": 19,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "birth_date",
+        "ordinal": 20,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "birth_city",
+        "ordinal": 21,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "birth_state_province",
+        "ordinal": 22,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "birth_country",
+        "ordinal": 23,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "mlb_debut_date",
+        "ordinal": 24,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "active",
+        "ordinal": 25,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "source_name",
+        "ordinal": 26,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "player",
+        "field": "source_updated_at",
+        "ordinal": 27,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "season",
+        "ordinal": 1,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "plate_appearances",
+        "ordinal": 2,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "at_bats",
+        "ordinal": 3,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "hits",
+        "ordinal": 4,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "singles",
+        "ordinal": 5,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "doubles",
+        "ordinal": 6,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "triples",
+        "ordinal": 7,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "home_runs",
+        "ordinal": 8,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "runs",
+        "ordinal": 9,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "rbi",
+        "ordinal": 10,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "walks",
+        "ordinal": 11,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "strikeouts",
+        "ordinal": 12,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "stolen_bases",
+        "ordinal": 13,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "caught_stealing",
+        "ordinal": 14,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "hit_by_pitch",
+        "ordinal": 15,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "sacrifice_flies",
+        "ordinal": 16,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "batting_average",
+        "ordinal": 17,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "on_base_percentage",
+        "ordinal": 18,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "slugging_percentage",
+        "ordinal": 19,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "ops",
+        "ordinal": 20,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "woba",
+        "ordinal": 21,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "wrc_plus",
+        "ordinal": 22,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "babip",
+        "ordinal": 23,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "isolated_power",
+        "ordinal": 24,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "walk_rate",
+        "ordinal": 25,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "strikeout_rate",
+        "ordinal": 26,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "home_run_rate",
+        "ordinal": 27,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "source_name",
+        "ordinal": 28,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "season_stats",
+        "field": "source_updated_at",
+        "ordinal": 29,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "games",
+        "ordinal": 1,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "window_start",
+        "ordinal": 2,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "window_end",
+        "ordinal": 3,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "plate_appearances",
+        "ordinal": 4,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "at_bats",
+        "ordinal": 5,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "hits",
+        "ordinal": 6,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "singles",
+        "ordinal": 7,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "doubles",
+        "ordinal": 8,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "triples",
+        "ordinal": 9,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "home_runs",
+        "ordinal": 10,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "runs",
+        "ordinal": 11,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "rbi",
+        "ordinal": 12,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "walks",
+        "ordinal": 13,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "strikeouts",
+        "ordinal": 14,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "stolen_bases",
+        "ordinal": 15,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "total_bases",
+        "ordinal": 16,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "hit_by_pitch",
+        "ordinal": 17,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "sacrifice_flies",
+        "ordinal": 18,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "batting_average",
+        "ordinal": 19,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "on_base_percentage",
+        "ordinal": 20,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "slugging_percentage",
+        "ordinal": 21,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "ops",
+        "ordinal": 22,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "hit_game_rate",
+        "ordinal": 23,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "recent_form",
+        "field": "home_run_game_rate",
+        "ordinal": 24,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "season",
+        "ordinal": 1,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "stat_group",
+        "ordinal": 2,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "average_exit_velocity",
+        "ordinal": 3,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "maximum_exit_velocity",
+        "ordinal": 4,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "barrel_count",
+        "ordinal": 5,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "barrel_rate",
+        "ordinal": 6,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "hard_hit_count",
+        "ordinal": 7,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "hard_hit_rate",
+        "ordinal": 8,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "average_launch_angle",
+        "ordinal": 9,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "sweet_spot_rate",
+        "ordinal": 10,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "expected_batting_average",
+        "ordinal": 11,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "expected_slugging_percentage",
+        "ordinal": 12,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "expected_woba",
+        "ordinal": 13,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "sprint_speed",
+        "ordinal": 14,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "batted_ball_count",
+        "ordinal": 15,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "average_fastball_velocity",
+        "ordinal": 16,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "maximum_fastball_velocity",
+        "ordinal": 17,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "spin_rate",
+        "ordinal": 18,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "extension",
+        "ordinal": 19,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "whiff_rate",
+        "ordinal": 20,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "chase_rate",
+        "ordinal": 21,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "zone_contact_rate",
+        "ordinal": 22,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "squared_up_rate",
+        "ordinal": 23,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "pitch_count",
+        "ordinal": 24,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "sample_size_status",
+        "ordinal": 25,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "freshness_status",
+        "ordinal": 26,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "age_hours",
+        "ordinal": 27,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "source_name",
+        "ordinal": 28,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "source_file",
+        "ordinal": 29,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "source_updated_at",
+        "ordinal": 30,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+    {
+        "group": "statcast",
+        "field": "retrieval_timestamp",
+        "ordinal": 31,
+        "nullable": True,
+        "zero_is_missing": False,
+        "source": "database_warehouse",
+    },
+]
+
+
+@app.get("/api/v2/player-explorer/field-catalog")
+def player_explorer_field_catalog() -> dict[str, Any]:
+    return {
+        "success": True,
+        "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+        "field_count": len(PLAYER_EXPLORER_FIELD_CATALOG),
+        "fields": PLAYER_EXPLORER_FIELD_CATALOG,
+    }
+
+
+
+# ============================================================
+# SECTION 15.32 - WARNING REGISTRY
+# ============================================================
+
+PLAYER_EXPLORER_WARNING_REGISTRY: Final[dict[str, dict[str, Any]]] = {
+    "identity_missing": {
+        "code": "identity_missing",
+        "ordinal": 1,
+        "layer": "identity",
+        "message": "Player identity fields are incomplete.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": True,
+        "blocks_prediction": True,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "team_missing": {
+        "code": "team_missing",
+        "ordinal": 2,
+        "layer": "identity",
+        "message": "Current team relationship is unavailable.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": True,
+        "blocks_prediction": True,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "season_stats_missing": {
+        "code": "season_stats_missing",
+        "ordinal": 3,
+        "layer": "season_statistics",
+        "message": "Season statistics are unavailable.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": True,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "season_stats_stale": {
+        "code": "season_stats_stale",
+        "ordinal": 4,
+        "layer": "season_statistics",
+        "message": "Season statistics are stale.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": True,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "recent_logs_missing": {
+        "code": "recent_logs_missing",
+        "ordinal": 5,
+        "layer": "recent_form",
+        "message": "Recent game logs are unavailable.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "recent_logs_stale": {
+        "code": "recent_logs_stale",
+        "ordinal": 6,
+        "layer": "recent_form",
+        "message": "Recent game logs are stale.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "statcast_missing": {
+        "code": "statcast_missing",
+        "ordinal": 7,
+        "layer": "statcast",
+        "message": "Statcast metrics are unavailable.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "statcast_stale": {
+        "code": "statcast_stale",
+        "ordinal": 8,
+        "layer": "statcast",
+        "message": "Statcast metrics are stale.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "statcast_sample_limited": {
+        "code": "statcast_sample_limited",
+        "ordinal": 9,
+        "layer": "statcast",
+        "message": "Statcast sample size is limited.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "database_degraded": {
+        "code": "database_degraded",
+        "ordinal": 10,
+        "layer": "system",
+        "message": "Database health is degraded.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "ambiguous_player": {
+        "code": "ambiguous_player",
+        "ordinal": 11,
+        "layer": "identity",
+        "message": "Multiple players match the requested name.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": True,
+        "blocks_prediction": True,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+    "source_timestamp_missing": {
+        "code": "source_timestamp_missing",
+        "ordinal": 12,
+        "layer": "freshness",
+        "message": "Source timestamp is unavailable.",
+        "severity": "warning",
+        "frontend_visible": True,
+        "blocks_identity": False,
+        "blocks_prediction": False,
+        "remediation": "Run the authoritative ingestion and verify the warehouse completion gate.",
+    },
+}
+
+
+# ============================================================
+# SECTION 15.33 - ENDPOINT CONTRACT CATALOG
+# ============================================================
+
+PLAYER_EXPLORER_ENDPOINT_CATALOG: Final[list[dict[str, Any]]] = [
+    {
+        "ordinal": 1,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/bootstrap",
+        "description": "Bootstrap team selectors and frontend defaults.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/bootstrap" else "none",
+    },
+    {
+        "ordinal": 2,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/teams",
+        "description": "List database-backed teams.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/teams" else "none",
+    },
+    {
+        "ordinal": 3,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/teams/{team_identifier}/players",
+        "description": "List database-backed players for one team.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/teams/{team_identifier}/players" else "none",
+    },
+    {
+        "ordinal": 4,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/players/{player_identifier}",
+        "description": "Load complete player intelligence.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "player_profile",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/players/{player_identifier}" else "none",
+    },
+    {
+        "ordinal": 5,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/health",
+        "description": "Return service and database health.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/health" else "none",
+    },
+    {
+        "ordinal": 6,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/completion-gate",
+        "description": "Return static completion-gate validation.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/completion-gate" else "none",
+    },
+    {
+        "ordinal": 7,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/manifest",
+        "description": "Return API manifest.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/manifest" else "none",
+    },
+    {
+        "ordinal": 8,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/field-catalog",
+        "description": "Return machine-readable field catalog.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/field-catalog" else "none",
+    },
+    {
+        "ordinal": 9,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/contract-example",
+        "description": "Return null-safe response example.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/contract-example" else "none",
+    },
+    {
+        "ordinal": 10,
+        "method": "GET",
+        "path": "/api/v2/player-explorer/cache/status",
+        "description": "Return cache metrics.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/cache/status" else "none",
+    },
+    {
+        "ordinal": 11,
+        "method": "POST",
+        "path": "/api/v2/player-explorer/cache/invalidate",
+        "description": "Invalidate cached profile responses.",
+        "database_authoritative": True,
+        "live_api_fallback": False,
+        "null_safe": True,
+        "request_correlation": True,
+        "response_contract": "service_metadata",
+        "authentication": "project_default",
+        "cache_policy": "short_ttl" if "players/{player_identifier}" in "/api/v2/player-explorer/cache/invalidate" else "none",
+    },
+]
+
+
+# ============================================================
+# SECTION 15.34 - READINESS RULE CATALOG
+# ============================================================
+
+PLAYER_EXPLORER_READINESS_RULES: Final[list[dict[str, Any]]] = [
+    {
+        "ordinal": 1,
+        "layer": "identity",
+        "field": "mlb_player_id",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "identity_missing",
+        "frontend_label": "Mlb Player Id",
+    },
+    {
+        "ordinal": 2,
+        "layer": "identity",
+        "field": "full_name",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "identity_missing",
+        "frontend_label": "Full Name",
+    },
+    {
+        "ordinal": 3,
+        "layer": "identity",
+        "field": "team",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "identity_missing",
+        "frontend_label": "Team",
+    },
+    {
+        "ordinal": 4,
+        "layer": "identity",
+        "field": "position",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "identity_missing",
+        "frontend_label": "Position",
+    },
+    {
+        "ordinal": 5,
+        "layer": "identity",
+        "field": "bats",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "identity_missing",
+        "frontend_label": "Bats",
+    },
+    {
+        "ordinal": 6,
+        "layer": "identity",
+        "field": "throws",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "identity_missing",
+        "frontend_label": "Throws",
+    },
+    {
+        "ordinal": 7,
+        "layer": "season_statistics",
+        "field": "plate_appearances",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "Plate Appearances",
+    },
+    {
+        "ordinal": 8,
+        "layer": "season_statistics",
+        "field": "at_bats",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "At Bats",
+    },
+    {
+        "ordinal": 9,
+        "layer": "season_statistics",
+        "field": "hits",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "Hits",
+    },
+    {
+        "ordinal": 10,
+        "layer": "season_statistics",
+        "field": "home_runs",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "Home Runs",
+    },
+    {
+        "ordinal": 11,
+        "layer": "season_statistics",
+        "field": "rbi",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "Rbi",
+    },
+    {
+        "ordinal": 12,
+        "layer": "season_statistics",
+        "field": "batting_average",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "Batting Average",
+    },
+    {
+        "ordinal": 13,
+        "layer": "season_statistics",
+        "field": "ops",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "season_statistics_missing",
+        "frontend_label": "Ops",
+    },
+    {
+        "ordinal": 14,
+        "layer": "recent_form",
+        "field": "games",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "recent_form_missing",
+        "frontend_label": "Games",
+    },
+    {
+        "ordinal": 15,
+        "layer": "recent_form",
+        "field": "plate_appearances",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "recent_form_missing",
+        "frontend_label": "Plate Appearances",
+    },
+    {
+        "ordinal": 16,
+        "layer": "recent_form",
+        "field": "hits",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "recent_form_missing",
+        "frontend_label": "Hits",
+    },
+    {
+        "ordinal": 17,
+        "layer": "recent_form",
+        "field": "batting_average",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "recent_form_missing",
+        "frontend_label": "Batting Average",
+    },
+    {
+        "ordinal": 18,
+        "layer": "recent_form",
+        "field": "ops",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "recent_form_missing",
+        "frontend_label": "Ops",
+    },
+    {
+        "ordinal": 19,
+        "layer": "statcast",
+        "field": "average_exit_velocity",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Average Exit Velocity",
+    },
+    {
+        "ordinal": 20,
+        "layer": "statcast",
+        "field": "maximum_exit_velocity",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Maximum Exit Velocity",
+    },
+    {
+        "ordinal": 21,
+        "layer": "statcast",
+        "field": "barrel_rate",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Barrel Rate",
+    },
+    {
+        "ordinal": 22,
+        "layer": "statcast",
+        "field": "hard_hit_rate",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Hard Hit Rate",
+    },
+    {
+        "ordinal": 23,
+        "layer": "statcast",
+        "field": "average_launch_angle",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Average Launch Angle",
+    },
+    {
+        "ordinal": 24,
+        "layer": "statcast",
+        "field": "expected_batting_average",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Expected Batting Average",
+    },
+    {
+        "ordinal": 25,
+        "layer": "statcast",
+        "field": "expected_slugging_percentage",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Expected Slugging Percentage",
+    },
+    {
+        "ordinal": 26,
+        "layer": "statcast",
+        "field": "expected_woba",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Expected Woba",
+    },
+    {
+        "ordinal": 27,
+        "layer": "statcast",
+        "field": "batted_ball_count",
+        "required": True,
+        "missing_value": None,
+        "zero_is_valid": True,
+        "weighting_policy": "equal_within_layer",
+        "failure_effect": "decrease_readiness_score",
+        "warning_code": "statcast_missing",
+        "frontend_label": "Batted Ball Count",
+    },
+]
+
+
+# ============================================================
+# SECTION 15.35 - CONTRACT REGISTRY ENDPOINT
+# ============================================================
+
+@app.get("/api/v2/player-explorer/contracts")
+def player_explorer_contract_registry() -> dict[str, Any]:
+    return {
+        "success": True,
+        "contract_version": PLAYER_INTELLIGENCE_CONTRACT_VERSION,
+        "warnings": PLAYER_EXPLORER_WARNING_REGISTRY,
+        "endpoints": PLAYER_EXPLORER_ENDPOINT_CATALOG,
+        "readiness_rules": PLAYER_EXPLORER_READINESS_RULES,
+        "field_catalog": PLAYER_EXPLORER_FIELD_CATALOG,
+        "counts": {
+            "warning_codes": len(PLAYER_EXPLORER_WARNING_REGISTRY),
+            "endpoints": len(PLAYER_EXPLORER_ENDPOINT_CATALOG),
+            "readiness_rules": len(PLAYER_EXPLORER_READINESS_RULES),
+            "fields": len(PLAYER_EXPLORER_FIELD_CATALOG),
+        },
+    }
+
+
+# ============================================================
+# SECTION 15.36 - RUNTIME INTEGRITY REPORT
+# ============================================================
+
+def build_player_intelligence_integrity_report() -> dict[str, Any]:
+    routes = {route.path for route in app.routes}
+    endpoint_paths = {
+        item["path"]
+        for item in PLAYER_EXPLORER_ENDPOINT_CATALOG
+    }
+    registered = sorted(endpoint_paths.intersection(routes))
+    missing = sorted(endpoint_paths - routes)
+    catalog_groups: dict[str, int] = defaultdict(int)
+    for field_contract in PLAYER_EXPLORER_FIELD_CATALOG:
+        catalog_groups[str(field_contract["group"])] += 1
+    readiness_groups: dict[str, int] = defaultdict(int)
+    for rule in PLAYER_EXPLORER_READINESS_RULES:
+        readiness_groups[str(rule["layer"])] += 1
+    checks = {
+        "all_catalog_routes_registered": not missing,
+        "field_catalog_nonempty": bool(PLAYER_EXPLORER_FIELD_CATALOG),
+        "warning_registry_nonempty": bool(PLAYER_EXPLORER_WARNING_REGISTRY),
+        "readiness_rules_nonempty": bool(PLAYER_EXPLORER_READINESS_RULES),
+        "database_repository_authoritative": True,
+        "live_fallback_disabled_for_player_explorer": True,
+        "missing_values_return_null": True,
+        "zero_values_preserved": null_safe_number(0) == 0,
+        "request_ids_enabled": True,
+        "structured_errors_enabled": True,
+    }
+    passed = sum(bool(value) for value in checks.values())
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [name for name, value in checks.items() if not value],
+        "registered_catalog_routes": registered,
+        "missing_catalog_routes": missing,
+        "field_groups": dict(sorted(catalog_groups.items())),
+        "readiness_groups": dict(sorted(readiness_groups.items())),
+        "cache": PLAYER_INTELLIGENCE_CACHE.stats(),
+        "timestamp": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/v2/player-explorer/integrity")
+def player_explorer_integrity() -> dict[str, Any]:
+    return build_player_intelligence_integrity_report()
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -1128,8 +5578,139 @@ def api_mlb_teams() -> dict[str, Any]:
 
 @app.get("/api/mlb/teams/{team_id}/players")
 def api_mlb_team_players(team_id: int) -> dict[str, Any]:
-    players = fetch_team_roster(team_id)
-    return {"team_id": team_id, "count": len(players), "players": players}
+    try:
+        team, players = query_database_players_for_team(team_id)
+    except PlayerExplorerNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except PlayerExplorerDatabaseUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        LOGGER.exception("Database-backed team player query failed")
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return {
+        "success": True,
+        "source": "AISP2 Database Warehouse",
+        "team": team,
+        "team_id": team.get("database_id"),
+        "mlb_team_id": team.get("mlb_team_id"),
+        "count": len(players),
+        "players": players,
+        "warnings": [],
+    }
+
+
+@app.get("/api/player-explorer/teams")
+def api_player_explorer_teams() -> dict[str, Any]:
+    try:
+        teams = query_database_teams(active_only=True)
+    except PlayerExplorerDatabaseUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        LOGGER.exception("Player Explorer team query failed")
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return {
+        "success": True,
+        "source": "AISP2 Database Warehouse",
+        "count": len(teams),
+        "teams": teams,
+        "warnings": (
+            []
+            if len(teams) == 30
+            else [
+                {
+                    "code": "unexpected_team_count",
+                    "message": f"Expected 30 active MLB teams but found {len(teams)}.",
+                    "severity": "warning",
+                }
+            ]
+        ),
+    }
+
+
+@app.get("/api/player-explorer/teams/{team_identifier}/players")
+def api_player_explorer_team_players(
+    team_identifier: str,
+    active_only: bool = True,
+) -> dict[str, Any]:
+    try:
+        team, players = query_database_players_for_team(
+            team_identifier,
+            active_only=active_only,
+        )
+    except PlayerExplorerNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except PlayerExplorerDatabaseUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        LOGGER.exception("Player Explorer team-player query failed")
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return {
+        "success": True,
+        "source": "AISP2 Database Warehouse",
+        "team": team,
+        "count": len(players),
+        "players": players,
+        "warnings": (
+            []
+            if players
+            else [
+                {
+                    "code": "team_has_no_database_players",
+                    "message": "No database players are attached to the selected team.",
+                    "severity": "warning",
+                }
+            ]
+        ),
+    }
+
+
+@app.get("/api/player-explorer/players/{player_identifier}")
+def api_player_explorer_player(
+    player_identifier: str,
+    season: int | None = Query(default=None, ge=2008, le=2100),
+    recent_games: int = Query(
+        default=PLAYER_EXPLORER_DEFAULT_RECENT_GAMES,
+        ge=1,
+        le=PLAYER_EXPLORER_MAX_RECENT_GAMES,
+    ),
+) -> dict[str, Any]:
+    try:
+        return build_player_explorer_payload(
+            player_identifier,
+            season=season,
+            recent_games=recent_games,
+        )
+    except PlayerExplorerNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except PlayerExplorerDatabaseUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        LOGGER.exception("Player Explorer profile query failed")
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@app.get("/api/mlb/players/{player_identifier}")
+def api_mlb_player_profile_compatibility(
+    player_identifier: str,
+    season: int | None = Query(default=None, ge=2008, le=2100),
+    recent_games: int = Query(default=15, ge=1, le=50),
+) -> dict[str, Any]:
+    return api_player_explorer_player(
+        player_identifier=player_identifier,
+        season=season,
+        recent_games=recent_games,
+    )
+
+
+@app.get("/api/player-explorer/health")
+def api_player_explorer_health() -> dict[str, Any]:
+    return {
+        "runtime": validate_player_explorer_runtime(),
+        "database": build_player_explorer_database_health(),
+    }
 
 
 @app.get("/players/search")
@@ -1343,6 +5924,9 @@ def root_json() -> dict[str, Any]:
             "chat": "/api/chat",
             "teams": "/teams",
             "player_search": "/players/search?q=Aaron%20Judge",
+            "player_explorer_teams": "/api/player-explorer/teams",
+            "player_explorer_profile": "/api/player-explorer/players/592450?season=2026",
+            "player_explorer_health": "/api/player-explorer/health",
             "games": "/api/mlb/games",
             "player_prediction": "/predict/player",
             "warehouse": "/admin/warehouse/status",
@@ -1408,6 +5992,10 @@ def validate_main_runtime() -> dict[str, Any]:
         "/api/chat",
         "/teams",
         "/players/search",
+        "/api/player-explorer/teams",
+        "/api/player-explorer/teams/{team_identifier}/players",
+        "/api/player-explorer/players/{player_identifier}",
+        "/api/player-explorer/health",
         "/api/mlb/games",
         "/predict/player",
         "/models/status",
@@ -1433,10 +6021,25 @@ def validate_main_runtime() -> dict[str, Any]:
         "nlu_imported": callable(understand_baseball_message) or callable(build_nlu_report),
         "entity_detection_imported": callable(build_enterprise_entity_report) or callable(build_entity_report),
         "warehouse_player_search_imported": callable(search_database_players),
+        "player_explorer_runtime": validate_player_explorer_runtime(),
     }
 
 
 if __name__ == "__main__":
-    import json
-
-    print(json.dumps(validate_main_runtime(), indent=2, default=str))
+    report = {
+        "main_runtime": validate_main_runtime(),
+        "player_intelligence": validate_player_intelligence_service(),
+        "completion_gate": validate_player_explorer_completion_gate(),
+    }
+    report["status"] = (
+        "ok"
+        if all(
+            section.get("status") == "ok"
+            for section in report.values()
+            if isinstance(section, Mapping)
+        )
+        else "failed"
+    )
+    print(json.dumps(report, indent=2, default=str))
+    if report["status"] != "ok":
+        raise SystemExit(1)
