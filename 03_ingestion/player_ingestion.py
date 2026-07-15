@@ -40,11 +40,13 @@ from __future__ import annotations
 # SECTION 01 - STANDARD LIBRARY IMPORTS
 # ============================================================
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
+from enum import Enum
+from uuid import uuid4
 import json
 import logging
 import re
@@ -75,6 +77,10 @@ for path in (PROJECT_ROOT, DATABASE_DIR, DATA_SOURCES_DIR, INGESTION_DIR):
 
 from database import initialize_database
 from database import managed_database_session
+from database import collect_database_inventory
+from database import player_explorer_database_readiness
+from database import safe_commit
+from database import safe_rollback
 from models import Player
 from models import Team
 from models import RosterEntry
@@ -98,8 +104,8 @@ LOGGER = logging.getLogger(__name__)
 # ============================================================
 
 INGESTION_NAME: Final[str] = "AISP2 Enterprise Player and Roster Ingestion"
-INGESTION_VERSION: Final[str] = "6.0.0"
-INGESTION_PHASE: Final[str] = "Phase 11 Part 4.0"
+INGESTION_VERSION: Final[str] = "7.0.0"
+INGESTION_PHASE: Final[str] = "Phase 12 Part 2.0"
 INGESTION_PATH: Final[str] = "03_ingestion/player_ingestion.py"
 DEFAULT_PLAYER_SEASON: Final[int] = DEFAULT_SEASON
 DEFAULT_ROSTER_TYPES: Final[tuple[str, ...]] = (
@@ -632,6 +638,88 @@ class MLBClientAdapter:
             f"/people/{player_id}/stats",
             params={"stats": stat_type, "group": group, "season": season},
         )
+
+
+    def get_player_game_logs(
+        self,
+        player_id: int,
+        season: int,
+        *,
+        group: str = "hitting",
+    ) -> dict[str, Any]:
+        method = getattr(self.client, "get_player_game_logs", None)
+        if callable(method):
+            try:
+                return coerce_mapping(
+                    method(
+                        player_id=player_id,
+                        season=season,
+                        group=group,
+                    )
+                )
+            except Exception:
+                pass
+
+        return self.get_player_stats(
+            player_id,
+            season,
+            group=group,
+            stat_type="gameLog",
+        )
+
+    def get_player_splits(
+        self,
+        player_id: int,
+        season: int,
+        *,
+        group: str = "hitting",
+    ) -> dict[str, Any]:
+        method = getattr(self.client, "get_player_splits", None)
+        if callable(method):
+            try:
+                return coerce_mapping(
+                    method(
+                        player_id=player_id,
+                        season=season,
+                        group=group,
+                    )
+                )
+            except Exception:
+                pass
+
+        return self.get_player_stats(
+            player_id,
+            season,
+            group=group,
+            stat_type="statSplits",
+        )
+
+    def get_statcast_aggregate(
+        self,
+        player_id: int,
+        season: int,
+    ) -> dict[str, Any]:
+        for method_name in (
+            "get_player_statcast",
+            "get_statcast_player_summary",
+            "get_player_savant_metrics",
+        ):
+            method = getattr(self.client, method_name, None)
+            if not callable(method):
+                continue
+
+            for kwargs in (
+                {"player_id": player_id, "season": season},
+                {"mlb_player_id": player_id, "season": season},
+            ):
+                try:
+                    return coerce_mapping(method(**kwargs))
+                except TypeError:
+                    continue
+                except Exception:
+                    break
+
+        return {}
 
     def _raw_get(
         self,
@@ -2686,6 +2774,1496 @@ def audit_complete_player_warehouse() -> dict[str, Any]:
     }
 
 
+
+# ============================================================
+# SECTION 22.12 - AUTHORITATIVE ROSTER ENUMERATIONS
+# ============================================================
+
+class RosterPriority(int, Enum):
+    UNKNOWN = 0
+    FULL_ROSTER = 100
+    FORTY_MAN = 200
+    INJURED = 300
+    ACTIVE = 400
+
+
+class CompletionGateState(str, Enum):
+    PASSED = "passed"
+    DEGRADED = "degraded"
+    FAILED = "failed"
+
+
+# ============================================================
+# SECTION 22.13 - AUTHORITATIVE DATA CONTRACTS
+# ============================================================
+
+@dataclass(slots=True)
+class AuthoritativePlayerIdentity:
+    mlb_player_id: int
+    full_name: str
+
+    first_name: str | None = None
+    last_name: str | None = None
+    use_name: str | None = None
+    nick_name: str | None = None
+
+    position: str | None = None
+    position_code: str | None = None
+    position_abbreviation: str | None = None
+
+    bats: str | None = None
+    throws: str | None = None
+
+    active_status: bool = True
+    injured_status: bool = False
+    two_way_status: bool = False
+
+    mlb_team_id: int | None = None
+    team_name: str | None = None
+
+    roster_type: str | None = None
+    roster_status_code: str | None = None
+    roster_status_description: str | None = None
+    jersey_number: str | None = None
+
+    source_observed_at: datetime = field(default_factory=utc_now)
+    source_updated_at: datetime | None = None
+    payload_checksum: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["source_observed_at"] = self.source_observed_at.isoformat()
+        payload["source_updated_at"] = (
+            self.source_updated_at.isoformat()
+            if self.source_updated_at
+            else None
+        )
+        return payload
+
+
+@dataclass(slots=True)
+class AuthoritativeRosterMembership:
+    season: int
+    roster_type: str
+    mlb_team_id: int
+    mlb_player_id: int
+
+    team_name: str
+    full_name: str
+
+    position: str | None = None
+    position_code: str | None = None
+    position_abbreviation: str | None = None
+
+    jersey_number: str | None = None
+    status_code: str | None = None
+    status_description: str | None = None
+
+    active_status: bool = True
+    injured_status: bool = False
+    two_way_status: bool = False
+
+    source_observed_at: datetime = field(default_factory=utc_now)
+    source_updated_at: datetime | None = None
+    payload_checksum: str | None = None
+
+    @property
+    def priority(self) -> RosterPriority:
+        normalized = self.roster_type.strip().lower()
+
+        if normalized == "active":
+            return RosterPriority.ACTIVE
+
+        if self.injured_status or "injured" in normalized:
+            return RosterPriority.INJURED
+
+        if normalized in {"40man", "40_man", "fortyman"}:
+            return RosterPriority.FORTY_MAN
+
+        if normalized in {"fullroster", "full_roster"}:
+            return RosterPriority.FULL_ROSTER
+
+        return RosterPriority.UNKNOWN
+
+    def key(self) -> tuple[int, str, int, int]:
+        return (
+            self.season,
+            self.roster_type,
+            self.mlb_team_id,
+            self.mlb_player_id,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["priority"] = int(self.priority)
+        payload["source_observed_at"] = self.source_observed_at.isoformat()
+        payload["source_updated_at"] = (
+            self.source_updated_at.isoformat()
+            if self.source_updated_at
+            else None
+        )
+        return payload
+
+
+@dataclass(slots=True)
+class AuthoritativeRosterSnapshot:
+    snapshot_id: str
+    season: int
+    observed_at: datetime
+
+    teams: list[dict[str, Any]]
+    players: dict[int, AuthoritativePlayerIdentity]
+    memberships: list[AuthoritativeRosterMembership]
+
+    source_errors: list[dict[str, Any]]
+    duplicate_memberships: list[dict[str, Any]]
+    identity_conflicts: list[dict[str, Any]]
+
+    payload_checksum: str
+    request_metrics: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "snapshot_id": self.snapshot_id,
+            "season": self.season,
+            "observed_at": self.observed_at.isoformat(),
+            "team_count": len(self.teams),
+            "player_count": len(self.players),
+            "membership_count": len(self.memberships),
+            "teams": self.teams,
+            "players": {
+                str(player_id): identity.to_dict()
+                for player_id, identity in self.players.items()
+            },
+            "memberships": [
+                membership.to_dict()
+                for membership in self.memberships
+            ],
+            "source_errors": self.source_errors,
+            "duplicate_memberships": self.duplicate_memberships,
+            "identity_conflicts": self.identity_conflicts,
+            "payload_checksum": self.payload_checksum,
+            "request_metrics": self.request_metrics,
+        }
+
+
+@dataclass(slots=True)
+class PlayerRosterCompletionAudit:
+    source_player_count: int
+    database_player_count: int
+
+    missing_player_ids: list[int]
+    duplicate_player_ids: list[dict[str, Any]]
+    incomplete_players: list[dict[str, Any]]
+    wrong_team_players: list[dict[str, Any]]
+    missing_memberships: list[dict[str, Any]]
+    duplicate_memberships: list[dict[str, Any]]
+    identical_name_groups: list[dict[str, Any]]
+
+    completion_gate_passed: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+# ============================================================
+# SECTION 22.14 - STATUS AND TIMESTAMP HELPERS
+# ============================================================
+
+INJURED_TOKENS: Final[tuple[str, ...]] = (
+    "injured",
+    "10-day",
+    "15-day",
+    "60-day",
+    " il",
+    "restricted",
+    "bereavement",
+    "paternity",
+)
+
+TWO_WAY_TOKENS: Final[tuple[str, ...]] = (
+    "two-way",
+    "two way",
+    "twoway",
+)
+
+
+def parse_source_timestamp(
+    value: Any,
+    *,
+    fallback: datetime | None = None,
+) -> datetime | None:
+    if value is None:
+        return fallback
+
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    text_value = safe_string(value)
+    if not text_value:
+        return fallback
+
+    try:
+        parsed = datetime.fromisoformat(
+            text_value.replace("Z", "+00:00")
+        )
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    except ValueError:
+        return fallback
+
+
+def classify_injured_status(
+    status_code: str | None,
+    status_description: str | None,
+    roster_type: str | None,
+) -> bool:
+    combined = " ".join(
+        value.lower()
+        for value in (
+            status_code,
+            status_description,
+            roster_type,
+        )
+        if value
+    )
+
+    return any(token in combined for token in INJURED_TOKENS)
+
+
+def classify_two_way_status(
+    position: str | None,
+    position_code: str | None,
+    position_abbreviation: str | None,
+) -> bool:
+    combined = " ".join(
+        value.lower()
+        for value in (
+            position,
+            position_code,
+            position_abbreviation,
+        )
+        if value
+    )
+
+    return (
+        any(token in combined for token in TWO_WAY_TOKENS)
+        or position_abbreviation in {"TWP", "TW"}
+    )
+
+
+# ============================================================
+# SECTION 22.15 - AUTHORITATIVE IDENTITY NORMALIZATION
+# ============================================================
+
+def normalize_authoritative_player_identity(
+    raw_player: Mapping[str, Any],
+) -> AuthoritativePlayerIdentity:
+    normalized = normalize_player_payload(raw_player)
+
+    player_id = safe_integer(normalized.get("mlb_player_id"))
+    full_name = safe_string(normalized.get("full_name"))
+
+    if player_id is None:
+        raise PlayerValidationError("Authoritative player is missing mlb_player_id")
+
+    if not full_name:
+        raise PlayerValidationError("Authoritative player is missing full_name")
+
+    position_payload = coerce_mapping(
+        raw_player.get("_aisp2_position")
+        or raw_player.get("primaryPosition")
+        or raw_player.get("position")
+    )
+
+    roster_raw = coerce_mapping(raw_player.get("_aisp2_roster_raw"))
+    status_payload = coerce_mapping(roster_raw.get("status"))
+
+    position = safe_string(normalized.get("position"))
+    position_code = safe_string(normalized.get("position_code"))
+    position_abbreviation = safe_string(
+        position_payload.get("abbreviation")
+        or raw_player.get("position_abbreviation")
+    )
+
+    status_code = safe_string(
+        status_payload.get("code")
+        or raw_player.get("_aisp2_roster_status_code")
+    )
+
+    status_description = safe_string(
+        status_payload.get("description")
+        or normalized.get("roster_status")
+    )
+
+    roster_type = safe_string(normalized.get("roster_type"))
+
+    observed_at = (
+        parse_source_timestamp(
+            normalized.get("source_observed_at"),
+            fallback=utc_now(),
+        )
+        or utc_now()
+    )
+
+    source_updated_at = parse_source_timestamp(
+        raw_player.get("_aisp2_source_updated_at")
+        or raw_player.get("lastUpdated")
+    )
+
+    return AuthoritativePlayerIdentity(
+        mlb_player_id=player_id,
+        full_name=full_name,
+        first_name=safe_string(normalized.get("first_name")),
+        last_name=safe_string(normalized.get("last_name")),
+        use_name=safe_string(
+            raw_player.get("useName")
+            or raw_player.get("use_name")
+        ),
+        nick_name=safe_string(
+            raw_player.get("nickName")
+            or raw_player.get("nick_name")
+        ),
+        position=position,
+        position_code=position_code,
+        position_abbreviation=position_abbreviation,
+        bats=safe_string(normalized.get("bats")),
+        throws=safe_string(normalized.get("throws")),
+        active_status=bool(normalized.get("active_status")),
+        injured_status=classify_injured_status(
+            status_code,
+            status_description,
+            roster_type,
+        ),
+        two_way_status=classify_two_way_status(
+            position,
+            position_code,
+            position_abbreviation,
+        ),
+        mlb_team_id=safe_integer(normalized.get("current_team_id")),
+        team_name=safe_string(normalized.get("current_team_name")),
+        roster_type=roster_type,
+        roster_status_code=status_code,
+        roster_status_description=status_description,
+        jersey_number=safe_string(normalized.get("jersey_number")),
+        source_observed_at=observed_at,
+        source_updated_at=source_updated_at,
+        payload_checksum=payload_checksum(raw_player),
+    )
+
+
+def normalize_authoritative_membership(
+    raw_player: Mapping[str, Any],
+    *,
+    season: int,
+) -> AuthoritativeRosterMembership:
+    identity = normalize_authoritative_player_identity(raw_player)
+
+    if identity.mlb_team_id is None:
+        raise PlayerValidationError("Roster membership is missing MLB team ID")
+
+    if not identity.team_name:
+        raise PlayerValidationError("Roster membership is missing team name")
+
+    return AuthoritativeRosterMembership(
+        season=int(season),
+        roster_type=identity.roster_type or "active",
+        mlb_team_id=identity.mlb_team_id,
+        mlb_player_id=identity.mlb_player_id,
+        team_name=identity.team_name,
+        full_name=identity.full_name,
+        position=identity.position,
+        position_code=identity.position_code,
+        position_abbreviation=identity.position_abbreviation,
+        jersey_number=identity.jersey_number,
+        status_code=identity.roster_status_code,
+        status_description=identity.roster_status_description,
+        active_status=identity.active_status,
+        injured_status=identity.injured_status,
+        two_way_status=identity.two_way_status,
+        source_observed_at=identity.source_observed_at,
+        source_updated_at=identity.source_updated_at,
+        payload_checksum=identity.payload_checksum,
+    )
+
+
+# ============================================================
+# SECTION 22.16 - COMPLETE AUTHORITATIVE SNAPSHOT COLLECTION
+# ============================================================
+
+def collect_authoritative_roster_snapshot(
+    season: int = DEFAULT_PLAYER_SEASON,
+    *,
+    roster_types: Sequence[str] = DEFAULT_ROSTER_TYPES,
+    hydrate_people: bool = True,
+    request_delay_seconds: float = DEFAULT_REQUEST_DELAY_SECONDS,
+    client: Any | None = None,
+) -> AuthoritativeRosterSnapshot:
+    adapter = MLBClientAdapter(client)
+    observed_at = utc_now()
+
+    teams = adapter.get_active_teams(season)
+
+    players: dict[int, AuthoritativePlayerIdentity] = {}
+    memberships: list[AuthoritativeRosterMembership] = []
+
+    source_errors: list[dict[str, Any]] = []
+    duplicate_memberships: list[dict[str, Any]] = []
+    identity_conflicts: list[dict[str, Any]] = []
+
+    membership_keys: set[tuple[int, str, int, int]] = set()
+    payload_records: list[dict[str, Any]] = []
+
+    for team in teams:
+        team_id = safe_integer(team.get("id"))
+        team_name = safe_string(team.get("name"))
+
+        if team_id is None:
+            source_errors.append({
+                "stage": "team_validation",
+                "error": "Active team payload is missing MLB team ID",
+                "team": team,
+            })
+            continue
+
+        for roster_type in roster_types:
+            try:
+                roster_entries = adapter.get_team_roster(
+                    team_id,
+                    season,
+                    roster_type,
+                )
+            except Exception as error:
+                source_errors.append({
+                    "stage": "roster_fetch",
+                    "mlb_team_id": team_id,
+                    "team_name": team_name,
+                    "roster_type": roster_type,
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                })
+                continue
+
+            payload_records.append({
+                "mlb_team_id": team_id,
+                "roster_type": roster_type,
+                "roster": roster_entries,
+            })
+
+            for roster_entry in roster_entries:
+                roster_person = coerce_mapping(roster_entry.get("person"))
+
+                player_id = safe_integer(
+                    roster_person.get("id")
+                    or roster_entry.get("personId")
+                    or roster_entry.get("player_id")
+                )
+
+                if player_id is None:
+                    source_errors.append({
+                        "stage": "roster_entry_validation",
+                        "mlb_team_id": team_id,
+                        "roster_type": roster_type,
+                        "error": "Roster entry is missing MLB player ID",
+                    })
+                    continue
+
+                person_payload = roster_person
+
+                if hydrate_people:
+                    try:
+                        hydrated = adapter.get_person(player_id)
+                        if hydrated:
+                            person_payload = hydrated
+                    except Exception as error:
+                        source_errors.append({
+                            "stage": "player_profile_fetch",
+                            "mlb_player_id": player_id,
+                            "mlb_team_id": team_id,
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                        })
+
+                merged = merge_player_payloads(
+                    person_payload,
+                    roster_entry,
+                    team,
+                    roster_type=roster_type,
+                    observed_at=observed_at,
+                )
+
+                merged["_aisp2_roster_raw"] = roster_entry
+                merged["_aisp2_source_updated_at"] = (
+                    roster_entry.get("lastUpdated")
+                    or person_payload.get("lastUpdated")
+                )
+
+                status_payload = coerce_mapping(roster_entry.get("status"))
+                merged["_aisp2_roster_status_code"] = status_payload.get("code")
+
+                try:
+                    identity = normalize_authoritative_player_identity(merged)
+                    membership = normalize_authoritative_membership(
+                        merged,
+                        season=season,
+                    )
+                except Exception as error:
+                    source_errors.append({
+                        "stage": "identity_normalization",
+                        "mlb_player_id": player_id,
+                        "mlb_team_id": team_id,
+                        "error_type": type(error).__name__,
+                        "error": str(error),
+                    })
+                    continue
+
+                previous = players.get(player_id)
+
+                if previous is not None:
+                    conflicts = []
+
+                    for field_name in (
+                        "full_name",
+                        "first_name",
+                        "last_name",
+                    ):
+                        previous_value = getattr(previous, field_name)
+                        new_value = getattr(identity, field_name)
+
+                        if (
+                            previous_value
+                            and new_value
+                            and previous_value != new_value
+                        ):
+                            conflicts.append({
+                                "field": field_name,
+                                "previous": previous_value,
+                                "new": new_value,
+                            })
+
+                    if conflicts:
+                        identity_conflicts.append({
+                            "mlb_player_id": player_id,
+                            "conflicts": conflicts,
+                        })
+
+                    previous_priority = {
+                        "active": RosterPriority.ACTIVE,
+                        "40man": RosterPriority.FORTY_MAN,
+                        "fullroster": RosterPriority.FULL_ROSTER,
+                    }.get(
+                        str(previous.roster_type or "").lower(),
+                        RosterPriority.UNKNOWN,
+                    )
+
+                    if membership.priority > previous_priority:
+                        players[player_id] = identity
+                else:
+                    players[player_id] = identity
+
+                membership_key = membership.key()
+
+                if membership_key in membership_keys:
+                    duplicate_memberships.append({
+                        "membership_key": list(membership_key),
+                        "mlb_player_id": player_id,
+                        "full_name": identity.full_name,
+                    })
+                    continue
+
+                membership_keys.add(membership_key)
+                memberships.append(membership)
+
+                if request_delay_seconds > 0:
+                    time.sleep(request_delay_seconds)
+
+    metrics_method = getattr(adapter.client, "request_metrics", None)
+    request_metrics = metrics_method() if callable(metrics_method) else {}
+
+    return AuthoritativeRosterSnapshot(
+        snapshot_id=str(uuid4()),
+        season=int(season),
+        observed_at=observed_at,
+        teams=list(teams),
+        players=players,
+        memberships=memberships,
+        source_errors=source_errors[:MAX_ERROR_RECORDS],
+        duplicate_memberships=duplicate_memberships[:MAX_ERROR_RECORDS],
+        identity_conflicts=identity_conflicts[:MAX_ERROR_RECORDS],
+        payload_checksum=payload_checksum(payload_records),
+        request_metrics=request_metrics,
+    )
+
+
+# ============================================================
+# SECTION 22.17 - AUTHORITATIVE PLAYER UPSERT
+# ============================================================
+
+def authoritative_player_persistence_payload(
+    identity: AuthoritativePlayerIdentity,
+    *,
+    database_team_id: int | None,
+) -> tuple[dict[str, Any], list[str]]:
+    candidates = {
+        "mlb_player_id": identity.mlb_player_id,
+        "full_name": identity.full_name,
+        "first_name": identity.first_name,
+        "last_name": identity.last_name,
+        "use_name": identity.use_name,
+        "nick_name": identity.nick_name,
+        "position": identity.position,
+        "position_code": identity.position_code,
+        "position_abbreviation": identity.position_abbreviation,
+        "bats": identity.bats,
+        "throws": identity.throws,
+        "active_status": identity.active_status,
+        "current_team_id": database_team_id,
+        "source_name": "MLB Stats API",
+        "source_updated_at": (
+            identity.source_updated_at
+            or identity.source_observed_at
+        ),
+        "updated_at": identity.source_observed_at,
+    }
+
+    persisted = {}
+    ignored = []
+
+    for field_name, value in candidates.items():
+        if field_name in PLAYER_MODEL_FIELDS:
+            persisted[field_name] = value
+        else:
+            ignored.append(field_name)
+
+    return persisted, ignored
+
+
+def upsert_authoritative_player(
+    database_session: Any,
+    identity: AuthoritativePlayerIdentity,
+) -> PlayerUpsertResult:
+    database_team_id = None
+
+    if identity.mlb_team_id is not None:
+        team = require_team_by_mlb_id(
+            database_session,
+            identity.mlb_team_id,
+        )
+        database_team_id = team.id
+
+    values, ignored = authoritative_player_persistence_payload(
+        identity,
+        database_team_id=database_team_id,
+    )
+
+    existing = find_player_by_mlb_id(
+        database_session,
+        identity.mlb_player_id,
+    )
+
+    if existing is None:
+        database_session.add(Player(**values))
+        database_session.flush()
+
+        return PlayerUpsertResult(
+            action="created",
+            mlb_player_id=identity.mlb_player_id,
+            full_name=identity.full_name,
+            changed_fields=sorted(values),
+            persisted_fields=sorted(values),
+            ignored_fields=sorted(ignored),
+        )
+
+    changed_fields = apply_model_changes(
+        existing,
+        values,
+        PLAYER_MODEL_FIELDS,
+    )
+
+    database_session.flush()
+
+    return PlayerUpsertResult(
+        action="updated" if changed_fields else "unchanged",
+        mlb_player_id=identity.mlb_player_id,
+        full_name=identity.full_name,
+        changed_fields=changed_fields,
+        persisted_fields=sorted(values),
+        ignored_fields=sorted(ignored),
+    )
+
+
+# ============================================================
+# SECTION 22.18 - AUTHORITATIVE MEMBERSHIP UPSERT
+# ============================================================
+
+def upsert_authoritative_roster_membership(
+    database_session: Any,
+    membership: AuthoritativeRosterMembership,
+) -> dict[str, Any]:
+    player = find_player_by_mlb_id(
+        database_session,
+        membership.mlb_player_id,
+    )
+
+    if player is None:
+        raise PlayerValidationError(
+            "Roster membership references a missing player"
+        )
+
+    team = require_team_by_mlb_id(
+        database_session,
+        membership.mlb_team_id,
+    )
+
+    existing = (
+        database_session.query(RosterEntry)
+        .filter(
+            RosterEntry.season == membership.season,
+            RosterEntry.roster_type == membership.roster_type,
+            RosterEntry.team_id == team.id,
+            RosterEntry.player_id == player.id,
+        )
+        .first()
+    )
+
+    values = filter_model_payload(
+        {
+            "season": membership.season,
+            "roster_type": membership.roster_type,
+            "jersey_number": membership.jersey_number,
+            "status_code": membership.status_code,
+            "status_description": membership.status_description,
+            "team_id": team.id,
+            "player_id": player.id,
+            "source_name": "MLB Stats API",
+            "source_updated_at": (
+                membership.source_updated_at
+                or membership.source_observed_at
+            ),
+            "updated_at": membership.source_observed_at,
+        },
+        ROSTER_MODEL_FIELDS,
+    )
+
+    if existing is None:
+        database_session.add(RosterEntry(**values))
+        database_session.flush()
+        action = "created"
+        changed_fields = sorted(values)
+    else:
+        changed_fields = apply_model_changes(
+            existing,
+            values,
+            ROSTER_MODEL_FIELDS,
+        )
+        action = "updated" if changed_fields else "unchanged"
+
+    return {
+        "action": action,
+        "database_player_id": player.id,
+        "database_team_id": team.id,
+        "mlb_player_id": membership.mlb_player_id,
+        "mlb_team_id": membership.mlb_team_id,
+        "season": membership.season,
+        "roster_type": membership.roster_type,
+        "changed_fields": changed_fields,
+    }
+
+
+# ============================================================
+# SECTION 22.19 - TRADE AND TEAM-CHANGE RECONCILIATION
+# ============================================================
+
+def reconcile_authoritative_current_team(
+    database_session: Any,
+    *,
+    identity: AuthoritativePlayerIdentity,
+    memberships: Sequence[AuthoritativeRosterMembership],
+) -> dict[str, Any]:
+    player = find_player_by_mlb_id(
+        database_session,
+        identity.mlb_player_id,
+    )
+
+    if player is None:
+        raise PlayerValidationError(
+            "Player is missing during current-team reconciliation"
+        )
+
+    candidates = [
+        membership
+        for membership in memberships
+        if membership.mlb_player_id == identity.mlb_player_id
+    ]
+
+    if not candidates:
+        return {
+            "action": "unchanged",
+            "reason": "no_authoritative_membership",
+        }
+
+    selected = max(
+        candidates,
+        key=lambda membership: (
+            int(membership.priority),
+            membership.source_observed_at,
+        ),
+    )
+
+    team = require_team_by_mlb_id(
+        database_session,
+        selected.mlb_team_id,
+    )
+
+    previous_team_id = getattr(player, "current_team_id", None)
+
+    if previous_team_id == team.id:
+        return {
+            "action": "unchanged",
+            "database_team_id": team.id,
+            "mlb_team_id": selected.mlb_team_id,
+        }
+
+    player.current_team_id = team.id
+
+    if hasattr(player, "updated_at"):
+        player.updated_at = utc_now()
+
+    database_session.flush()
+
+    return {
+        "action": "reassigned",
+        "previous_database_team_id": previous_team_id,
+        "database_team_id": team.id,
+        "mlb_team_id": selected.mlb_team_id,
+        "roster_type": selected.roster_type,
+    }
+
+
+# ============================================================
+# SECTION 22.20 - AUTHORITATIVE DATABASE AUDIT
+# ============================================================
+
+def audit_authoritative_rostered_players(
+    snapshot: AuthoritativeRosterSnapshot,
+) -> PlayerRosterCompletionAudit:
+    source_ids = set(snapshot.players)
+
+    with managed_database_session(commit_on_success=False) as database_session:
+        database_players = database_session.query(Player).all()
+
+        database_by_id = {
+            int(player.mlb_player_id): player
+            for player in database_players
+            if getattr(player, "mlb_player_id", None) is not None
+        }
+
+        database_ids = set(database_by_id)
+
+        missing_player_ids = sorted(source_ids - database_ids)
+
+        duplicate_rows = (
+            database_session.query(
+                Player.mlb_player_id,
+                func.count(Player.id),
+            )
+            .group_by(Player.mlb_player_id)
+            .having(func.count(Player.id) > 1)
+            .all()
+        )
+
+        duplicate_player_ids = [
+            {
+                "mlb_player_id": int(player_id),
+                "count": int(count),
+            }
+            for player_id, count in duplicate_rows
+        ]
+
+        incomplete_players = []
+
+        required_fields = (
+            "mlb_player_id",
+            "full_name",
+            "position",
+            "bats",
+            "throws",
+            "active_status",
+            "current_team_id",
+            "source_updated_at",
+        )
+
+        for player_id in sorted(source_ids & database_ids):
+            player = database_by_id[player_id]
+
+            missing_fields = [
+                field_name
+                for field_name in required_fields
+                if (
+                    field_name in PLAYER_MODEL_FIELDS
+                    and getattr(player, field_name, None) in (None, "")
+                )
+            ]
+
+            if missing_fields:
+                incomplete_players.append({
+                    "mlb_player_id": player_id,
+                    "full_name": getattr(player, "full_name", None),
+                    "missing_fields": missing_fields,
+                })
+
+        wrong_team_players = []
+
+        for player_id, identity in snapshot.players.items():
+            player = database_by_id.get(player_id)
+
+            if player is None or identity.mlb_team_id is None:
+                continue
+
+            team = find_team_by_mlb_id(
+                database_session,
+                identity.mlb_team_id,
+            )
+
+            if team is None or player.current_team_id != team.id:
+                wrong_team_players.append({
+                    "mlb_player_id": player_id,
+                    "full_name": identity.full_name,
+                    "database_team_id": (
+                        player.current_team_id
+                        if player is not None
+                        else None
+                    ),
+                    "expected_mlb_team_id": identity.mlb_team_id,
+                    "expected_database_team_id": (
+                        team.id if team is not None else None
+                    ),
+                })
+
+        missing_memberships = []
+
+        for membership in snapshot.memberships:
+            player = database_by_id.get(membership.mlb_player_id)
+            team = find_team_by_mlb_id(
+                database_session,
+                membership.mlb_team_id,
+            )
+
+            if player is None or team is None:
+                missing_memberships.append({
+                    "mlb_player_id": membership.mlb_player_id,
+                    "mlb_team_id": membership.mlb_team_id,
+                    "roster_type": membership.roster_type,
+                    "reason": "player_or_team_missing",
+                })
+                continue
+
+            exists = (
+                database_session.query(RosterEntry)
+                .filter(
+                    RosterEntry.season == membership.season,
+                    RosterEntry.roster_type == membership.roster_type,
+                    RosterEntry.team_id == team.id,
+                    RosterEntry.player_id == player.id,
+                )
+                .first()
+            )
+
+            if exists is None:
+                missing_memberships.append({
+                    "mlb_player_id": membership.mlb_player_id,
+                    "mlb_team_id": membership.mlb_team_id,
+                    "roster_type": membership.roster_type,
+                })
+
+        duplicate_membership_rows = (
+            database_session.query(
+                RosterEntry.season,
+                RosterEntry.roster_type,
+                RosterEntry.team_id,
+                RosterEntry.player_id,
+                func.count(RosterEntry.id),
+            )
+            .group_by(
+                RosterEntry.season,
+                RosterEntry.roster_type,
+                RosterEntry.team_id,
+                RosterEntry.player_id,
+            )
+            .having(func.count(RosterEntry.id) > 1)
+            .all()
+        )
+
+        duplicate_memberships = [
+            {
+                "season": row[0],
+                "roster_type": row[1],
+                "database_team_id": row[2],
+                "database_player_id": row[3],
+                "count": row[4],
+            }
+            for row in duplicate_membership_rows
+        ]
+
+    name_groups: dict[str, list[int]] = defaultdict(list)
+
+    for player_id, identity in snapshot.players.items():
+        name_groups[
+            normalize_search_text(identity.full_name)
+        ].append(player_id)
+
+    identical_name_groups = [
+        {
+            "normalized_name": normalized_name,
+            "mlb_player_ids": sorted(player_ids),
+            "count": len(player_ids),
+        }
+        for normalized_name, player_ids in name_groups.items()
+        if len(player_ids) > 1
+    ]
+
+    completion_gate_passed = (
+        not missing_player_ids
+        and not duplicate_player_ids
+        and not incomplete_players
+        and not wrong_team_players
+        and not missing_memberships
+        and not duplicate_memberships
+    )
+
+    return PlayerRosterCompletionAudit(
+        source_player_count=len(source_ids),
+        database_player_count=len(database_ids),
+        missing_player_ids=missing_player_ids,
+        duplicate_player_ids=duplicate_player_ids,
+        incomplete_players=incomplete_players,
+        wrong_team_players=wrong_team_players,
+        missing_memberships=missing_memberships,
+        duplicate_memberships=duplicate_memberships,
+        identical_name_groups=identical_name_groups,
+        completion_gate_passed=completion_gate_passed,
+    )
+
+
+# ============================================================
+# SECTION 22.21 - AUTHORITATIVE INGESTION ORCHESTRATOR
+# ============================================================
+
+def ingest_authoritative_rostered_players(
+    season: int = DEFAULT_PLAYER_SEASON,
+    *,
+    roster_types: Sequence[str] = DEFAULT_ROSTER_TYPES,
+    hydrate_people: bool = True,
+    request_delay_seconds: float = DEFAULT_REQUEST_DELAY_SECONDS,
+    client: Any | None = None,
+) -> dict[str, Any]:
+    started_at = utc_now()
+    started_clock = time.perf_counter()
+
+    report: dict[str, Any] = {
+        "run_id": str(uuid4()),
+        "ingestion": "authoritative_rostered_players",
+        "version": INGESTION_VERSION,
+        "phase": INGESTION_PHASE,
+        "season": int(season),
+        "roster_types": list(roster_types),
+        "started_at": started_at.isoformat(),
+        "status": "running",
+        "success": False,
+        "completion_gate_passed": False,
+        "player_actions": [],
+        "membership_actions": [],
+        "team_actions": [],
+        "errors": [],
+        "warnings": [],
+    }
+
+    try:
+        report["database_initialization"] = initialize_database()
+
+        snapshot = collect_authoritative_roster_snapshot(
+            season=season,
+            roster_types=roster_types,
+            hydrate_people=hydrate_people,
+            request_delay_seconds=request_delay_seconds,
+            client=client,
+        )
+
+        report["source_snapshot"] = snapshot.to_dict()
+
+        action_counts = Counter()
+
+        with managed_database_session(commit_on_success=False) as database_session:
+            try:
+                for player_id, identity in snapshot.players.items():
+                    savepoint = database_session.begin_nested()
+
+                    try:
+                        result = upsert_authoritative_player(
+                            database_session,
+                            identity,
+                        )
+
+                        action_counts[f"player_{result.action}"] += 1
+                        report["player_actions"].append(result.to_dict())
+
+                        savepoint.commit()
+
+                    except Exception as error:
+                        savepoint.rollback()
+                        action_counts["player_failed"] += 1
+
+                        append_bounded_error(report, {
+                            "stage": "player_upsert",
+                            "mlb_player_id": player_id,
+                            "full_name": identity.full_name,
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                        })
+
+                for membership in snapshot.memberships:
+                    savepoint = database_session.begin_nested()
+
+                    try:
+                        result = upsert_authoritative_roster_membership(
+                            database_session,
+                            membership,
+                        )
+
+                        action_counts[
+                            f"membership_{result['action']}"
+                        ] += 1
+
+                        report["membership_actions"].append(result)
+                        savepoint.commit()
+
+                    except Exception as error:
+                        savepoint.rollback()
+                        action_counts["membership_failed"] += 1
+
+                        append_bounded_error(report, {
+                            "stage": "membership_upsert",
+                            "mlb_player_id": membership.mlb_player_id,
+                            "mlb_team_id": membership.mlb_team_id,
+                            "roster_type": membership.roster_type,
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                        })
+
+                for player_id, identity in snapshot.players.items():
+                    try:
+                        result = reconcile_authoritative_current_team(
+                            database_session,
+                            identity=identity,
+                            memberships=snapshot.memberships,
+                        )
+
+                        action_counts[f"team_{result['action']}"] += 1
+
+                        report["team_actions"].append({
+                            "mlb_player_id": player_id,
+                            **result,
+                        })
+
+                    except Exception as error:
+                        append_bounded_error(report, {
+                            "stage": "team_reconciliation",
+                            "mlb_player_id": player_id,
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                        })
+
+                safe_commit(database_session, raise_on_error=True)
+
+            except Exception:
+                safe_rollback(database_session, raise_on_error=False)
+                raise
+
+        audit = audit_authoritative_rostered_players(snapshot)
+
+        report["action_counts"] = dict(sorted(action_counts.items()))
+        report["audit"] = audit.to_dict()
+        report["database_inventory"] = collect_database_inventory()
+        report["player_explorer_readiness"] = (
+            player_explorer_database_readiness()
+        )
+
+        report["completion_gate_passed"] = audit.completion_gate_passed
+
+        report["success"] = (
+            audit.completion_gate_passed
+            and not report["errors"]
+        )
+
+        report["status"] = (
+            "completed"
+            if report["success"]
+            else (
+                "completed_with_errors"
+                if audit.completion_gate_passed
+                else "incomplete"
+            )
+        )
+
+        if snapshot.source_errors:
+            report["warnings"].append(
+                f"{len(snapshot.source_errors)} official-source errors "
+                "were isolated and recorded."
+            )
+
+        if snapshot.identity_conflicts:
+            report["warnings"].append(
+                f"{len(snapshot.identity_conflicts)} official identity "
+                "conflicts require review."
+            )
+
+        report["next_required_action"] = (
+            "All current rostered players and roster relationships "
+            "passed the authoritative completion gate."
+            if audit.completion_gate_passed
+            else (
+                "Resolve missing players, incomplete identity fields, "
+                "wrong team assignments, missing roster relationships, "
+                "or duplicates."
+            )
+        )
+
+    except Exception as error:
+        report["status"] = "failed"
+        report["success"] = False
+
+        append_bounded_error(report, {
+            "stage": "authoritative_ingestion",
+            "error_type": type(error).__name__,
+            "error": str(error),
+        })
+
+    finally:
+        report["finished_at"] = utc_now().isoformat()
+        report["duration_ms"] = round(
+            (time.perf_counter() - started_clock) * 1000.0,
+            3,
+        )
+
+    return report
+
+
+# ============================================================
+# SECTION 22.22 - AUTHORITATIVE COMPLETION GATE
+# ============================================================
+
+def validate_player_roster_completion_gate(
+    *,
+    season: int = DEFAULT_PLAYER_SEASON,
+    roster_types: Sequence[str] = DEFAULT_ROSTER_TYPES,
+    client: Any | None = None,
+) -> dict[str, Any]:
+    snapshot = collect_authoritative_roster_snapshot(
+        season=season,
+        roster_types=roster_types,
+        hydrate_people=True,
+        request_delay_seconds=0.0,
+        client=client,
+    )
+
+    audit = audit_authoritative_rostered_players(snapshot)
+
+    checks = {
+        "source_contains_30_teams": len(snapshot.teams) == 30,
+        "source_contains_players": len(snapshot.players) > 0,
+        "all_source_players_persisted": not audit.missing_player_ids,
+        "no_duplicate_mlb_player_ids": not audit.duplicate_player_ids,
+        "all_required_identity_fields_present": not audit.incomplete_players,
+        "all_current_teams_correct": not audit.wrong_team_players,
+        "all_roster_relationships_present": not audit.missing_memberships,
+        "no_duplicate_roster_relationships": not audit.duplicate_memberships,
+        "official_identity_conflicts_absent": not snapshot.identity_conflicts,
+        "source_timestamps_present": all(
+            identity.source_observed_at is not None
+            for identity in snapshot.players.values()
+        ),
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "season": int(season),
+        "roster_types": list(roster_types),
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name
+            for name, value in checks.items()
+            if not value
+        ],
+        "completion_gate_passed": passed == len(checks),
+        "audit": audit.to_dict(),
+        "snapshot_summary": {
+            "snapshot_id": snapshot.snapshot_id,
+            "team_count": len(snapshot.teams),
+            "player_count": len(snapshot.players),
+            "membership_count": len(snapshot.memberships),
+            "source_error_count": len(snapshot.source_errors),
+            "identity_conflict_count": len(snapshot.identity_conflicts),
+            "duplicate_membership_count": len(
+                snapshot.duplicate_memberships
+            ),
+            "payload_checksum": snapshot.payload_checksum,
+        },
+    }
+
+
+# ============================================================
+# SECTION 22.23 - ENTERPRISE MODULE VALIDATION
+# ============================================================
+
+def validate_player_ingestion_enterprise_module() -> dict[str, Any]:
+    sample = {
+        "id": 592450,
+        "fullName": "Aaron Judge",
+        "firstName": "Aaron",
+        "lastName": "Judge",
+        "useName": "Aaron",
+        "primaryPosition": {
+            "name": "Outfielder",
+            "code": "O",
+            "abbreviation": "OF",
+        },
+        "batSide": {"code": "R"},
+        "pitchHand": {"code": "R"},
+        "active": True,
+        "_aisp2_team_id": 147,
+        "_aisp2_team_name": "New York Yankees",
+        "_aisp2_roster_type": "active",
+        "_aisp2_roster_status": "Active",
+        "_aisp2_roster_status_code": "A",
+        "_aisp2_roster_number": "99",
+        "_aisp2_observed_at": utc_now().isoformat(),
+        "_aisp2_source_updated_at": utc_now().isoformat(),
+        "_aisp2_roster_raw": {
+            "status": {
+                "code": "A",
+                "description": "Active",
+            },
+        },
+    }
+
+    identity = normalize_authoritative_player_identity(sample)
+
+    membership = normalize_authoritative_membership(
+        sample,
+        season=DEFAULT_PLAYER_SEASON,
+    )
+
+    checks = {
+        "legacy_validation_available": callable(
+            validate_player_ingestion_module
+        ),
+        "legacy_ingestion_available": callable(ingest_mlb_players),
+        "complete_warehouse_ingestion_available": callable(
+            ingest_complete_player_warehouse
+        ),
+        "authoritative_snapshot_available": callable(
+            collect_authoritative_roster_snapshot
+        ),
+        "authoritative_ingestion_available": callable(
+            ingest_authoritative_rostered_players
+        ),
+        "completion_gate_available": callable(
+            validate_player_roster_completion_gate
+        ),
+        "authoritative_id_normalized": identity.mlb_player_id == 592450,
+        "authoritative_name_normalized": identity.full_name == "Aaron Judge",
+        "authoritative_team_normalized": identity.mlb_team_id == 147,
+        "position_normalized": identity.position_abbreviation == "OF",
+        "bats_normalized": identity.bats == "R",
+        "throws_normalized": identity.throws == "R",
+        "active_status_normalized": identity.active_status is True,
+        "source_timestamp_present": identity.source_observed_at is not None,
+        "membership_identity_valid": (
+            membership.mlb_player_id == identity.mlb_player_id
+            and membership.mlb_team_id == 147
+        ),
+        "authoritative_identity_key_is_mlb_id": (
+            player_identity_field() == "mlb_player_id"
+        ),
+        "roster_model_available": (
+            "player_id" in ROSTER_MODEL_FIELDS
+            and "team_id" in ROSTER_MODEL_FIELDS
+        ),
+        "database_helpers_available": all(
+            callable(function)
+            for function in (
+                collect_database_inventory,
+                player_explorer_database_readiness,
+                safe_commit,
+                safe_rollback,
+            )
+        ),
+        "statcast_adapter_available": callable(
+            getattr(MLBClientAdapter, "get_statcast_aggregate", None)
+        ),
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "module": INGESTION_NAME,
+        "version": INGESTION_VERSION,
+        "phase": INGESTION_PHASE,
+        "path": INGESTION_PATH,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name
+            for name, value in checks.items()
+            if not value
+        ],
+        "normalized_identity": identity.to_dict(),
+        "normalized_membership": membership.to_dict(),
+    }
+
+
+def player_ingestion_enterprise_health() -> dict[str, Any]:
+    validation = validate_player_ingestion_enterprise_module()
+
+    return {
+        "module": INGESTION_NAME,
+        "version": INGESTION_VERSION,
+        "phase": INGESTION_PHASE,
+        "path": INGESTION_PATH,
+        "status": (
+            "enterprise_ready"
+            if validation["status"] == "ok"
+            else "validation_failed"
+        ),
+        "capabilities": {
+            "all_active_teams": True,
+            "all_team_rosters": True,
+            "official_player_profiles": True,
+            "mlb_id_authoritative_identity": True,
+            "duplicate_player_prevention": True,
+            "duplicate_roster_prevention": True,
+            "team_relationship_validation": True,
+            "trade_reconciliation": True,
+            "inactive_player_handling": True,
+            "injured_player_handling": True,
+            "two_way_player_handling": True,
+            "identical_name_safety": True,
+            "source_timestamps": True,
+            "partial_failure_isolation": True,
+            "authoritative_completion_gate": True,
+            "legacy_api_compatibility": True,
+        },
+        "validation": validation,
+        "timestamp": utc_now().isoformat(),
+    }
+
+
+
 # ============================================================
 # SECTION 23 - VALIDATION
 # ============================================================
@@ -2778,6 +4356,29 @@ __all__ = [
     "ingest_player_detail_layers",
     "ingest_complete_player_warehouse",
     "audit_complete_player_warehouse",
+
+    "RosterPriority",
+    "CompletionGateState",
+    "AuthoritativePlayerIdentity",
+    "AuthoritativeRosterMembership",
+    "AuthoritativeRosterSnapshot",
+    "PlayerRosterCompletionAudit",
+
+    "parse_source_timestamp",
+    "classify_injured_status",
+    "classify_two_way_status",
+    "normalize_authoritative_player_identity",
+    "normalize_authoritative_membership",
+    "collect_authoritative_roster_snapshot",
+    "authoritative_player_persistence_payload",
+    "upsert_authoritative_player",
+    "upsert_authoritative_roster_membership",
+    "reconcile_authoritative_current_team",
+    "audit_authoritative_rostered_players",
+    "ingest_authoritative_rostered_players",
+    "validate_player_roster_completion_gate",
+    "validate_player_ingestion_enterprise_module",
+    "player_ingestion_enterprise_health",
 ]
 
 
@@ -2786,5 +4387,16 @@ __all__ = [
 # ============================================================
 
 if __name__ == "__main__":
-    print(json.dumps(validate_player_ingestion_module(), indent=2, default=str))
-    print(json.dumps(build_continuous_refresh_plan(), indent=2, default=str))
+    report = validate_player_ingestion_enterprise_module()
+
+    print(
+        json.dumps(
+            report,
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    )
+
+    if report["status"] != "ok":
+        raise SystemExit(1)
