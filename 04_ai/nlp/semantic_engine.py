@@ -49,11 +49,11 @@ from typing import Final
 SEMANTIC_ENGINE_NAME: Final[str] = (
     "AISP2 Enterprise Fallback Semantic Analyzer"
 )
-SEMANTIC_ENGINE_VERSION: Final[str] = "6.0.0"
-SEMANTIC_ENGINE_PHASE: Final[str] = "Phase 10 Part 15.0"
+SEMANTIC_ENGINE_VERSION: Final[str] = "6.1.0"
+SEMANTIC_ENGINE_PHASE: Final[str] = "Phase 10 Part 15.1"
 SEMANTIC_ENGINE_PATH: Final[str] = "04_ai/nlp/semantic_engine.py"
 SEMANTIC_ENGINE_STATUS: Final[str] = "fallback_only"
-SEMANTIC_SCHEMA_VERSION: Final[str] = "3.0.0"
+SEMANTIC_SCHEMA_VERSION: Final[str] = "3.1.0"
 
 SEMANTIC_ENGINE_ROLE: Final[str] = "fallback_semantic_analyzer"
 SEMANTIC_ENGINE_PRIMARY_ROUTER: Final[str] = "nlu_engine"
@@ -2929,6 +2929,1031 @@ def semantic_fingerprint(
     ).hexdigest()
 
 
+
+# ============================================================
+# SECTION 36 - CLAUSE-LEVEL SEMANTIC ANALYSIS
+# PURPOSE:
+# Break compound user requests into independent clauses without
+# turning the semantic layer into a competing router.
+# ============================================================
+
+CLAUSE_BOUNDARY_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"\s*(?:;|\band then\b|\bthen\b|\balso\b|\bplus\b|\bbut\b)\s*",
+    re.IGNORECASE,
+)
+
+
+@dataclass(slots=True)
+class SemanticClause:
+    index: int
+    text: str
+    normalized_text: str
+    tokens: list[str]
+    has_comparison: bool = False
+    has_negation: bool = False
+    temporal_references: list[str] = field(default_factory=list)
+    numeric_constraints: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "text": self.text,
+            "normalized_text": self.normalized_text,
+            "tokens": list(self.tokens),
+            "has_comparison": self.has_comparison,
+            "has_negation": self.has_negation,
+            "temporal_references": list(self.temporal_references),
+            "numeric_constraints": list(self.numeric_constraints),
+        }
+
+
+def split_semantic_clauses(
+    message: str,
+) -> list[str]:
+    normalized = str(message or "").strip()
+
+    if not normalized:
+        return []
+
+    parts = [
+        part.strip(" ,")
+        for part in CLAUSE_BOUNDARY_PATTERN.split(normalized)
+        if part and part.strip(" ,")
+    ]
+
+    return parts or [normalized]
+
+
+def build_semantic_clauses(
+    message: str,
+) -> list[SemanticClause]:
+    clauses: list[SemanticClause] = []
+
+    for index, clause_text in enumerate(
+        split_semantic_clauses(message)
+    ):
+        clauses.append(
+            SemanticClause(
+                index=index,
+                text=clause_text,
+                normalized_text=normalize_text(clause_text),
+                tokens=tokenize_text(clause_text),
+                has_comparison=detect_comparison_request(clause_text),
+                has_negation=detect_negation(clause_text),
+                temporal_references=detect_temporal_references(
+                    clause_text
+                ),
+                numeric_constraints=detect_numeric_constraints(
+                    clause_text
+                ),
+            )
+        )
+
+    return clauses
+
+
+# ============================================================
+# SECTION 37 - PRIMARY ROUTE CONFLICT DIAGNOSTICS
+# ============================================================
+
+@dataclass(slots=True)
+class RouteConflictDiagnostic:
+    primary_intent: str | None
+    fallback_intent: str | None
+    conflict_detected: bool
+    severity: str
+    reason: str
+    preserve_primary: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def analyze_primary_route_conflict(
+    primary_intent: str | None,
+    fallback_intent: str | None,
+    *,
+    primary_confidence: float = 0.0,
+) -> RouteConflictDiagnostic:
+    if not primary_intent or not fallback_intent:
+        return RouteConflictDiagnostic(
+            primary_intent=primary_intent,
+            fallback_intent=fallback_intent,
+            conflict_detected=False,
+            severity="none",
+            reason="one_or_both_intents_missing",
+        )
+
+    if primary_intent == fallback_intent:
+        return RouteConflictDiagnostic(
+            primary_intent=primary_intent,
+            fallback_intent=fallback_intent,
+            conflict_detected=False,
+            severity="none",
+            reason="intent_agreement",
+        )
+
+    normalized_confidence = coerce_confidence(primary_confidence)
+
+    severity = (
+        "high"
+        if normalized_confidence >= PRIMARY_CONFIDENCE_ACCEPTED
+        else "moderate"
+        if normalized_confidence >= PRIMARY_CONFIDENCE_FALLBACK
+        else "low"
+    )
+
+    return RouteConflictDiagnostic(
+        primary_intent=primary_intent,
+        fallback_intent=fallback_intent,
+        conflict_detected=True,
+        severity=severity,
+        reason="fallback_recommendation_differs_from_primary",
+        preserve_primary=True,
+    )
+
+
+# ============================================================
+# SECTION 38 - CONTEXTUAL ENTITY RECOVERY
+# ============================================================
+
+CONTEXT_PLAYER_KEYS: Final[tuple[str, ...]] = (
+    "player",
+    "last_player",
+    "active_player",
+    "resolved_player",
+)
+
+CONTEXT_TEAM_KEYS: Final[tuple[str, ...]] = (
+    "team",
+    "last_team",
+    "active_team",
+    "resolved_team",
+)
+
+CONTEXT_OUTCOME_KEYS: Final[tuple[str, ...]] = (
+    "outcome",
+    "last_outcome",
+    "active_outcome",
+    "resolved_outcome",
+)
+
+
+def first_context_value(
+    context: Mapping[str, Any] | None,
+    keys: Sequence[str],
+) -> str | None:
+    if not context:
+        return None
+
+    for key in keys:
+        value = context.get(key)
+
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return None
+
+
+def recover_entities_from_context(
+    message: str,
+    context: Mapping[str, Any] | None,
+) -> list[SemanticEntityCandidate]:
+    if not context:
+        return []
+
+    normalized = normalize_text(message)
+    pronoun_signal = contains_any_keyword(
+        normalized,
+        (
+            "he",
+            "him",
+            "his",
+            "they",
+            "them",
+            "their",
+            "that player",
+            "that team",
+            "same player",
+            "same team",
+        ),
+    )
+
+    if not pronoun_signal:
+        return []
+
+    output: list[SemanticEntityCandidate] = []
+
+    player = first_context_value(
+        context,
+        CONTEXT_PLAYER_KEYS,
+    )
+    team = first_context_value(
+        context,
+        CONTEXT_TEAM_KEYS,
+    )
+    outcome = first_context_value(
+        context,
+        CONTEXT_OUTCOME_KEYS,
+    )
+
+    if player:
+        output.append(
+            SemanticEntityCandidate(
+                entity_type=SemanticEntityType.PLAYER,
+                canonical_value=player,
+                observed_value="context_reference",
+                score=0.86,
+                source="conversation_context",
+            )
+        )
+
+    if team:
+        output.append(
+            SemanticEntityCandidate(
+                entity_type=SemanticEntityType.TEAM,
+                canonical_value=team,
+                observed_value="context_reference",
+                score=0.84,
+                source="conversation_context",
+            )
+        )
+
+    if outcome:
+        output.append(
+            SemanticEntityCandidate(
+                entity_type=SemanticEntityType.OUTCOME,
+                canonical_value=outcome,
+                observed_value="context_reference",
+                score=0.82,
+                source="conversation_context",
+            )
+        )
+
+    return output
+
+
+# ============================================================
+# SECTION 39 - SEMANTIC EVIDENCE GRAPH
+# ============================================================
+
+@dataclass(slots=True)
+class EvidenceGraphNode:
+    node_id: str
+    node_type: str
+    value: Any
+    score: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "node_id": self.node_id,
+            "node_type": self.node_type,
+            "value": self.value,
+            "score": round(float(self.score), 6),
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(slots=True)
+class EvidenceGraphEdge:
+    source_node_id: str
+    target_node_id: str
+    relation: str
+    weight: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_node_id": self.source_node_id,
+            "target_node_id": self.target_node_id,
+            "relation": self.relation,
+            "weight": round(float(self.weight), 6),
+        }
+
+
+def build_semantic_evidence_graph(
+    fallback_result: Mapping[str, Any],
+) -> dict[str, Any]:
+    nodes: list[EvidenceGraphNode] = []
+    edges: list[EvidenceGraphEdge] = []
+
+    intent = fallback_result.get("recommended_intent")
+
+    if intent:
+        nodes.append(
+            EvidenceGraphNode(
+                node_id="intent:recommended",
+                node_type="intent",
+                value=intent,
+                score=float(
+                    fallback_result.get(
+                        "recommended_confidence",
+                        0.0,
+                    )
+                ),
+            )
+        )
+
+    for index, candidate in enumerate(
+        fallback_result.get("entity_candidates")
+        or []
+    ):
+        node_id = f"entity:{index}"
+
+        nodes.append(
+            EvidenceGraphNode(
+                node_id=node_id,
+                node_type=str(
+                    candidate.get(
+                        "entity_type",
+                        "unknown",
+                    )
+                ),
+                value=candidate.get(
+                    "canonical_value"
+                ),
+                score=float(
+                    candidate.get("score", 0.0)
+                ),
+                metadata={
+                    "source": candidate.get("source"),
+                    "ambiguous": candidate.get(
+                        "ambiguous",
+                        False,
+                    ),
+                },
+            )
+        )
+
+        if intent:
+            edges.append(
+                EvidenceGraphEdge(
+                    source_node_id=node_id,
+                    target_node_id="intent:recommended",
+                    relation="supports",
+                    weight=float(
+                        candidate.get("score", 0.0)
+                    ),
+                )
+            )
+
+    for index, evidence in enumerate(
+        fallback_result.get("evidence")
+        or []
+    ):
+        node_id = f"evidence:{index}"
+
+        nodes.append(
+            EvidenceGraphNode(
+                node_id=node_id,
+                node_type=str(
+                    evidence.get("kind", "evidence")
+                ),
+                value=evidence.get("value"),
+                score=float(
+                    evidence.get("score", 0.0)
+                ),
+                metadata={
+                    "label": evidence.get("label"),
+                },
+            )
+        )
+
+        if intent:
+            edges.append(
+                EvidenceGraphEdge(
+                    source_node_id=node_id,
+                    target_node_id="intent:recommended",
+                    relation="supports",
+                    weight=float(
+                        evidence.get("score", 0.0)
+                    ),
+                )
+            )
+
+    return {
+        "nodes": [
+            node.to_dict()
+            for node in nodes
+        ],
+        "edges": [
+            edge.to_dict()
+            for edge in edges
+        ],
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+    }
+
+
+# ============================================================
+# SECTION 40 - SEMANTIC QUALITY SCORE
+# ============================================================
+
+def calculate_semantic_quality_score(
+    fallback_result: Mapping[str, Any],
+) -> float:
+    confidence = float(
+        fallback_result.get(
+            "recommended_confidence",
+            0.0,
+        )
+    )
+
+    entity_candidates = (
+        fallback_result.get("entity_candidates")
+        or []
+    )
+    evidence = (
+        fallback_result.get("evidence")
+        or []
+    )
+    risks = set(
+        fallback_result.get("risk_flags")
+        or []
+    )
+
+    entity_component = min(
+        1.0,
+        len(entity_candidates) / 3.0,
+    )
+    evidence_component = min(
+        1.0,
+        len(evidence) / 6.0,
+    )
+
+    penalty = 0.0
+
+    if SemanticRiskFlag.AMBIGUOUS_ENTITY.value in risks:
+        penalty += 0.18
+
+    if SemanticRiskFlag.LOW_EVIDENCE.value in risks:
+        penalty += 0.22
+
+    if SemanticRiskFlag.PRIMARY_ROUTE_CONFLICT.value in risks:
+        penalty += 0.08
+
+    score = (
+        confidence * 0.60
+        + entity_component * 0.20
+        + evidence_component * 0.20
+        - penalty
+    )
+
+    return max(
+        0.0,
+        min(1.0, score),
+    )
+
+
+# ============================================================
+# SECTION 41 - DETERMINISTIC AUDIT RECORDS
+# ============================================================
+
+def build_semantic_audit_record(
+    fallback_result: Mapping[str, Any],
+) -> dict[str, Any]:
+    stable_payload = {
+        "message": fallback_result.get("message"),
+        "activation_decision": fallback_result.get(
+            "activation_decision"
+        ),
+        "status": fallback_result.get("status"),
+        "recommended_intent": fallback_result.get(
+            "recommended_intent"
+        ),
+        "recommended_confidence": fallback_result.get(
+            "recommended_confidence"
+        ),
+        "players": fallback_result.get("players") or [],
+        "teams": fallback_result.get("teams") or [],
+        "outcomes": fallback_result.get("outcomes") or [],
+        "risk_flags": fallback_result.get("risk_flags") or [],
+    }
+
+    return {
+        "engine": SEMANTIC_ENGINE_NAME,
+        "version": SEMANTIC_ENGINE_VERSION,
+        "phase": SEMANTIC_ENGINE_PHASE,
+        "role": SEMANTIC_ENGINE_ROLE,
+        "primary_override_allowed": False,
+        "fingerprint": semantic_fingerprint(stable_payload),
+        "stable_payload": stable_payload,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
+# ============================================================
+# SECTION 42 - BATCH FALLBACK ANALYSIS
+# ============================================================
+
+def analyze_semantic_fallback_batch(
+    requests: Sequence[Mapping[str, Any]],
+    *,
+    teams: Mapping[str, Any] | None = None,
+    player_profiles: Mapping[str, Any] | None = None,
+    config: SemanticFallbackConfig | None = None,
+) -> list[dict[str, Any]]:
+    config = config or SemanticFallbackConfig()
+    config.validate()
+
+    output: list[dict[str, Any]] = []
+
+    for request in requests:
+        output.append(
+            analyze_semantic_fallback(
+                str(request.get("message") or ""),
+                primary_route=request.get(
+                    "primary_route"
+                ),
+                teams=(
+                    request.get("teams")
+                    or teams
+                ),
+                player_profiles=(
+                    request.get("player_profiles")
+                    or player_profiles
+                ),
+                context=request.get("context"),
+                config=config,
+            )
+        )
+
+    return output
+
+
+# ============================================================
+# SECTION 43 - OBSERVABILITY METRICS
+# ============================================================
+
+@dataclass(slots=True)
+class SemanticMetrics:
+    total_requests: int = 0
+    skipped_requests: int = 0
+    fallback_requests: int = 0
+    clarification_requests: int = 0
+    unresolved_requests: int = 0
+    primary_conflicts: int = 0
+    ambiguous_entity_requests: int = 0
+
+    def record(
+        self,
+        result: Mapping[str, Any],
+    ) -> None:
+        self.total_requests += 1
+
+        status = result.get("status")
+
+        if status == SemanticAnalysisStatus.SKIPPED.value:
+            self.skipped_requests += 1
+        else:
+            self.fallback_requests += 1
+
+        if result.get("clarification_required"):
+            self.clarification_requests += 1
+
+        if status == SemanticAnalysisStatus.UNRESOLVED.value:
+            self.unresolved_requests += 1
+
+        risks = set(
+            result.get("risk_flags")
+            or []
+        )
+
+        if SemanticRiskFlag.PRIMARY_ROUTE_CONFLICT.value in risks:
+            self.primary_conflicts += 1
+
+        if SemanticRiskFlag.AMBIGUOUS_ENTITY.value in risks:
+            self.ambiguous_entity_requests += 1
+
+    def to_dict(self) -> dict[str, Any]:
+        fallback_rate = (
+            self.fallback_requests
+            / self.total_requests
+            if self.total_requests
+            else 0.0
+        )
+
+        clarification_rate = (
+            self.clarification_requests
+            / self.total_requests
+            if self.total_requests
+            else 0.0
+        )
+
+        return {
+            **asdict(self),
+            "fallback_rate": round(
+                fallback_rate,
+                6,
+            ),
+            "clarification_rate": round(
+                clarification_rate,
+                6,
+            ),
+        }
+
+
+def summarize_semantic_results(
+    results: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    metrics = SemanticMetrics()
+
+    intents: Counter[str] = Counter()
+    statuses: Counter[str] = Counter()
+    activations: Counter[str] = Counter()
+
+    for result in results:
+        metrics.record(result)
+
+        if result.get("recommended_intent"):
+            intents[
+                str(result["recommended_intent"])
+            ] += 1
+
+        if result.get("status"):
+            statuses[
+                str(result["status"])
+            ] += 1
+
+        if result.get("activation_decision"):
+            activations[
+                str(result["activation_decision"])
+            ] += 1
+
+    return {
+        "metrics": metrics.to_dict(),
+        "intent_distribution": dict(intents),
+        "status_distribution": dict(statuses),
+        "activation_distribution": dict(
+            activations
+        ),
+    }
+
+
+# ============================================================
+# SECTION 44 - FALLBACK ORCHESTRATION ENVELOPE
+# ============================================================
+
+def build_semantic_fallback_envelope(
+    message: str,
+    *,
+    primary_route: Mapping[str, Any] | PrimaryRouteState | None = None,
+    teams: Mapping[str, Any] | None = None,
+    player_profiles: Mapping[str, Any] | None = None,
+    context: Mapping[str, Any] | None = None,
+    config: SemanticFallbackConfig | None = None,
+) -> dict[str, Any]:
+    result = analyze_semantic_fallback(
+        message,
+        primary_route=primary_route,
+        teams=teams,
+        player_profiles=player_profiles,
+        context=context,
+        config=config,
+    )
+
+    clauses = build_semantic_clauses(
+        message
+    )
+
+    conflict = analyze_primary_route_conflict(
+        safe_nested_mapping_get(
+            result,
+            "primary_route",
+            "intent",
+        ),
+        result.get("diagnostics", {}).get(
+            "fallback_intent_candidate"
+        ),
+        primary_confidence=float(
+            safe_nested_mapping_get(
+                result,
+                "primary_route",
+                "confidence",
+                default=0.0,
+            )
+            or 0.0
+        ),
+    )
+
+    result["clauses"] = [
+        clause.to_dict()
+        for clause in clauses
+    ]
+    result["route_conflict"] = (
+        conflict.to_dict()
+    )
+    result["evidence_graph"] = (
+        build_semantic_evidence_graph(
+            result
+        )
+    )
+    result["quality_score"] = (
+        calculate_semantic_quality_score(
+            result
+        )
+    )
+    result["audit"] = (
+        build_semantic_audit_record(
+            result
+        )
+    )
+
+    return result
+
+
+# ============================================================
+# SECTION 45 - NESTED MAPPING UTILITY
+# ============================================================
+
+def safe_nested_mapping_get(
+    payload: Mapping[str, Any] | None,
+    *keys: str,
+    default: Any = None,
+) -> Any:
+    current: Any = payload
+
+    for key in keys:
+        if (
+            not isinstance(current, Mapping)
+            or key not in current
+        ):
+            return default
+
+        current = current.get(key)
+
+    return current
+
+
+# ============================================================
+# SECTION 46 - EXTENDED VALIDATION
+# ============================================================
+
+def validate_semantic_engine_extensions(
+) -> dict[str, Any]:
+    teams = {
+        "New York Yankees": {
+            "id": 147,
+            "abbreviation": "NYY",
+            "club_name": "Yankees",
+        },
+        "Boston Red Sox": {
+            "id": 111,
+            "abbreviation": "BOS",
+            "club_name": "Red Sox",
+        },
+    }
+
+    players = {
+        "Aaron Judge": {
+            "id": 592450,
+            "first_name": "Aaron",
+            "last_name": "Judge",
+        },
+        "Shohei Ohtani": {
+            "id": 660271,
+            "first_name": "Shohei",
+            "last_name": "Ohtani",
+        },
+    }
+
+    checks: dict[str, bool] = {}
+
+    clauses = build_semantic_clauses(
+        "show Aaron Judge stats and then show the Yankees roster"
+    )
+    checks["compound_clause_split"] = (
+        len(clauses) == 2
+    )
+
+    conflict = analyze_primary_route_conflict(
+        "player_stats",
+        "roster",
+        primary_confidence=0.90,
+    )
+    checks["route_conflict_detected"] = (
+        conflict.conflict_detected
+        and conflict.preserve_primary
+    )
+
+    context_entities = recover_entities_from_context(
+        "what are his home run odds",
+        {
+            "last_player": "Aaron Judge",
+            "last_outcome": "home_run",
+        },
+    )
+    context_values = {
+        candidate.canonical_value
+        for candidate in context_entities
+    }
+    checks["contextual_entity_recovery"] = (
+        "Aaron Judge" in context_values
+        and "home_run" in context_values
+    )
+
+    fallback = build_semantic_fallback_envelope(
+        "what is the chance Aaron Judge hits a home run",
+        primary_route={
+            "unresolved": True,
+            "confidence": 0.20,
+        },
+        teams=teams,
+        player_profiles=players,
+    )
+
+    checks["evidence_graph_built"] = (
+        fallback["evidence_graph"][
+            "node_count"
+        ] > 0
+    )
+
+    checks["quality_score_bounded"] = (
+        0.0
+        <= fallback["quality_score"]
+        <= 1.0
+    )
+
+    checks["audit_fingerprint_created"] = bool(
+        fallback["audit"]["fingerprint"]
+    )
+
+    batch = analyze_semantic_fallback_batch(
+        [
+            {
+                "message": "show Aaron Judge stats",
+                "primary_route": {
+                    "intent": "player_stats",
+                    "confidence": 0.95,
+                    "accepted": True,
+                },
+            },
+            {
+                "message": "show Yankees roster",
+                "primary_route": {
+                    "unresolved": True,
+                    "confidence": 0.10,
+                },
+            },
+        ],
+        teams=teams,
+        player_profiles=players,
+    )
+
+    checks["batch_analysis_operational"] = (
+        len(batch) == 2
+    )
+
+    summary = summarize_semantic_results(
+        batch
+    )
+    checks["metrics_summary_operational"] = (
+        summary["metrics"][
+            "total_requests"
+        ]
+        == 2
+    )
+
+    checks["accepted_primary_still_not_overridden"] = (
+        batch[0]["recommended_intent"]
+        == "player_stats"
+    )
+
+    passed = sum(
+        1
+        for value in checks.values()
+        if value
+    )
+
+    return {
+        "status": (
+            "ok"
+            if passed == len(checks)
+            else "failed"
+        ),
+        "engine": SEMANTIC_ENGINE_NAME,
+        "version": SEMANTIC_ENGINE_VERSION,
+        "phase": SEMANTIC_ENGINE_PHASE,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name
+            for name, value
+            in checks.items()
+            if not value
+        ],
+    }
+
+
+# ============================================================
+# SECTION 47 - COMBINED VALIDATION
+# ============================================================
+
+_original_validate_semantic_engine_module = (
+    validate_semantic_engine_module
+)
+
+
+def validate_semantic_engine_module(
+) -> dict[str, Any]:
+    base_validation = (
+        _original_validate_semantic_engine_module()
+    )
+    extension_validation = (
+        validate_semantic_engine_extensions()
+    )
+
+    checks = {
+        **base_validation["checks"],
+        **{
+            f"extension_{name}": value
+            for name, value
+            in extension_validation[
+                "checks"
+            ].items()
+        },
+    }
+
+    passed = sum(
+        1
+        for value in checks.values()
+        if value
+    )
+
+    return {
+        "status": (
+            "ok"
+            if passed == len(checks)
+            else "failed"
+        ),
+        "engine": SEMANTIC_ENGINE_NAME,
+        "version": SEMANTIC_ENGINE_VERSION,
+        "phase": SEMANTIC_ENGINE_PHASE,
+        "role": SEMANTIC_ENGINE_ROLE,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name
+            for name, value
+            in checks.items()
+            if not value
+        ],
+    }
+
+
+# ============================================================
+# SECTION 48 - EXTENDED HEALTH
+# ============================================================
+
+_original_semantic_engine_health = (
+    semantic_engine_health
+)
+
+
+def semantic_engine_health(
+) -> dict[str, Any]:
+    validation = (
+        validate_semantic_engine_module()
+    )
+
+    return {
+        "name": SEMANTIC_ENGINE_NAME,
+        "version": SEMANTIC_ENGINE_VERSION,
+        "phase": SEMANTIC_ENGINE_PHASE,
+        "path": SEMANTIC_ENGINE_PATH,
+        "status": (
+            SEMANTIC_ENGINE_STATUS
+            if validation["status"] == "ok"
+            else "validation_failed"
+        ),
+        "role": SEMANTIC_ENGINE_ROLE,
+        "primary_router": (
+            SEMANTIC_ENGINE_PRIMARY_ROUTER
+        ),
+        "can_override_primary": False,
+        "can_enrich_primary": True,
+        "fallback_activation_policy": True,
+        "clause_level_analysis": True,
+        "contextual_entity_recovery": True,
+        "route_conflict_diagnostics": True,
+        "evidence_graph": True,
+        "batch_analysis": True,
+        "observability_metrics": True,
+        "deterministic_audit_records": True,
+        "ambiguity_detection": True,
+        "clarification_policy": True,
+        "fuzzy_support_adapter": True,
+        "backward_compatible_api": True,
+        "validation": validation,
+        "timestamp": datetime.now(
+            UTC
+        ).isoformat(),
+    }
+
+
+
 # ============================================================
 # SECTION 36 - PUBLIC EXPORTS
 # ============================================================
@@ -3011,6 +4036,26 @@ __all__ = [
     "validate_semantic_engine_module",
     "SEMANTIC_ENGINE_CONFIGURATION",
     "semantic_fingerprint",
+
+    "SemanticClause",
+    "RouteConflictDiagnostic",
+    "EvidenceGraphNode",
+    "EvidenceGraphEdge",
+    "SemanticMetrics",
+
+    "split_semantic_clauses",
+    "build_semantic_clauses",
+    "analyze_primary_route_conflict",
+    "first_context_value",
+    "recover_entities_from_context",
+    "build_semantic_evidence_graph",
+    "calculate_semantic_quality_score",
+    "build_semantic_audit_record",
+    "analyze_semantic_fallback_batch",
+    "summarize_semantic_results",
+    "build_semantic_fallback_envelope",
+    "safe_nested_mapping_get",
+    "validate_semantic_engine_extensions",
 ]
 
 
