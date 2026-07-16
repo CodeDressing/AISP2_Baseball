@@ -1914,50 +1914,171 @@ def _aisp2_player_explorer_profile_payload(
     }
 
 
-def _aisp2_player_explorer_bootstrap_payload(database_session) -> dict[str, _AISP2PlayerExplorerAny]:
-    if _AISP2Team is None or _AISP2Player is None:
+def _aisp2_player_explorer_fetch_json_url(url: str) -> dict:
+    import json
+    import urllib.request
+
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "AISP2-Baseball/PlayerExplorerBootstrap",
+                "Accept": "application/json",
+            },
+        )
+
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    except Exception as error:
         return {
-            "status": PLAYER_EXPLORER_STATUS_ERROR,
-            "api_version": PLAYER_EXPLORER_API_VERSION,
-            "message": "Team or Player model is unavailable.",
+            "error": str(error),
+            "url": url,
         }
 
-    teams = (
-        database_session.query(_AISP2Team)
-        .order_by(_AISP2Team.name.asc())
-        .all()
+
+def _aisp2_player_explorer_live_mlb_bootstrap_payload(
+    season: int = PLAYER_EXPLORER_DEFAULT_SEASON,
+) -> dict[str, _AISP2PlayerExplorerAny]:
+    teams_url = (
+        "https://statsapi.mlb.com/api/v1/teams"
+        f"?sportId=1&season={season}"
     )
+
+    teams_response = _aisp2_player_explorer_fetch_json_url(
+        teams_url,
+    )
+
+    raw_teams = teams_response.get("teams", [])
 
     team_payloads = []
     players_by_team: dict[str, list[dict[str, _AISP2PlayerExplorerAny]]] = {}
 
-    for team in teams:
-        team_payload = _aisp2_player_explorer_team_payload(team)
-        team_payloads.append(team_payload)
+    for raw_team in raw_teams:
+        mlb_team_id = raw_team.get("id")
+        team_name = raw_team.get("name")
+        abbreviation = raw_team.get("abbreviation")
 
-        players = (
-            database_session.query(_AISP2Player)
-            .filter(_AISP2Player.current_team_id == team.id)
-            .order_by(_AISP2Player.full_name.asc())
-            .limit(PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM)
-            .all()
+        if not mlb_team_id or not team_name:
+            continue
+
+        team_payload = {
+            "id": mlb_team_id,
+            "mlb_team_id": mlb_team_id,
+            "name": team_name,
+            "abbreviation": abbreviation,
+            "team_code": raw_team.get("teamCode"),
+            "file_code": raw_team.get("fileCode"),
+            "franchise_name": raw_team.get("franchiseName"),
+            "club_name": raw_team.get("clubName"),
+            "short_name": raw_team.get("shortName"),
+            "location_name": raw_team.get("locationName"),
+            "league": (raw_team.get("league") or {}).get("name"),
+            "division": (raw_team.get("division") or {}).get("name"),
+            "venue": (raw_team.get("venue") or {}).get("name"),
+            "is_active": raw_team.get("active", True),
+            "source": "live_mlb_stats_api",
+        }
+
+        team_payloads.append(
+            team_payload,
         )
 
-        players_by_team[str(team.id)] = [
-            _aisp2_player_explorer_player_selector_payload(player)
-            for player in players
+        roster_url = (
+            "https://statsapi.mlb.com/api/v1/teams/"
+            f"{mlb_team_id}/roster?season={season}&rosterType=active"
+        )
+
+        roster_response = _aisp2_player_explorer_fetch_json_url(
+            roster_url,
+        )
+
+        roster_rows = roster_response.get("roster", [])
+
+        player_payloads = []
+
+        for roster_row in roster_rows:
+            person = roster_row.get("person") or {}
+            position = roster_row.get("position") or {}
+            status = roster_row.get("status") or {}
+
+            mlb_player_id = person.get("id")
+            full_name = person.get("fullName")
+
+            if not mlb_player_id or not full_name:
+                continue
+
+            player_payloads.append(
+                {
+                    "id": mlb_player_id,
+                    "mlb_player_id": mlb_player_id,
+                    "full_name": full_name,
+                    "name": full_name,
+                    "position": position.get("name"),
+                    "position_code": position.get("code"),
+                    "jersey_number": roster_row.get("jerseyNumber"),
+                    "status_code": status.get("code"),
+                    "status_description": status.get("description"),
+                    "current_team_id": mlb_team_id,
+                    "active_status": True,
+                    "source": "live_mlb_stats_api_roster",
+                }
+            )
+
+        player_payloads = sorted(
+            player_payloads,
+            key=lambda row: str(row.get("full_name", "")).lower(),
+        )
+
+        key_values = [
+            mlb_team_id,
+            team_name,
+            abbreviation,
+            raw_team.get("teamCode"),
+            raw_team.get("fileCode"),
+            raw_team.get("clubName"),
+            raw_team.get("shortName"),
         ]
 
+        for key_value in key_values:
+            if key_value is None or str(key_value).strip() == "":
+                continue
+
+            players_by_team[str(key_value)] = player_payloads
+
+    total_players = sum(
+        len(players)
+        for key, players in players_by_team.items()
+        if str(key).isdigit()
+    )
+
+    default_team = team_payloads[0] if team_payloads else None
+
+    default_players = []
+
+    if default_team:
+        default_players = (
+            players_by_team.get(str(default_team.get("id"))) or
+            players_by_team.get(str(default_team.get("name"))) or
+            []
+        )
+
     return {
-        "status": PLAYER_EXPLORER_STATUS_READY,
+        "status": PLAYER_EXPLORER_STATUS_READY if team_payloads else PLAYER_EXPLORER_STATUS_PARTIAL,
         "api_version": PLAYER_EXPLORER_API_VERSION,
         "checked_at": _aisp2_player_explorer_now_iso(),
+        "season": season,
         "team_count": len(team_payloads),
-        "player_count": _aisp2_player_explorer_count(database_session, _AISP2Player),
+        "player_count": total_players,
         "teams": team_payloads,
         "players_by_team": players_by_team,
-        "default_team": team_payloads[0] if team_payloads else None,
-        "default_players": players_by_team.get(str(team_payloads[0]["id"]), []) if team_payloads else [],
+        "players_by_team_key_count": len(players_by_team),
+        "default_team": default_team,
+        "default_players": default_players,
+        "bootstrap_source": "live_mlb_api_fallback",
+        "database_team_count": 0,
+        "database_player_count": 0,
+        "fallback_reason": "Database returned zero teams or zero players on deployed runtime.",
         "display_rules": {
             "missing_statistics": "Pending Ingestion",
             "not_available": "Not Available",
@@ -1968,6 +2089,157 @@ def _aisp2_player_explorer_bootstrap_payload(database_session) -> dict[str, _AIS
     }
 
 
+def _aisp2_player_explorer_bootstrap_payload(database_session) -> dict[str, _AISP2PlayerExplorerAny]:
+    if _AISP2Team is None or _AISP2Player is None:
+        return _aisp2_player_explorer_live_mlb_bootstrap_payload(
+            season=PLAYER_EXPLORER_DEFAULT_SEASON,
+        )
+
+    teams = (
+        database_session.query(_AISP2Team)
+        .order_by(_AISP2Team.name.asc())
+        .all()
+    )
+
+    database_team_count = len(teams)
+    database_player_count = _aisp2_player_explorer_count(
+        database_session,
+        _AISP2Player,
+    )
+
+    if database_team_count == 0 or database_player_count == 0:
+        live_payload = _aisp2_player_explorer_live_mlb_bootstrap_payload(
+            season=PLAYER_EXPLORER_DEFAULT_SEASON,
+        )
+
+        live_payload["database_team_count"] = database_team_count
+        live_payload["database_player_count"] = database_player_count
+        live_payload["fallback_reason"] = (
+            "Database bootstrap was empty, so AISP2 loaded live MLB teams and active rosters."
+        )
+
+        return live_payload
+
+    team_payloads = []
+    players_by_team: dict[str, list[dict[str, _AISP2PlayerExplorerAny]]] = {}
+
+    for team in teams:
+        team_payload = _aisp2_player_explorer_team_payload(team)
+        team_payloads.append(team_payload)
+
+        player_map: dict[int, _AISP2PlayerExplorerAny] = {}
+
+        try:
+            current_team_players = (
+                database_session.query(_AISP2Player)
+                .filter(_AISP2Player.current_team_id == team.id)
+                .order_by(_AISP2Player.full_name.asc())
+                .limit(PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM)
+                .all()
+            )
+
+            for player in current_team_players:
+                if getattr(player, "id", None) is not None:
+                    player_map[player.id] = player
+
+        except Exception:
+            pass
+
+        try:
+            if _AISP2RosterEntry is not None:
+                roster_rows = (
+                    database_session.query(_AISP2RosterEntry)
+                    .filter(_AISP2RosterEntry.team_id == team.id)
+                    .order_by(
+                        _AISP2RosterEntry.season.desc(),
+                        _AISP2RosterEntry.id.desc(),
+                    )
+                    .limit(PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM * 2)
+                    .all()
+                )
+
+                for roster_row in roster_rows:
+                    player_id = getattr(roster_row, "player_id", None)
+
+                    if player_id is None:
+                        continue
+
+                    if player_id in player_map:
+                        continue
+
+                    player = (
+                        database_session.query(_AISP2Player)
+                        .filter(_AISP2Player.id == player_id)
+                        .first()
+                    )
+
+                    if player is not None and getattr(player, "id", None) is not None:
+                        player_map[player.id] = player
+
+        except Exception:
+            pass
+
+        players = sorted(
+            player_map.values(),
+            key=lambda player: str(getattr(player, "full_name", "") or "").lower(),
+        )
+
+        player_payloads = [
+            _aisp2_player_explorer_player_selector_payload(player)
+            for player in players[:PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM]
+        ]
+
+        key_values = [
+            getattr(team, "id", None),
+            getattr(team, "mlb_team_id", None),
+            getattr(team, "name", None),
+            getattr(team, "abbreviation", None),
+            getattr(team, "team_code", None),
+            getattr(team, "file_code", None),
+            getattr(team, "club_name", None),
+            getattr(team, "short_name", None),
+        ]
+
+        for key_value in key_values:
+            if key_value is None or str(key_value).strip() == "":
+                continue
+
+            players_by_team[str(key_value)] = player_payloads
+
+    default_team = team_payloads[0] if team_payloads else None
+
+    default_players = []
+
+    if default_team:
+        default_players = (
+            players_by_team.get(str(default_team.get("id"))) or
+            players_by_team.get(str(default_team.get("mlb_team_id"))) or
+            players_by_team.get(str(default_team.get("name"))) or
+            []
+        )
+
+    return {
+        "status": PLAYER_EXPLORER_STATUS_READY,
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+        "team_count": len(team_payloads),
+        "player_count": database_player_count,
+        "teams": team_payloads,
+        "players_by_team": players_by_team,
+        "players_by_team_key_count": len(players_by_team),
+        "default_team": default_team,
+        "default_players": default_players,
+        "bootstrap_source": "database_with_roster_fallback",
+        "database_team_count": database_team_count,
+        "database_player_count": database_player_count,
+        "display_rules": {
+            "missing_statistics": "Pending Ingestion",
+            "not_available": "Not Available",
+            "insufficient_sample": "Insufficient Sample",
+            "stale_data": "Stale Data",
+            "no_demo_values": True,
+        },
+    }
 def _aisp2_player_explorer_audit_payload(database_session) -> dict[str, _AISP2PlayerExplorerAny]:
     team_count = _aisp2_player_explorer_count(database_session, _AISP2Team)
     player_count = _aisp2_player_explorer_count(database_session, _AISP2Player)
