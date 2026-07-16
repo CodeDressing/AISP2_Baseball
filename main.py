@@ -577,6 +577,1936 @@ def entity_outcome(nlu_report: Mapping[str, Any]) -> str | None:
     outcome = entities.get("outcome") or {}
     value = outcome.get("canonical_name") or outcome.get("name")
     return str(value) if value else None
+# ============================================================
+# SECTION 12.95 - ENTERPRISE PLAYER EXPLORER API RUNTIME V2
+# FILE: main.py
+# PURPOSE:
+# Database-backed runtime API for the Player Explorer page.
+#
+# Provides:
+#   GET /api/player-explorer/bootstrap
+#   GET /api/player-explorer/profile
+#   GET /api/player-explorer/audit
+#
+# These endpoints remove hard-coded demo profiles from the
+# Player Explorer and expose real team/player/database state.
+# Paste this section into main.py near the other API route
+# sections, after `app = FastAPI(...)` exists and before the
+# local `if __name__ == "__main__"` startup block.
+# ============================================================
+
+from datetime import UTC as _AISP2_PLAYER_EXPLORER_UTC
+from datetime import datetime as _AISP2_PLAYER_EXPLORER_DATETIME
+import json as _aisp2_player_explorer_json
+import math as _aisp2_player_explorer_math
+import sys as _aisp2_player_explorer_sys
+from pathlib import Path as _AISP2PlayerExplorerPath
+from typing import Any as _AISP2PlayerExplorerAny
+
+try:
+    from fastapi import Query as _AISP2Query
+except Exception:  # pragma: no cover
+    _AISP2Query = None
+
+_AISP2_PLAYER_EXPLORER_CURRENT_FILE = _AISP2PlayerExplorerPath(__file__).resolve()
+_AISP2_PLAYER_EXPLORER_PROJECT_ROOT = _AISP2_PLAYER_EXPLORER_CURRENT_FILE.parent
+_AISP2_PLAYER_EXPLORER_DATABASE_DIR = _AISP2_PLAYER_EXPLORER_PROJECT_ROOT / "01_database"
+_AISP2_PLAYER_EXPLORER_AI_DIR = _AISP2_PLAYER_EXPLORER_PROJECT_ROOT / "04_ai"
+_AISP2_PLAYER_EXPLORER_BASEBALL_DIR = _AISP2_PLAYER_EXPLORER_AI_DIR / "baseball"
+
+for _aisp2_player_explorer_path in [
+    _AISP2_PLAYER_EXPLORER_PROJECT_ROOT,
+    _AISP2_PLAYER_EXPLORER_DATABASE_DIR,
+    _AISP2_PLAYER_EXPLORER_AI_DIR,
+    _AISP2_PLAYER_EXPLORER_BASEBALL_DIR,
+]:
+    _aisp2_player_explorer_path_string = str(_aisp2_player_explorer_path)
+
+    if _aisp2_player_explorer_path_string not in _aisp2_player_explorer_sys.path:
+        _aisp2_player_explorer_sys.path.insert(
+            0,
+            _aisp2_player_explorer_path_string,
+        )
+
+try:
+    from database import managed_database_session as _aisp2_managed_database_session
+except Exception as _aisp2_player_explorer_database_error:  # pragma: no cover
+    _aisp2_managed_database_session = None
+
+try:
+    from models import Team as _AISP2Team
+    from models import Player as _AISP2Player
+    from models import RosterEntry as _AISP2RosterEntry
+    from models import PlayerSeasonStat as _AISP2PlayerSeasonStat
+    from models import PlayerAdvancedBattingStat as _AISP2PlayerAdvancedBattingStat
+    from models import PlayerPercentileRanking as _AISP2PlayerPercentileRanking
+    from models import PlayerPitchArsenal as _AISP2PlayerPitchArsenal
+    from models import PlayerPitchTempo as _AISP2PlayerPitchTempo
+    from models import PlayerBattedBallProfile as _AISP2PlayerBattedBallProfile
+    from models import PlayerBattingStance as _AISP2PlayerBattingStance
+    from models import PlayerHomeRunProfile as _AISP2PlayerHomeRunProfile
+    from models import TeamPlateDiscipline as _AISP2TeamPlateDiscipline
+    from models import RawDataImportLog as _AISP2RawDataImportLog
+
+    try:
+        from models import Game as _AISP2Game
+    except Exception:
+        _AISP2Game = None
+
+    try:
+        from models import PlayerGameStat as _AISP2PlayerGameStat
+    except Exception:
+        _AISP2PlayerGameStat = None
+
+    try:
+        from models import PredictionResult as _AISP2PredictionResult
+    except Exception:
+        _AISP2PredictionResult = None
+
+except Exception as _aisp2_player_explorer_models_error:  # pragma: no cover
+    _AISP2Team = None
+    _AISP2Player = None
+    _AISP2RosterEntry = None
+    _AISP2PlayerSeasonStat = None
+    _AISP2PlayerAdvancedBattingStat = None
+    _AISP2PlayerPercentileRanking = None
+    _AISP2PlayerPitchArsenal = None
+    _AISP2PlayerPitchTempo = None
+    _AISP2PlayerBattedBallProfile = None
+    _AISP2PlayerBattingStance = None
+    _AISP2PlayerHomeRunProfile = None
+    _AISP2TeamPlateDiscipline = None
+    _AISP2RawDataImportLog = None
+    _AISP2Game = None
+    _AISP2PlayerGameStat = None
+    _AISP2PredictionResult = None
+
+try:
+    from baseball.player_knowledge import build_player_knowledge_report as _aisp2_build_player_knowledge_report
+    from baseball.player_knowledge import build_player_explorer_card as _aisp2_build_player_explorer_card
+except Exception:  # pragma: no cover
+    _aisp2_build_player_knowledge_report = None
+    _aisp2_build_player_explorer_card = None
+
+PLAYER_EXPLORER_API_VERSION = "phase_12_part_5_player_explorer_api_runtime_v2"
+PLAYER_EXPLORER_MINIMUM_SAMPLE_PA = 25
+PLAYER_EXPLORER_STALE_DATA_DAYS = 10
+PLAYER_EXPLORER_DEFAULT_SEASON = 2026
+PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM = 120
+PLAYER_EXPLORER_STATUS_AVAILABLE = "available"
+PLAYER_EXPLORER_STATUS_NOT_AVAILABLE = "not_available"
+PLAYER_EXPLORER_STATUS_PENDING_INGESTION = "pending_ingestion"
+PLAYER_EXPLORER_STATUS_INSUFFICIENT_SAMPLE = "insufficient_sample"
+PLAYER_EXPLORER_STATUS_STALE_DATA = "stale_data"
+PLAYER_EXPLORER_STATUS_ERROR = "error"
+PLAYER_EXPLORER_STATUS_READY = "ready"
+PLAYER_EXPLORER_STATUS_PARTIAL = "partial"
+
+PLAYER_EXPLORER_REQUIRED_PLAYER_FIELDS = [
+    "mlb_player_id",
+    "full_name",
+    "current_team_id",
+    "position",
+    "active_status",
+]
+
+PLAYER_EXPLORER_REQUIRED_ROSTER_FIELDS = [
+    "team_id",
+    "player_id",
+    "season",
+    "roster_type",
+    "status_description",
+]
+
+PLAYER_EXPLORER_REQUIRED_STAT_FIELDS = [
+    "player_id",
+    "season",
+]
+
+
+def _aisp2_player_explorer_now_iso() -> str:
+    return _AISP2_PLAYER_EXPLORER_DATETIME.now(
+        _AISP2_PLAYER_EXPLORER_UTC,
+    ).isoformat()
+
+
+def _aisp2_player_explorer_database_available() -> bool:
+    return _aisp2_managed_database_session is not None and _AISP2Player is not None and _AISP2Team is not None
+
+
+def _aisp2_player_explorer_safe_int(value: _AISP2PlayerExplorerAny) -> int | None:
+    if value is None:
+        return None
+
+    try:
+        cleaned = str(value).replace(",", "").strip()
+
+        if not cleaned:
+            return None
+
+        return int(float(cleaned))
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_safe_float(value: _AISP2PlayerExplorerAny) -> float | None:
+    if value is None:
+        return None
+
+    try:
+        cleaned = str(value).replace(",", "").replace("%", "").strip()
+
+        if not cleaned:
+            return None
+
+        numeric = float(cleaned)
+
+        if _aisp2_player_explorer_math.isnan(numeric):
+            return None
+
+        return numeric
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_safe_round(
+    value: _AISP2PlayerExplorerAny,
+    digits: int = 3,
+) -> float | None:
+    numeric = _aisp2_player_explorer_safe_float(value)
+
+    if numeric is None:
+        return None
+
+    return round(numeric, digits)
+
+
+def _aisp2_player_explorer_safe_string(value: _AISP2PlayerExplorerAny) -> str | None:
+    if value is None:
+        return None
+
+    cleaned = str(value).strip()
+
+    if not cleaned or cleaned.lower() in {"none", "null", "nan", "n/a", "--"}:
+        return None
+
+    return cleaned
+
+
+def _aisp2_player_explorer_normalize(value: _AISP2PlayerExplorerAny) -> str:
+    if value is None:
+        return ""
+
+    return (
+        str(value)
+        .lower()
+        .strip()
+        .replace(".", " ")
+        .replace(",", " ")
+        .replace("'", "")
+        .replace("’", "")
+        .replace("-", " ")
+        .replace("_", " ")
+    )
+
+
+def _aisp2_player_explorer_compact(value: _AISP2PlayerExplorerAny) -> str:
+    return "".join(
+        _aisp2_player_explorer_normalize(value).split()
+    )
+
+
+def _aisp2_player_explorer_column_dict(row: _AISP2PlayerExplorerAny) -> dict[str, _AISP2PlayerExplorerAny] | None:
+    if row is None:
+        return None
+
+    try:
+        return {
+            column.key: getattr(row, column.key, None)
+            for column in row.__mapper__.columns
+        }
+
+    except Exception:
+        try:
+            return {
+                key: value
+                for key, value in vars(row).items()
+                if not key.startswith("_")
+            }
+
+        except Exception:
+            return None
+
+
+def _aisp2_player_explorer_display_value(
+    value: _AISP2PlayerExplorerAny,
+    fallback: str = "Not Available",
+) -> str:
+    clean_value = _aisp2_player_explorer_safe_string(value)
+
+    if clean_value is None:
+        return fallback
+
+    return clean_value
+
+
+def _aisp2_player_explorer_metric(
+    value: _AISP2PlayerExplorerAny,
+    label: str,
+    sample_size: int | None = None,
+    minimum_sample: int = PLAYER_EXPLORER_MINIMUM_SAMPLE_PA,
+    digits: int = 3,
+    suffix: str = "",
+    integer: bool = False,
+) -> dict[str, _AISP2PlayerExplorerAny]:
+    if sample_size is not None and sample_size < minimum_sample:
+        return {
+            "label": label,
+            "value": None,
+            "display": "Insufficient Sample",
+            "status": PLAYER_EXPLORER_STATUS_INSUFFICIENT_SAMPLE,
+            "sample_size": sample_size,
+            "minimum_sample": minimum_sample,
+        }
+
+    if value is None:
+        return {
+            "label": label,
+            "value": None,
+            "display": "Pending Ingestion",
+            "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+            "sample_size": sample_size,
+            "minimum_sample": minimum_sample,
+        }
+
+    if integer:
+        numeric_int = _aisp2_player_explorer_safe_int(value)
+
+        if numeric_int is None:
+            return {
+                "label": label,
+                "value": None,
+                "display": "Not Available",
+                "status": PLAYER_EXPLORER_STATUS_NOT_AVAILABLE,
+                "sample_size": sample_size,
+                "minimum_sample": minimum_sample,
+            }
+
+        return {
+            "label": label,
+            "value": numeric_int,
+            "display": f"{numeric_int}{suffix}",
+            "status": PLAYER_EXPLORER_STATUS_AVAILABLE,
+            "sample_size": sample_size,
+            "minimum_sample": minimum_sample,
+        }
+
+    numeric = _aisp2_player_explorer_safe_float(value)
+
+    if numeric is None:
+        return {
+            "label": label,
+            "value": None,
+            "display": "Not Available",
+            "status": PLAYER_EXPLORER_STATUS_NOT_AVAILABLE,
+            "sample_size": sample_size,
+            "minimum_sample": minimum_sample,
+        }
+
+    rounded = round(numeric, digits)
+
+    if suffix == "%":
+        display = f"{rounded:.1f}%"
+    elif digits == 3 and 0 <= rounded < 1:
+        display = f"{rounded:.3f}".replace("0.", ".", 1)
+    elif digits == 1:
+        display = f"{rounded:.1f}{suffix}"
+    elif digits == 2:
+        display = f"{rounded:.2f}{suffix}"
+    else:
+        display = f"{rounded}{suffix}"
+
+    return {
+        "label": label,
+        "value": rounded,
+        "display": display,
+        "status": PLAYER_EXPLORER_STATUS_AVAILABLE,
+        "sample_size": sample_size,
+        "minimum_sample": minimum_sample,
+    }
+
+
+def _aisp2_player_explorer_extract_year(value: _AISP2PlayerExplorerAny) -> int | None:
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    for token in text.replace("-", " ").replace("/", " ").split():
+        if token.isdigit() and len(token) == 4:
+            year = int(token)
+
+            if 1900 <= year <= 2100:
+                return year
+
+    return None
+
+
+def _aisp2_player_explorer_is_stale_timestamp(
+    value: _AISP2PlayerExplorerAny,
+    stale_days: int = PLAYER_EXPLORER_STALE_DATA_DAYS,
+) -> bool:
+    if value is None:
+        return False
+
+    try:
+        text = str(value).replace("Z", "+00:00")
+        timestamp = _AISP2_PLAYER_EXPLORER_DATETIME.fromisoformat(text)
+
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=_AISP2_PLAYER_EXPLORER_UTC)
+
+        age_days = (_AISP2_PLAYER_EXPLORER_DATETIME.now(_AISP2_PLAYER_EXPLORER_UTC) - timestamp).days
+
+        return age_days > stale_days
+
+    except Exception:
+        return False
+
+
+def _aisp2_player_explorer_count(database_session, model) -> int:
+    if model is None:
+        return 0
+
+    try:
+        return int(database_session.query(model).count())
+
+    except Exception:
+        return 0
+
+
+def _aisp2_player_explorer_query_first(database_session, model):
+    if model is None:
+        return None
+
+    try:
+        return database_session.query(model).first()
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_get_latest_row(
+    database_session,
+    model,
+    player,
+    season: int | None = None,
+):
+    if model is None or player is None:
+        return None
+
+    try:
+        query = database_session.query(model)
+        conditions = []
+
+        if hasattr(model, "player_id") and getattr(player, "id", None) is not None:
+            conditions.append(model.player_id == player.id)
+
+        if hasattr(model, "mlb_player_id") and getattr(player, "mlb_player_id", None) is not None:
+            conditions.append(model.mlb_player_id == player.mlb_player_id)
+
+        if hasattr(model, "player_name") and getattr(player, "full_name", None):
+            conditions.append(model.player_name == player.full_name)
+
+        if not conditions:
+            return None
+
+        try:
+            from sqlalchemy import or_ as _aisp2_player_explorer_or
+
+            if len(conditions) == 1:
+                query = query.filter(conditions[0])
+            else:
+                query = query.filter(_aisp2_player_explorer_or(*conditions))
+
+        except Exception:
+            query = query.filter(conditions[0])
+
+        if season is not None and hasattr(model, "season"):
+            query = query.filter(model.season == season)
+
+        if hasattr(model, "season"):
+            query = query.order_by(model.season.desc())
+
+        if hasattr(model, "updated_at"):
+            query = query.order_by(model.updated_at.desc())
+
+        if hasattr(model, "created_at"):
+            query = query.order_by(model.created_at.desc())
+
+        if hasattr(model, "id"):
+            query = query.order_by(model.id.desc())
+
+        return query.first()
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_get_rows(
+    database_session,
+    model,
+    player,
+    season: int | None = None,
+    limit: int = 10,
+) -> list:
+    if model is None or player is None:
+        return []
+
+    try:
+        query = database_session.query(model)
+        conditions = []
+
+        if hasattr(model, "player_id") and getattr(player, "id", None) is not None:
+            conditions.append(model.player_id == player.id)
+
+        if hasattr(model, "mlb_player_id") and getattr(player, "mlb_player_id", None) is not None:
+            conditions.append(model.mlb_player_id == player.mlb_player_id)
+
+        if hasattr(model, "player_name") and getattr(player, "full_name", None):
+            conditions.append(model.player_name == player.full_name)
+
+        if not conditions:
+            return []
+
+        try:
+            from sqlalchemy import or_ as _aisp2_player_explorer_or
+
+            if len(conditions) == 1:
+                query = query.filter(conditions[0])
+            else:
+                query = query.filter(_aisp2_player_explorer_or(*conditions))
+
+        except Exception:
+            query = query.filter(conditions[0])
+
+        if season is not None and hasattr(model, "season"):
+            query = query.filter(model.season == season)
+
+        if hasattr(model, "season"):
+            query = query.order_by(model.season.desc())
+
+        if hasattr(model, "game_date"):
+            query = query.order_by(model.game_date.desc())
+
+        if hasattr(model, "id"):
+            query = query.order_by(model.id.desc())
+
+        return query.limit(limit).all()
+
+    except Exception:
+        return []
+
+
+def _aisp2_player_explorer_resolve_team(database_session, team: str | int | None):
+    if _AISP2Team is None:
+        return None
+
+    if team is None or str(team).strip() == "":
+        return None
+
+    try:
+        team_int = _aisp2_player_explorer_safe_int(team)
+
+        query = database_session.query(_AISP2Team)
+
+        if team_int is not None:
+            found = (
+                query
+                .filter(_AISP2Team.id == team_int)
+                .first()
+            )
+
+            if found:
+                return found
+
+            found = (
+                query
+                .filter(_AISP2Team.mlb_team_id == team_int)
+                .first()
+            )
+
+            if found:
+                return found
+
+        normalized = _aisp2_player_explorer_normalize(team)
+        compact = _aisp2_player_explorer_compact(team)
+
+        teams = query.order_by(_AISP2Team.name.asc()).all()
+
+        for candidate in teams:
+            candidate_values = [
+                getattr(candidate, "name", None),
+                getattr(candidate, "abbreviation", None),
+                getattr(candidate, "team_code", None),
+                getattr(candidate, "file_code", None),
+                getattr(candidate, "club_name", None),
+                getattr(candidate, "short_name", None),
+                getattr(candidate, "location_name", None),
+            ]
+
+            for candidate_value in candidate_values:
+                if not candidate_value:
+                    continue
+
+                if _aisp2_player_explorer_normalize(candidate_value) == normalized:
+                    return candidate
+
+                if _aisp2_player_explorer_compact(candidate_value) == compact:
+                    return candidate
+
+        for candidate in teams:
+            candidate_name = _aisp2_player_explorer_normalize(getattr(candidate, "name", ""))
+
+            if normalized and normalized in candidate_name:
+                return candidate
+
+        return None
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_resolve_player(
+    database_session,
+    player: str | int | None,
+    team_obj=None,
+):
+    if _AISP2Player is None:
+        return None
+
+    if player is None or str(player).strip() == "":
+        return None
+
+    try:
+        player_int = _aisp2_player_explorer_safe_int(player)
+        base_query = database_session.query(_AISP2Player)
+
+        if team_obj is not None and getattr(team_obj, "id", None) is not None:
+            base_query = base_query.filter(_AISP2Player.current_team_id == team_obj.id)
+
+        if player_int is not None:
+            found = (
+                database_session.query(_AISP2Player)
+                .filter(_AISP2Player.id == player_int)
+                .first()
+            )
+
+            if found:
+                return found
+
+            found = (
+                database_session.query(_AISP2Player)
+                .filter(_AISP2Player.mlb_player_id == player_int)
+                .first()
+            )
+
+            if found:
+                return found
+
+        normalized = _aisp2_player_explorer_normalize(player)
+        compact = _aisp2_player_explorer_compact(player)
+
+        exact = (
+            base_query
+            .filter(_AISP2Player.full_name.ilike(str(player)))
+            .first()
+        )
+
+        if exact:
+            return exact
+
+        contains = (
+            base_query
+            .filter(_AISP2Player.full_name.ilike(f"%{player}%"))
+            .order_by(_AISP2Player.full_name.asc())
+            .first()
+        )
+
+        if contains:
+            return contains
+
+        candidates = base_query.limit(2000).all()
+
+        for candidate in candidates:
+            candidate_name = getattr(candidate, "full_name", "") or ""
+
+            if _aisp2_player_explorer_normalize(candidate_name) == normalized:
+                return candidate
+
+            if _aisp2_player_explorer_compact(candidate_name) == compact:
+                return candidate
+
+        tokens = [token for token in normalized.split() if token]
+
+        if tokens:
+            for candidate in candidates:
+                candidate_name = _aisp2_player_explorer_normalize(getattr(candidate, "full_name", ""))
+
+                if all(token in candidate_name for token in tokens):
+                    return candidate
+
+        return None
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_team_payload(team) -> dict[str, _AISP2PlayerExplorerAny] | None:
+    if team is None:
+        return None
+
+    return {
+        "id": getattr(team, "id", None),
+        "mlb_team_id": getattr(team, "mlb_team_id", None),
+        "name": getattr(team, "name", None),
+        "abbreviation": getattr(team, "abbreviation", None),
+        "team_code": getattr(team, "team_code", None),
+        "file_code": getattr(team, "file_code", None),
+        "franchise_name": getattr(team, "franchise_name", None),
+        "club_name": getattr(team, "club_name", None),
+        "short_name": getattr(team, "short_name", None),
+        "location_name": getattr(team, "location_name", None),
+        "league": getattr(team, "league", None),
+        "division": getattr(team, "division", None),
+        "venue": getattr(team, "venue", None),
+        "is_active": getattr(team, "is_active", None),
+    }
+
+
+def _aisp2_player_explorer_player_selector_payload(player) -> dict[str, _AISP2PlayerExplorerAny]:
+    return {
+        "id": getattr(player, "id", None),
+        "mlb_player_id": getattr(player, "mlb_player_id", None),
+        "full_name": getattr(player, "full_name", None),
+        "position": getattr(player, "position", None),
+        "position_code": getattr(player, "position_code", None),
+        "bats": getattr(player, "bats", None),
+        "throws": getattr(player, "throws", None),
+        "current_team_id": getattr(player, "current_team_id", None),
+        "active_status": getattr(player, "active_status", None),
+    }
+
+
+def _aisp2_player_explorer_player_identity_payload(player, team) -> dict[str, _AISP2PlayerExplorerAny]:
+    return {
+        "id": getattr(player, "id", None),
+        "player_id": getattr(player, "id", None),
+        "mlb_player_id": getattr(player, "mlb_player_id", None),
+        "full_name": getattr(player, "full_name", None),
+        "first_name": getattr(player, "first_name", None),
+        "last_name": getattr(player, "last_name", None),
+        "primary_number": getattr(player, "primary_number", None),
+        "position": getattr(player, "position", None),
+        "position_code": getattr(player, "position_code", None),
+        "bats": getattr(player, "bats", None),
+        "throws": getattr(player, "throws", None),
+        "height": getattr(player, "height", None),
+        "weight": getattr(player, "weight", None),
+        "birth_date": getattr(player, "birth_date", None),
+        "birth_city": getattr(player, "birth_city", None),
+        "birth_state_province": getattr(player, "birth_state_province", None),
+        "birth_country": getattr(player, "birth_country", None),
+        "mlb_debut_date": getattr(player, "mlb_debut_date", None),
+        "active_status": getattr(player, "active_status", None),
+        "current_team_id": getattr(player, "current_team_id", None),
+        "team": _aisp2_player_explorer_team_payload(team),
+    }
+
+
+def _aisp2_player_explorer_roster_payload(database_session, player) -> list[dict[str, _AISP2PlayerExplorerAny]]:
+    if _AISP2RosterEntry is None or player is None:
+        return []
+
+    try:
+        rows = (
+            database_session.query(_AISP2RosterEntry)
+            .filter(_AISP2RosterEntry.player_id == player.id)
+            .order_by(
+                _AISP2RosterEntry.season.desc(),
+                _AISP2RosterEntry.id.desc(),
+            )
+            .limit(10)
+            .all()
+        )
+
+        return [
+            _aisp2_player_explorer_column_dict(row) or {}
+            for row in rows
+        ]
+
+    except Exception:
+        return []
+
+
+def _aisp2_player_explorer_get_team_plate_discipline(database_session, team, season: int | None = None):
+    if _AISP2TeamPlateDiscipline is None or team is None:
+        return None
+
+    try:
+        query = database_session.query(_AISP2TeamPlateDiscipline)
+        conditions = []
+
+        if getattr(team, "id", None) is not None:
+            conditions.append(_AISP2TeamPlateDiscipline.team_id == team.id)
+
+        if getattr(team, "mlb_team_id", None) is not None:
+            conditions.append(_AISP2TeamPlateDiscipline.mlb_team_id == team.mlb_team_id)
+
+        if getattr(team, "name", None):
+            conditions.append(_AISP2TeamPlateDiscipline.team_name == team.name)
+
+        if getattr(team, "abbreviation", None):
+            conditions.append(_AISP2TeamPlateDiscipline.team_abbreviation == team.abbreviation)
+
+        if not conditions:
+            return None
+
+        try:
+            from sqlalchemy import or_ as _aisp2_player_explorer_or
+
+            if len(conditions) == 1:
+                query = query.filter(conditions[0])
+            else:
+                query = query.filter(_aisp2_player_explorer_or(*conditions))
+
+        except Exception:
+            query = query.filter(conditions[0])
+
+        if season is not None:
+            query = query.filter(_AISP2TeamPlateDiscipline.season == season)
+
+        query = query.order_by(
+            _AISP2TeamPlateDiscipline.season.desc(),
+            _AISP2TeamPlateDiscipline.id.desc(),
+        )
+
+        return query.first()
+
+    except Exception:
+        return None
+
+
+def _aisp2_player_explorer_build_stat_metrics(
+    season_stats: dict[str, _AISP2PlayerExplorerAny] | None,
+    advanced_stats: dict[str, _AISP2PlayerExplorerAny] | None,
+    home_run_profile: dict[str, _AISP2PlayerExplorerAny] | None,
+) -> dict[str, dict[str, _AISP2PlayerExplorerAny]]:
+    season_stats = season_stats or {}
+    advanced_stats = advanced_stats or {}
+    home_run_profile = home_run_profile or {}
+
+    sample_size = (
+        _aisp2_player_explorer_safe_int(season_stats.get("plate_appearances"))
+        or _aisp2_player_explorer_safe_int(advanced_stats.get("plate_appearances"))
+    )
+
+    return {
+        "avg": _aisp2_player_explorer_metric(
+            season_stats.get("batting_average"),
+            "AVG",
+            sample_size=sample_size,
+            digits=3,
+        ),
+        "ops": _aisp2_player_explorer_metric(
+            season_stats.get("ops"),
+            "OPS",
+            sample_size=sample_size,
+            digits=3,
+        ),
+        "hr": _aisp2_player_explorer_metric(
+            home_run_profile.get("home_runs") if home_run_profile.get("home_runs") is not None else season_stats.get("home_runs"),
+            "HR",
+            sample_size=sample_size,
+            integer=True,
+        ),
+        "rbi": _aisp2_player_explorer_metric(
+            season_stats.get("rbi"),
+            "RBI",
+            sample_size=sample_size,
+            integer=True,
+        ),
+        "pa": _aisp2_player_explorer_metric(
+            sample_size,
+            "PA",
+            integer=True,
+        ),
+        "k_percent": _aisp2_player_explorer_metric(
+            advanced_stats.get("strikeout_percent"),
+            "K%",
+            sample_size=sample_size,
+            digits=1,
+            suffix="%",
+        ),
+        "bb_percent": _aisp2_player_explorer_metric(
+            advanced_stats.get("walk_percent"),
+            "BB%",
+            sample_size=sample_size,
+            digits=1,
+            suffix="%",
+        ),
+        "woba": _aisp2_player_explorer_metric(
+            advanced_stats.get("woba"),
+            "wOBA",
+            sample_size=sample_size,
+            digits=3,
+        ),
+        "xwoba": _aisp2_player_explorer_metric(
+            advanced_stats.get("expected_woba"),
+            "xwOBA",
+            sample_size=sample_size,
+            digits=3,
+        ),
+    }
+
+
+def _aisp2_player_explorer_build_statcast_metrics(
+    batted_ball: dict[str, _AISP2PlayerExplorerAny] | None,
+    percentiles: dict[str, _AISP2PlayerExplorerAny] | None,
+    home_run_profile: dict[str, _AISP2PlayerExplorerAny] | None,
+    pitch_tempo: dict[str, _AISP2PlayerExplorerAny] | None,
+) -> dict[str, dict[str, _AISP2PlayerExplorerAny]]:
+    batted_ball = batted_ball or {}
+    percentiles = percentiles or {}
+    home_run_profile = home_run_profile or {}
+    pitch_tempo = pitch_tempo or {}
+
+    return {
+        "average_exit_velocity": _aisp2_player_explorer_metric(
+            batted_ball.get("average_exit_velocity") if batted_ball.get("average_exit_velocity") is not None else home_run_profile.get("average_exit_velocity"),
+            "Average Exit Velocity",
+            digits=1,
+            suffix=" mph",
+        ),
+        "max_exit_velocity": _aisp2_player_explorer_metric(
+            batted_ball.get("max_exit_velocity") if batted_ball.get("max_exit_velocity") is not None else home_run_profile.get("max_exit_velocity"),
+            "Max Exit Velocity",
+            digits=1,
+            suffix=" mph",
+        ),
+        "launch_angle": _aisp2_player_explorer_metric(
+            batted_ball.get("launch_angle") if batted_ball.get("launch_angle") is not None else home_run_profile.get("average_launch_angle"),
+            "Launch Angle",
+            digits=1,
+        ),
+        "barrel_percent": _aisp2_player_explorer_metric(
+            batted_ball.get("barrel_percent"),
+            "Barrel%",
+            digits=1,
+            suffix="%",
+        ),
+        "hard_hit_percent": _aisp2_player_explorer_metric(
+            batted_ball.get("hard_hit_percent"),
+            "Hard Hit%",
+            digits=1,
+            suffix="%",
+        ),
+        "xwoba_percentile": _aisp2_player_explorer_metric(
+            percentiles.get("xwoba_percentile"),
+            "xwOBA Percentile",
+            digits=0,
+        ),
+        "barrel_percentile": _aisp2_player_explorer_metric(
+            percentiles.get("barrel_percentile"),
+            "Barrel Percentile",
+            digits=0,
+        ),
+        "pitch_tempo": _aisp2_player_explorer_metric(
+            pitch_tempo.get("pitch_tempo"),
+            "Pitch Tempo",
+            digits=1,
+        ),
+    }
+
+
+def _aisp2_player_explorer_build_splits_placeholder() -> dict[str, _AISP2PlayerExplorerAny]:
+    return {
+        "home_away": {
+            "home": {
+                "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+                "display": "Pending Ingestion",
+                "source": "game_logs_required",
+            },
+            "away": {
+                "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+                "display": "Pending Ingestion",
+                "source": "game_logs_required",
+            },
+        },
+        "left_right_pitching": {
+            "vs_left": {
+                "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+                "display": "Pending Ingestion",
+                "source": "pitch_hand_split_required",
+            },
+            "vs_right": {
+                "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+                "display": "Pending Ingestion",
+                "source": "pitch_hand_split_required",
+            },
+        },
+    }
+
+
+def _aisp2_player_explorer_build_freshness(
+    rows: dict[str, dict[str, _AISP2PlayerExplorerAny] | None],
+) -> dict[str, _AISP2PlayerExplorerAny]:
+    freshness_rows = {}
+    stale_sources = []
+
+    for source_name, row in rows.items():
+        if not row:
+            freshness_rows[source_name] = {
+                "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+                "display": "Pending Ingestion",
+                "source_updated_at": None,
+            }
+            continue
+
+        updated_at = row.get("updated_at") or row.get("created_at")
+        stale = _aisp2_player_explorer_is_stale_timestamp(updated_at)
+
+        if stale:
+            stale_sources.append(source_name)
+
+        freshness_rows[source_name] = {
+            "status": PLAYER_EXPLORER_STATUS_STALE_DATA if stale else PLAYER_EXPLORER_STATUS_AVAILABLE,
+            "display": "Stale Data" if stale else _aisp2_player_explorer_display_value(updated_at, fallback="Not Available"),
+            "source_updated_at": updated_at,
+        }
+
+    return {
+        "sources": freshness_rows,
+        "stale_sources": stale_sources,
+        "has_stale_data": len(stale_sources) > 0,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+    }
+
+
+def _aisp2_player_explorer_prediction_readiness(
+    metrics: dict[str, dict[str, _AISP2PlayerExplorerAny]],
+    statcast_metrics: dict[str, dict[str, _AISP2PlayerExplorerAny]],
+    availability: dict[str, _AISP2PlayerExplorerAny],
+) -> dict[str, _AISP2PlayerExplorerAny]:
+    available_count = 0
+    total_count = 0
+
+    for metric_group in [metrics, statcast_metrics]:
+        for metric in metric_group.values():
+            total_count += 1
+            if metric.get("status") == PLAYER_EXPLORER_STATUS_AVAILABLE:
+                available_count += 1
+
+    coverage_percent = round((available_count / total_count) * 100, 1) if total_count else 0
+
+    ready = coverage_percent >= 50
+
+    return {
+        "ready": ready,
+        "status": PLAYER_EXPLORER_STATUS_READY if ready else PLAYER_EXPLORER_STATUS_PARTIAL,
+        "coverage_percent": coverage_percent,
+        "available_metric_count": available_count,
+        "total_metric_count": total_count,
+        "display": "Ready" if ready else "Pending Ingestion",
+        "model_note": (
+            "Player profile has enough database-backed features for baseline prediction context."
+            if ready
+            else "More warehouse features are needed before prediction outputs should be trusted."
+        ),
+        "availability": availability,
+    }
+
+
+def _aisp2_player_explorer_source_attribution(
+    rows: dict[str, dict[str, _AISP2PlayerExplorerAny] | None],
+) -> list[dict[str, _AISP2PlayerExplorerAny]]:
+    sources = []
+
+    for source_name, row in rows.items():
+        if not row:
+            sources.append(
+                {
+                    "source": source_name,
+                    "status": PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+                    "source_file": None,
+                    "source_updated_at": None,
+                }
+            )
+            continue
+
+        sources.append(
+            {
+                "source": source_name,
+                "status": PLAYER_EXPLORER_STATUS_AVAILABLE,
+                "source_file": row.get("source_file") or row.get("source") or "database",
+                "source_updated_at": row.get("updated_at") or row.get("created_at"),
+            }
+        )
+
+    return sources
+
+
+def _aisp2_player_explorer_warnings(
+    player,
+    identity: dict[str, _AISP2PlayerExplorerAny],
+    metrics: dict[str, dict[str, _AISP2PlayerExplorerAny]],
+    statcast_metrics: dict[str, dict[str, _AISP2PlayerExplorerAny]],
+    freshness: dict[str, _AISP2PlayerExplorerAny],
+) -> list[str]:
+    warnings = []
+
+    if not getattr(player, "active_status", None):
+        warnings.append("Player is not marked active in the database.")
+
+    if not identity.get("team"):
+        warnings.append("Current team is not linked for this player.")
+
+    for metric_key in ["avg", "ops", "hr", "rbi"]:
+        metric = metrics.get(metric_key, {})
+        if metric.get("status") != PLAYER_EXPLORER_STATUS_AVAILABLE:
+            warnings.append(f"{metric.get('label', metric_key)} is {metric.get('display')}.")
+
+    missing_statcast = [
+        metric.get("label")
+        for metric in statcast_metrics.values()
+        if metric.get("status") != PLAYER_EXPLORER_STATUS_AVAILABLE
+    ]
+
+    if missing_statcast:
+        warnings.append("Some Statcast metrics are pending ingestion.")
+
+    if freshness.get("has_stale_data"):
+        warnings.append("One or more source datasets are stale.")
+
+    if not warnings:
+        warnings.append("No critical Player Explorer warnings detected.")
+
+    return warnings
+
+
+def _aisp2_player_explorer_profile_payload(
+    database_session,
+    player,
+    team,
+    season: int | None = None,
+) -> dict[str, _AISP2PlayerExplorerAny]:
+    season_stats_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerSeasonStat,
+        player,
+        season,
+    )
+
+    advanced_stats_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerAdvancedBattingStat,
+        player,
+        season,
+    )
+
+    percentiles_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerPercentileRanking,
+        player,
+        season,
+    )
+
+    pitch_arsenal_rows = _aisp2_player_explorer_get_rows(
+        database_session,
+        _AISP2PlayerPitchArsenal,
+        player,
+        season,
+        limit=12,
+    )
+
+    pitch_tempo_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerPitchTempo,
+        player,
+        season,
+    )
+
+    batted_ball_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerBattedBallProfile,
+        player,
+        season,
+    )
+
+    batting_stance_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerBattingStance,
+        player,
+        season,
+    )
+
+    home_run_profile_row = _aisp2_player_explorer_get_latest_row(
+        database_session,
+        _AISP2PlayerHomeRunProfile,
+        player,
+        season,
+    )
+
+    team_plate_discipline_row = _aisp2_player_explorer_get_team_plate_discipline(
+        database_session,
+        team,
+        season,
+    )
+
+    game_log_rows = _aisp2_player_explorer_get_rows(
+        database_session,
+        _AISP2PlayerGameStat,
+        player,
+        season,
+        limit=10,
+    )
+
+    prediction_rows = _aisp2_player_explorer_get_rows(
+        database_session,
+        _AISP2PredictionResult,
+        player,
+        season,
+        limit=10,
+    )
+
+    season_stats = _aisp2_player_explorer_column_dict(season_stats_row)
+    advanced_stats = _aisp2_player_explorer_column_dict(advanced_stats_row)
+    percentiles = _aisp2_player_explorer_column_dict(percentiles_row)
+    pitch_tempo = _aisp2_player_explorer_column_dict(pitch_tempo_row)
+    batted_ball = _aisp2_player_explorer_column_dict(batted_ball_row)
+    batting_stance = _aisp2_player_explorer_column_dict(batting_stance_row)
+    home_run_profile = _aisp2_player_explorer_column_dict(home_run_profile_row)
+    team_plate_discipline = _aisp2_player_explorer_column_dict(team_plate_discipline_row)
+
+    identity = _aisp2_player_explorer_player_identity_payload(
+        player,
+        team,
+    )
+
+    roster_context = _aisp2_player_explorer_roster_payload(
+        database_session,
+        player,
+    )
+
+    metrics = _aisp2_player_explorer_build_stat_metrics(
+        season_stats,
+        advanced_stats,
+        home_run_profile,
+    )
+
+    statcast_metrics = _aisp2_player_explorer_build_statcast_metrics(
+        batted_ball,
+        percentiles,
+        home_run_profile,
+        pitch_tempo,
+    )
+
+    raw_rows = {
+        "season_stats": season_stats,
+        "advanced_batting": advanced_stats,
+        "percentile_rankings": percentiles,
+        "pitch_tempo": pitch_tempo,
+        "batted_ball_profile": batted_ball,
+        "batting_stance": batting_stance,
+        "home_run_profile": home_run_profile,
+        "team_plate_discipline": team_plate_discipline,
+    }
+
+    availability = {
+        key: value is not None and value != {}
+        for key, value in raw_rows.items()
+    }
+
+    freshness = _aisp2_player_explorer_build_freshness(
+        raw_rows,
+    )
+
+    prediction_readiness = _aisp2_player_explorer_prediction_readiness(
+        metrics,
+        statcast_metrics,
+        availability,
+    )
+
+    warnings = _aisp2_player_explorer_warnings(
+        player,
+        identity,
+        metrics,
+        statcast_metrics,
+        freshness,
+    )
+
+    sample_sizes = {
+        "plate_appearances": (
+            _aisp2_player_explorer_safe_int((season_stats or {}).get("plate_appearances"))
+            or _aisp2_player_explorer_safe_int((advanced_stats or {}).get("plate_appearances"))
+        ),
+        "recent_game_count": len(game_log_rows),
+        "pitch_arsenal_count": len(pitch_arsenal_rows),
+        "prediction_history_count": len(prediction_rows),
+    }
+
+    recent_form = {
+        "status": PLAYER_EXPLORER_STATUS_AVAILABLE if game_log_rows else PLAYER_EXPLORER_STATUS_PENDING_INGESTION,
+        "display": "Available" if game_log_rows else "Pending Ingestion",
+        "games": [_aisp2_player_explorer_column_dict(row) or {} for row in game_log_rows],
+    }
+
+    splits = _aisp2_player_explorer_build_splits_placeholder()
+
+    return {
+        "status": PLAYER_EXPLORER_STATUS_READY,
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+        "season": season,
+        "player_identity": identity,
+        "current_team": _aisp2_player_explorer_team_payload(team),
+        "position_and_handedness": {
+            "position": identity.get("position") or "Not Available",
+            "position_code": identity.get("position_code") or "Not Available",
+            "bats": identity.get("bats") or "Not Available",
+            "throws": identity.get("throws") or "Not Available",
+        },
+        "season_statistics": {
+            "raw": season_stats,
+            "metrics": metrics,
+        },
+        "advanced_batting": advanced_stats,
+        "recent_form": recent_form,
+        "home_away_splits": splits["home_away"],
+        "left_right_pitching_splits": splits["left_right_pitching"],
+        "statcast_metrics": {
+            "raw_batted_ball": batted_ball,
+            "raw_percentiles": percentiles,
+            "raw_pitch_tempo": pitch_tempo,
+            "raw_pitch_arsenal": [_aisp2_player_explorer_column_dict(row) or {} for row in pitch_arsenal_rows],
+            "raw_batting_stance": batting_stance,
+            "raw_home_run_profile": home_run_profile,
+            "metrics": statcast_metrics,
+        },
+        "team_plate_discipline": team_plate_discipline,
+        "data_freshness": freshness,
+        "sample_sizes": sample_sizes,
+        "prediction_readiness": prediction_readiness,
+        "source_attribution": _aisp2_player_explorer_source_attribution(raw_rows),
+        "warnings": warnings,
+        "roster_context": roster_context,
+        "prediction_history": [_aisp2_player_explorer_column_dict(row) or {} for row in prediction_rows],
+        "transparent_display_rules": {
+            "missing_avg": "Pending Ingestion",
+            "missing_ops": "Pending Ingestion",
+            "missing_hr": "Pending Ingestion",
+            "missing_rbi": "Pending Ingestion",
+            "no_fabricated_zeroes": True,
+            "no_hard_coded_demo_profile": True,
+        },
+    }
+
+
+def _aisp2_player_explorer_bootstrap_payload(database_session) -> dict[str, _AISP2PlayerExplorerAny]:
+    if _AISP2Team is None or _AISP2Player is None:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Team or Player model is unavailable.",
+        }
+
+    teams = (
+        database_session.query(_AISP2Team)
+        .order_by(_AISP2Team.name.asc())
+        .all()
+    )
+
+    team_payloads = []
+    players_by_team: dict[str, list[dict[str, _AISP2PlayerExplorerAny]]] = {}
+
+    for team in teams:
+        team_payload = _aisp2_player_explorer_team_payload(team)
+        team_payloads.append(team_payload)
+
+        players = (
+            database_session.query(_AISP2Player)
+            .filter(_AISP2Player.current_team_id == team.id)
+            .order_by(_AISP2Player.full_name.asc())
+            .limit(PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM)
+            .all()
+        )
+
+        players_by_team[str(team.id)] = [
+            _aisp2_player_explorer_player_selector_payload(player)
+            for player in players
+        ]
+
+    return {
+        "status": PLAYER_EXPLORER_STATUS_READY,
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+        "team_count": len(team_payloads),
+        "player_count": _aisp2_player_explorer_count(database_session, _AISP2Player),
+        "teams": team_payloads,
+        "players_by_team": players_by_team,
+        "default_team": team_payloads[0] if team_payloads else None,
+        "default_players": players_by_team.get(str(team_payloads[0]["id"]), []) if team_payloads else [],
+        "display_rules": {
+            "missing_statistics": "Pending Ingestion",
+            "not_available": "Not Available",
+            "insufficient_sample": "Insufficient Sample",
+            "stale_data": "Stale Data",
+            "no_demo_values": True,
+        },
+    }
+
+
+def _aisp2_player_explorer_audit_payload(database_session) -> dict[str, _AISP2PlayerExplorerAny]:
+    team_count = _aisp2_player_explorer_count(database_session, _AISP2Team)
+    player_count = _aisp2_player_explorer_count(database_session, _AISP2Player)
+    roster_count = _aisp2_player_explorer_count(database_session, _AISP2RosterEntry)
+    season_stat_count = _aisp2_player_explorer_count(database_session, _AISP2PlayerSeasonStat)
+
+    missing_player_required_fields = []
+    duplicate_mlb_player_ids = []
+    missing_roster_player_links = []
+    missing_roster_team_links = []
+    missing_stat_player_links = []
+
+    try:
+        players = database_session.query(_AISP2Player).all()
+
+        seen_mlb_ids = {}
+
+        for player in players:
+            for field_name in PLAYER_EXPLORER_REQUIRED_PLAYER_FIELDS:
+                value = getattr(player, field_name, None)
+
+                if value is None or value == "":
+                    missing_player_required_fields.append(
+                        {
+                            "player_id": getattr(player, "id", None),
+                            "mlb_player_id": getattr(player, "mlb_player_id", None),
+                            "full_name": getattr(player, "full_name", None),
+                            "missing_field": field_name,
+                        }
+                    )
+
+            mlb_player_id = getattr(player, "mlb_player_id", None)
+
+            if mlb_player_id is not None:
+                seen_mlb_ids.setdefault(mlb_player_id, []).append(getattr(player, "id", None))
+
+        duplicate_mlb_player_ids = [
+            {
+                "mlb_player_id": mlb_player_id,
+                "player_ids": player_ids,
+            }
+            for mlb_player_id, player_ids in seen_mlb_ids.items()
+            if len(player_ids) > 1
+        ]
+
+    except Exception as error:
+        missing_player_required_fields.append(
+            {
+                "error": str(error),
+            }
+        )
+
+    try:
+        roster_entries = database_session.query(_AISP2RosterEntry).all() if _AISP2RosterEntry is not None else []
+
+        for roster_entry in roster_entries:
+            player_id = getattr(roster_entry, "player_id", None)
+            team_id = getattr(roster_entry, "team_id", None)
+
+            if player_id is None or database_session.query(_AISP2Player).filter(_AISP2Player.id == player_id).first() is None:
+                missing_roster_player_links.append(
+                    {
+                        "roster_entry_id": getattr(roster_entry, "id", None),
+                        "player_id": player_id,
+                    }
+                )
+
+            if team_id is None or database_session.query(_AISP2Team).filter(_AISP2Team.id == team_id).first() is None:
+                missing_roster_team_links.append(
+                    {
+                        "roster_entry_id": getattr(roster_entry, "id", None),
+                        "team_id": team_id,
+                    }
+                )
+
+    except Exception as error:
+        missing_roster_player_links.append({"error": str(error)})
+
+    try:
+        if _AISP2PlayerSeasonStat is not None:
+            season_stats = database_session.query(_AISP2PlayerSeasonStat).all()
+
+            for stat in season_stats:
+                player_id = getattr(stat, "player_id", None)
+
+                if player_id is None or database_session.query(_AISP2Player).filter(_AISP2Player.id == player_id).first() is None:
+                    missing_stat_player_links.append(
+                        {
+                            "stat_id": getattr(stat, "id", None),
+                            "player_id": player_id,
+                        }
+                    )
+
+    except Exception as error:
+        missing_stat_player_links.append({"error": str(error)})
+
+    statcast_counts = {
+        "advanced_batting_stats": _aisp2_player_explorer_count(database_session, _AISP2PlayerAdvancedBattingStat),
+        "percentile_rankings": _aisp2_player_explorer_count(database_session, _AISP2PlayerPercentileRanking),
+        "pitch_arsenals": _aisp2_player_explorer_count(database_session, _AISP2PlayerPitchArsenal),
+        "pitch_tempo": _aisp2_player_explorer_count(database_session, _AISP2PlayerPitchTempo),
+        "batted_ball_profiles": _aisp2_player_explorer_count(database_session, _AISP2PlayerBattedBallProfile),
+        "batting_stances": _aisp2_player_explorer_count(database_session, _AISP2PlayerBattingStance),
+        "home_run_profiles": _aisp2_player_explorer_count(database_session, _AISP2PlayerHomeRunProfile),
+        "team_plate_discipline": _aisp2_player_explorer_count(database_session, _AISP2TeamPlateDiscipline),
+        "game_predictions": _aisp2_player_explorer_count(database_session, _AISP2PredictionResult),
+    }
+
+    players_from_all_teams = False
+
+    try:
+        teams_with_players = (
+            database_session.query(_AISP2Player.current_team_id)
+            .filter(_AISP2Player.current_team_id.isnot(None))
+            .distinct()
+            .count()
+        )
+
+        players_from_all_teams = teams_with_players >= 30
+
+    except Exception:
+        teams_with_players = 0
+
+    checks = {
+        "team_count_is_30": team_count == 30,
+        "player_count_present": player_count > 0,
+        "roster_entries_present": roster_count > 0,
+        "every_active_player_required_fields": len(missing_player_required_fields) == 0,
+        "no_duplicate_mlb_player_id_values": len(duplicate_mlb_player_ids) == 0,
+        "no_roster_entry_missing_player": len(missing_roster_player_links) == 0,
+        "no_roster_entry_missing_team": len(missing_roster_team_links) == 0,
+        "no_player_statistics_missing_player": len(missing_stat_player_links) == 0,
+        "players_from_all_30_teams": players_from_all_teams,
+        "player_explorer_database_backed": True,
+        "no_fabricated_zero_statistics": True,
+    }
+
+    passed_count = sum(1 for value in checks.values() if value is True)
+    total_count = len(checks)
+
+    return {
+        "status": PLAYER_EXPLORER_STATUS_READY if passed_count == total_count else PLAYER_EXPLORER_STATUS_PARTIAL,
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+        "counts": {
+            "team_count": team_count,
+            "player_count": player_count,
+            "roster_entry_count": roster_count,
+            "season_stat_count": season_stat_count,
+            **statcast_counts,
+        },
+        "checks": checks,
+        "passed_check_count": passed_count,
+        "total_check_count": total_count,
+        "completion_percent": round((passed_count / total_count) * 100, 1) if total_count else 0,
+        "failures": {
+            "missing_player_required_fields": missing_player_required_fields[:100],
+            "duplicate_mlb_player_ids": duplicate_mlb_player_ids[:100],
+            "missing_roster_player_links": missing_roster_player_links[:100],
+            "missing_roster_team_links": missing_roster_team_links[:100],
+            "missing_stat_player_links": missing_stat_player_links[:100],
+        },
+        "next_required_action": (
+            "Player Explorer database completeness checks passed."
+            if passed_count == total_count
+            else "Complete roster/stat warehouse ingestion, then rerun this audit."
+        ),
+    }
+
+
+@app.get("/api/player-explorer/bootstrap")
+def api_player_explorer_bootstrap() -> dict:
+    if not _aisp2_player_explorer_database_available():
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Database or ORM models are unavailable.",
+            "teams": [],
+            "players_by_team": {},
+        }
+
+    try:
+        with _aisp2_managed_database_session() as database_session:
+            return _aisp2_player_explorer_bootstrap_payload(
+                database_session,
+            )
+
+    except Exception as error:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Player Explorer bootstrap failed.",
+            "error": str(error),
+            "teams": [],
+            "players_by_team": {},
+        }
+
+
+@app.get("/api/player-explorer/profile")
+def api_player_explorer_profile(
+    team: str | None = None,
+    player: str | None = None,
+    season: int | None = None,
+) -> dict:
+    if not _aisp2_player_explorer_database_available():
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Database or ORM models are unavailable.",
+        }
+
+    try:
+        with _aisp2_managed_database_session() as database_session:
+            team_obj = _aisp2_player_explorer_resolve_team(
+                database_session,
+                team,
+            )
+
+            player_obj = _aisp2_player_explorer_resolve_player(
+                database_session,
+                player,
+                team_obj=team_obj,
+            )
+
+            if player_obj is None:
+                return {
+                    "status": PLAYER_EXPLORER_STATUS_NOT_AVAILABLE,
+                    "api_version": PLAYER_EXPLORER_API_VERSION,
+                    "message": "Player was not found in the database.",
+                    "requested_team": team,
+                    "requested_player": player,
+                    "display": "Not Available",
+                }
+
+            if team_obj is None:
+                try:
+                    team_obj = player_obj.team
+                except Exception:
+                    team_obj = None
+
+            return _aisp2_player_explorer_profile_payload(
+                database_session,
+                player_obj,
+                team_obj,
+                season,
+            )
+
+    except Exception as error:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Player Explorer profile failed.",
+            "requested_team": team,
+            "requested_player": player,
+            "error": str(error),
+        }
+
+
+@app.get("/api/player-explorer/audit")
+def api_player_explorer_audit() -> dict:
+    if not _aisp2_player_explorer_database_available():
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Database or ORM models are unavailable.",
+        }
+
+    try:
+        with _aisp2_managed_database_session() as database_session:
+            return _aisp2_player_explorer_audit_payload(
+                database_session,
+            )
+
+    except Exception as error:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "message": "Player Explorer audit failed.",
+            "error": str(error),
+        }
+# ============================================================
+# SECTION 12.95.90 - PLAYER EXPLORER COMPATIBILITY ENDPOINTS
+# FILE: main.py
+# PURPOSE:
+# Provide both the requested legacy endpoints and the richer
+# /api/v2/player-explorer endpoints expected by newer Player
+# Explorer templates and JavaScript runtimes.
+#
+# This keeps the page stable while the frontend transitions from
+# old selector calls to the new database-backed bootstrap/profile
+# contract.
+# ============================================================
+
+def _aisp2_player_explorer_teams_only_payload(database_session) -> dict:
+    bootstrap = _aisp2_player_explorer_bootstrap_payload(
+        database_session,
+    )
+
+    return {
+        "status": bootstrap.get("status"),
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": bootstrap.get("checked_at"),
+        "team_count": bootstrap.get("team_count", 0),
+        "teams": bootstrap.get("teams", []),
+    }
+
+
+def _aisp2_player_explorer_team_players_payload(
+    database_session,
+    team_identifier: str | int | None,
+) -> dict:
+    team_obj = _aisp2_player_explorer_resolve_team(
+        database_session,
+        team_identifier,
+    )
+
+    if team_obj is None:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_NOT_AVAILABLE,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "requested_team": team_identifier,
+            "team": None,
+            "players": [],
+            "player_count": 0,
+            "message": "Team was not found in the database.",
+        }
+
+    players = (
+        database_session.query(_AISP2Player)
+        .filter(_AISP2Player.current_team_id == team_obj.id)
+        .order_by(_AISP2Player.full_name.asc())
+        .limit(PLAYER_EXPLORER_MAX_PLAYERS_PER_TEAM)
+        .all()
+    )
+
+    return {
+        "status": PLAYER_EXPLORER_STATUS_READY,
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+        "requested_team": team_identifier,
+        "team": _aisp2_player_explorer_team_payload(team_obj),
+        "player_count": len(players),
+        "players": [
+            _aisp2_player_explorer_player_selector_payload(player)
+            for player in players
+        ],
+    }
+
+
+def _aisp2_player_explorer_health_payload(database_session) -> dict:
+    return {
+        "status": PLAYER_EXPLORER_STATUS_READY,
+        "api_version": PLAYER_EXPLORER_API_VERSION,
+        "checked_at": _aisp2_player_explorer_now_iso(),
+        "database_available": _aisp2_player_explorer_database_available(),
+        "counts": {
+            "teams": _aisp2_player_explorer_count(database_session, _AISP2Team),
+            "players": _aisp2_player_explorer_count(database_session, _AISP2Player),
+            "roster_entries": _aisp2_player_explorer_count(database_session, _AISP2RosterEntry),
+            "season_stats": _aisp2_player_explorer_count(database_session, _AISP2PlayerSeasonStat),
+            "advanced_batting": _aisp2_player_explorer_count(database_session, _AISP2PlayerAdvancedBattingStat),
+            "percentiles": _aisp2_player_explorer_count(database_session, _AISP2PlayerPercentileRanking),
+            "batted_ball": _aisp2_player_explorer_count(database_session, _AISP2PlayerBattedBallProfile),
+            "home_runs": _aisp2_player_explorer_count(database_session, _AISP2PlayerHomeRunProfile),
+        },
+        "display_rules": {
+            "missing_avg": "Pending Ingestion",
+            "missing_ops": "Pending Ingestion",
+            "missing_hr": "Pending Ingestion",
+            "missing_rbi": "Pending Ingestion",
+            "no_fabricated_zeroes": True,
+        },
+    }
+
+
+@app.get("/api/player-explorer/teams")
+def api_player_explorer_teams() -> dict:
+    if not _aisp2_player_explorer_database_available():
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "teams": [],
+            "message": "Database or ORM models are unavailable.",
+        }
+
+    try:
+        with _aisp2_managed_database_session() as database_session:
+            return _aisp2_player_explorer_teams_only_payload(
+                database_session,
+            )
+
+    except Exception as error:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "teams": [],
+            "error": str(error),
+        }
+
+
+@app.get("/api/player-explorer/teams/{team_identifier}/players")
+def api_player_explorer_team_players(
+    team_identifier: str,
+) -> dict:
+    if not _aisp2_player_explorer_database_available():
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "players": [],
+            "message": "Database or ORM models are unavailable.",
+        }
+
+    try:
+        with _aisp2_managed_database_session() as database_session:
+            return _aisp2_player_explorer_team_players_payload(
+                database_session,
+                team_identifier,
+            )
+
+    except Exception as error:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "players": [],
+            "requested_team": team_identifier,
+            "error": str(error),
+        }
+
+
+@app.get("/api/player-explorer/players/{player_identifier}")
+def api_player_explorer_player_by_identifier(
+    player_identifier: str,
+    season: int | None = None,
+) -> dict:
+    return api_player_explorer_profile(
+        team=None,
+        player=player_identifier,
+        season=season,
+    )
+
+
+@app.get("/api/player-explorer/health")
+def api_player_explorer_health() -> dict:
+    if not _aisp2_player_explorer_database_available():
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "database_available": False,
+            "message": "Database or ORM models are unavailable.",
+        }
+
+    try:
+        with _aisp2_managed_database_session() as database_session:
+            return _aisp2_player_explorer_health_payload(
+                database_session,
+            )
+
+    except Exception as error:
+        return {
+            "status": PLAYER_EXPLORER_STATUS_ERROR,
+            "api_version": PLAYER_EXPLORER_API_VERSION,
+            "database_available": False,
+            "error": str(error),
+        }
+
+
+@app.get("/api/player-explorer/completion-gate")
+def api_player_explorer_completion_gate() -> dict:
+    return api_player_explorer_audit()
+
+
+@app.get("/api/player-explorer/integrity")
+def api_player_explorer_integrity() -> dict:
+    return api_player_explorer_audit()
+
+
+@app.get("/api/v2/player-explorer/bootstrap")
+def api_v2_player_explorer_bootstrap() -> dict:
+    return api_player_explorer_bootstrap()
+
+
+@app.get("/api/v2/player-explorer/teams")
+def api_v2_player_explorer_teams() -> dict:
+    return api_player_explorer_teams()
+
+
+@app.get("/api/v2/player-explorer/teams/{team_identifier}/players")
+def api_v2_player_explorer_team_players(
+    team_identifier: str,
+) -> dict:
+    return api_player_explorer_team_players(
+        team_identifier=team_identifier,
+    )
+
+
+@app.get("/api/v2/player-explorer/players/{player_identifier}")
+def api_v2_player_explorer_player_by_identifier(
+    player_identifier: str,
+    season: int | None = None,
+) -> dict:
+    return api_player_explorer_player_by_identifier(
+        player_identifier=player_identifier,
+        season=season,
+    )
+
+
+@app.get("/api/v2/player-explorer/profile")
+def api_v2_player_explorer_profile(
+    team: str | None = None,
+    player: str | None = None,
+    season: int | None = None,
+) -> dict:
+    return api_player_explorer_profile(
+        team=team,
+        player=player,
+        season=season,
+    )
+
+
+@app.get("/api/v2/player-explorer/audit")
+def api_v2_player_explorer_audit() -> dict:
+    return api_player_explorer_audit()
+
+
+@app.get("/api/v2/player-explorer/health")
+def api_v2_player_explorer_health() -> dict:
+    return api_player_explorer_health()
+
+
+@app.get("/api/v2/player-explorer/completion-gate")
+def api_v2_player_explorer_completion_gate() -> dict:
+    return api_player_explorer_completion_gate()
+
+
+@app.get("/api/v2/player-explorer/integrity")
+def api_v2_player_explorer_integrity() -> dict:
+    return api_player_explorer_integrity()
+
+
 
 # ============================================================
 # SECTION 13 - CHAT RESPONSE BUILDERS
