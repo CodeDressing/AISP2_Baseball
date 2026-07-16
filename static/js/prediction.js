@@ -944,14 +944,18 @@ function renderDemoPredictionEnhancements(payload) {
 }
 
 /* ============================================================
-   SECTION 22 - LIVE MLB TEAM AND PLAYER LOADER
+   SECTION 22 - LIVE DATABASE TEAM AND PLAYER LOADER
    FILE: static/js/prediction.js
-   PURPOSE: load all MLB teams and active rosters from backend
+   PURPOSE:
+   Load all MLB teams and team-specific player selectors from
+   the database-backed Player Explorer bootstrap endpoint.
+   This replaces the old /api/mlb/teams loader.
    ============================================================ */
 
 const AISP2_MLB_CACHE = {
     teams: [],
     teamMap: {},
+    playersByTeam: {},
     loaded: false
 };
 
@@ -960,18 +964,33 @@ async function initializeLiveMLBSelectors() {
 
     try {
 
-        const teamsResponse =
-            await fetch("/api/mlb/teams");
+        const response =
+            await fetch("/api/player-explorer/bootstrap");
 
-        const teamsData =
-            await teamsResponse.json();
+        const data =
+            await response.json();
 
-        if (!teamsData.teams) {
-            return;
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                data.message ||
+                "Player Explorer bootstrap request failed."
+            );
+        }
+
+        if (!Array.isArray(data.teams)) {
+            throw new Error(
+                "Player Explorer bootstrap did not return a teams array."
+            );
         }
 
         AISP2_MLB_CACHE.teams =
-            teamsData.teams;
+            data.teams;
+
+        AISP2_MLB_CACHE.playersByTeam =
+            data.players_by_team || {};
+
+        AISP2_MLB_CACHE.teamMap = {};
 
         const teamSelector =
             getTeamSelector();
@@ -982,41 +1001,82 @@ async function initializeLiveMLBSelectors() {
 
         teamSelector.innerHTML = "";
 
-        teamsData.teams.forEach(team => {
+        data.teams.forEach(function(team) {
 
-            AISP2_MLB_CACHE.teamMap[
-                team.name
-            ] = team;
+            if (!team) {
+                return;
+            }
+
+            const teamId =
+                team.id !== undefined && team.id !== null
+                    ? String(team.id)
+                    : "";
+
+            const teamName =
+                team.name || team.abbreviation || teamId;
+
+            if (!teamId || !teamName) {
+                return;
+            }
+
+            AISP2_MLB_CACHE.teamMap[teamName] =
+                team;
+
+            AISP2_MLB_CACHE.teamMap[teamId] =
+                team;
 
             const option =
                 document.createElement("option");
 
             option.value =
-                team.name;
+                teamName;
+
+            option.dataset.teamId =
+                teamId;
 
             option.textContent =
-                team.name;
+                teamName;
 
             teamSelector.appendChild(option);
-
         });
 
         AISP2_MLB_CACHE.loaded =
             true;
 
-        if (teamsData.teams.length > 0) {
+        if (data.default_team && data.default_team.name) {
+
+            teamSelector.value =
+                data.default_team.name;
 
             await loadPlayersForSelectedTeam(
-                teamsData.teams[0].name
+                data.default_team.name
             );
 
+            return;
+        }
+
+        if (data.teams.length > 0) {
+
+            const firstTeam =
+                data.teams[0];
+
+            teamSelector.value =
+                firstTeam.name;
+
+            await loadPlayersForSelectedTeam(
+                firstTeam.name
+            );
         }
 
     } catch (error) {
 
         console.error(
-            "Failed loading MLB teams:",
+            "Failed loading database-backed MLB teams:",
             error
+        );
+
+        renderPredictionError(
+            "Could not load database-backed teams and players. Check /api/player-explorer/bootstrap."
         );
     }
 }
@@ -1024,54 +1084,95 @@ async function initializeLiveMLBSelectors() {
 
 async function loadPlayersForSelectedTeam(teamName) {
 
-    const team =
-        AISP2_MLB_CACHE.teamMap[teamName];
+    const playerSelector =
+        getPlayerSelector();
 
-    if (!team) {
+    if (!playerSelector) {
         return;
     }
 
-    try {
+    playerSelector.innerHTML = "";
 
-        const response =
-            await fetch(
-                "/api/mlb/teams/" +
-                team.id +
-                "/players"
-            );
+    const team =
+        AISP2_MLB_CACHE.teamMap[teamName];
 
-        const data =
-            await response.json();
+    if (!team || team.id === undefined || team.id === null) {
 
-        const playerSelector =
-            getPlayerSelector();
+        const emptyOption =
+            document.createElement("option");
 
-        if (!playerSelector) {
+        emptyOption.value =
+            "";
+
+        emptyOption.textContent =
+            "No team selected";
+
+        playerSelector.appendChild(emptyOption);
+
+        return;
+    }
+
+    const teamId =
+        String(team.id);
+
+    const players =
+        AISP2_MLB_CACHE.playersByTeam[teamId] || [];
+
+    if (!Array.isArray(players) || players.length === 0) {
+
+        const emptyOption =
+            document.createElement("option");
+
+        emptyOption.value =
+            "";
+
+        emptyOption.textContent =
+            "No players loaded for this team";
+
+        playerSelector.appendChild(emptyOption);
+
+        return;
+    }
+
+    players.forEach(function(player) {
+
+        if (!player) {
             return;
         }
 
-        playerSelector.innerHTML = "";
+        const playerName =
+            player.full_name ||
+            player.name ||
+            player.player_name ||
+            "";
 
-        data.players.forEach(player => {
+        if (!playerName) {
+            return;
+        }
 
-            const option =
-                document.createElement("option");
+        const option =
+            document.createElement("option");
 
-            option.value =
-                player.name;
+        option.value =
+            playerName;
 
-            option.textContent =
-                player.name;
+        option.textContent =
+            playerName;
 
-            playerSelector.appendChild(option);
+        if (player.id !== undefined && player.id !== null) {
+            option.dataset.playerId =
+                String(player.id);
+        }
 
-        });
+        if (player.mlb_player_id !== undefined && player.mlb_player_id !== null) {
+            option.dataset.mlbPlayerId =
+                String(player.mlb_player_id);
+        }
 
-    } catch (error) {
+        playerSelector.appendChild(option);
+    });
 
-        console.error(
-            "Failed loading players:",
-            error
-        );
+    if (playerSelector.options.length > 0) {
+        playerSelector.selectedIndex = 0;
     }
 }
