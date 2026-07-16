@@ -944,235 +944,437 @@ function renderDemoPredictionEnhancements(payload) {
 }
 
 /* ============================================================
-   SECTION 22 - LIVE DATABASE TEAM AND PLAYER LOADER
+   SECTION 22 - DATABASE-BACKED PREDICTION TEAM/PLAYER SELECTORS
    FILE: static/js/prediction.js
    PURPOSE:
-   Load all MLB teams and team-specific player selectors from
-   the database-backed Player Explorer bootstrap endpoint.
-   This replaces the old /api/mlb/teams loader.
+   Restore the Prediction Workbench player dropdown by loading
+   teams and players from /api/player-explorer/bootstrap.
+
+   FIXES:
+   - Empty player dropdown
+   - Old demo-only player list
+   - Mismatch between player.name and player.full_name
+   - Team/player selector desync
+   - Team changes not refreshing player choices
    ============================================================ */
 
-const AISP2_MLB_CACHE = {
+const AISP2_PREDICTION_SELECTOR_STATE = {
+    bootstrapLoaded: false,
+    bootstrap: null,
     teams: [],
-    teamMap: {},
     playersByTeam: {},
-    loaded: false
+    teamByName: {},
+    teamById: {},
+    lastTeamKey: null
 };
 
 
-async function initializeLiveMLBSelectors() {
+function getPredictionTeamSelectorSafe() {
+    return (
+        document.querySelector("[data-prediction-team]") ||
+        document.querySelector("[data-team-select]") ||
+        document.querySelector("[data-player-team]") ||
+        document.querySelector("select[name='team']") ||
+        document.querySelector("#team")
+    );
+}
 
-    try {
 
-        const response =
-            await fetch("/api/player-explorer/bootstrap");
+function getPredictionPlayerSelectorSafe() {
+    return (
+        document.querySelector("[data-prediction-player]") ||
+        document.querySelector("[data-player-select]") ||
+        document.querySelector("[data-player-name]") ||
+        document.querySelector("select[name='player']") ||
+        document.querySelector("#player")
+    );
+}
 
-        const data =
-            await response.json();
 
-        if (!response.ok) {
-            throw new Error(
-                data.error ||
-                data.message ||
-                "Player Explorer bootstrap request failed."
-            );
-        }
+function normalizePredictionSelectorText(value) {
+    return String(value || "")
+        .toLowerCase()
+        .trim()
+        .replace(/\./g, " ")
+        .replace(/,/g, " ")
+        .replace(/'/g, "")
+        .replace(/’/g, "")
+        .replace(/-/g, " ")
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ");
+}
 
-        if (!Array.isArray(data.teams)) {
-            throw new Error(
-                "Player Explorer bootstrap did not return a teams array."
-            );
-        }
 
-        AISP2_MLB_CACHE.teams =
-            data.teams;
+function clearPredictionSelect(selectElement, placeholderText) {
+    if (!selectElement) {
+        return;
+    }
 
-        AISP2_MLB_CACHE.playersByTeam =
-            data.players_by_team || {};
+    selectElement.innerHTML = "";
 
-        AISP2_MLB_CACHE.teamMap = {};
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = placeholderText || "Pending Ingestion";
+    selectElement.appendChild(option);
+}
 
-        const teamSelector =
-            getTeamSelector();
 
-        if (!teamSelector) {
+function addPredictionOption(selectElement, value, label, dataset) {
+    if (!selectElement || !value || !label) {
+        return;
+    }
+
+    const option = document.createElement("option");
+
+    option.value = String(value);
+    option.textContent = String(label);
+
+    if (dataset && typeof dataset === "object") {
+        Object.keys(dataset).forEach(function(key) {
+            if (dataset[key] !== undefined && dataset[key] !== null) {
+                option.dataset[key] = String(dataset[key]);
+            }
+        });
+    }
+
+    selectElement.appendChild(option);
+}
+
+
+function buildPredictionTeamIndexes(teams) {
+    AISP2_PREDICTION_SELECTOR_STATE.teamByName = {};
+    AISP2_PREDICTION_SELECTOR_STATE.teamById = {};
+
+    teams.forEach(function(team) {
+        if (!team) {
             return;
         }
 
-        teamSelector.innerHTML = "";
+        const teamId = team.id;
+        const mlbTeamId = team.mlb_team_id;
+        const name = team.name;
+        const abbreviation = team.abbreviation;
+        const clubName = team.club_name;
+        const shortName = team.short_name;
+        const locationName = team.location_name;
 
-        data.teams.forEach(function(team) {
+        const keys = [
+            teamId,
+            mlbTeamId,
+            name,
+            abbreviation,
+            clubName,
+            shortName,
+            locationName
+        ];
 
-            if (!team) {
+        keys.forEach(function(key) {
+            if (key === undefined || key === null || key === "") {
                 return;
             }
 
-            const teamId =
-                team.id !== undefined && team.id !== null
-                    ? String(team.id)
-                    : "";
+            const rawKey = String(key);
+            const normalizedKey = normalizePredictionSelectorText(rawKey);
 
-            const teamName =
-                team.name || team.abbreviation || teamId;
-
-            if (!teamId || !teamName) {
-                return;
-            }
-
-            AISP2_MLB_CACHE.teamMap[teamName] =
-                team;
-
-            AISP2_MLB_CACHE.teamMap[teamId] =
-                team;
-
-            const option =
-                document.createElement("option");
-
-            option.value =
-                teamName;
-
-            option.dataset.teamId =
-                teamId;
-
-            option.textContent =
-                teamName;
-
-            teamSelector.appendChild(option);
+            AISP2_PREDICTION_SELECTOR_STATE.teamByName[rawKey] = team;
+            AISP2_PREDICTION_SELECTOR_STATE.teamByName[normalizedKey] = team;
         });
 
-        AISP2_MLB_CACHE.loaded =
-            true;
+        if (teamId !== undefined && teamId !== null) {
+            AISP2_PREDICTION_SELECTOR_STATE.teamById[String(teamId)] = team;
+        }
 
-        if (data.default_team && data.default_team.name) {
+        if (mlbTeamId !== undefined && mlbTeamId !== null) {
+            AISP2_PREDICTION_SELECTOR_STATE.teamById[String(mlbTeamId)] = team;
+        }
+    });
+}
 
-            teamSelector.value =
-                data.default_team.name;
 
-            await loadPlayersForSelectedTeam(
-                data.default_team.name
-            );
+function resolvePredictionTeamFromSelectorValue(teamValue) {
+    const teamSelector = getPredictionTeamSelectorSafe();
 
+    let team = null;
+
+    if (teamSelector && teamSelector.selectedOptions && teamSelector.selectedOptions.length > 0) {
+        const selectedOption = teamSelector.selectedOptions[0];
+
+        if (selectedOption.dataset.teamId) {
+            team = AISP2_PREDICTION_SELECTOR_STATE.teamById[selectedOption.dataset.teamId];
+        }
+
+        if (!team && selectedOption.dataset.mlbTeamId) {
+            team = AISP2_PREDICTION_SELECTOR_STATE.teamById[selectedOption.dataset.mlbTeamId];
+        }
+    }
+
+    if (team) {
+        return team;
+    }
+
+    const rawValue = String(teamValue || "");
+    const normalizedValue = normalizePredictionSelectorText(rawValue);
+
+    return (
+        AISP2_PREDICTION_SELECTOR_STATE.teamByName[rawValue] ||
+        AISP2_PREDICTION_SELECTOR_STATE.teamByName[normalizedValue] ||
+        AISP2_PREDICTION_SELECTOR_STATE.teamById[rawValue] ||
+        null
+    );
+}
+
+
+function getPredictionPlayersForTeam(team) {
+    if (!team) {
+        return [];
+    }
+
+    const playersByTeam = AISP2_PREDICTION_SELECTOR_STATE.playersByTeam || {};
+
+    const possibleKeys = [
+        team.id,
+        team.mlb_team_id,
+        team.name,
+        team.abbreviation,
+        normalizePredictionSelectorText(team.name),
+        normalizePredictionSelectorText(team.abbreviation)
+    ];
+
+    for (let index = 0; index < possibleKeys.length; index += 1) {
+        const key = possibleKeys[index];
+
+        if (key === undefined || key === null || key === "") {
+            continue;
+        }
+
+        const players = playersByTeam[String(key)];
+
+        if (Array.isArray(players) && players.length > 0) {
+            return players;
+        }
+    }
+
+    return [];
+}
+
+
+function renderPredictionTeamsFromBootstrap() {
+    const teamSelector = getPredictionTeamSelectorSafe();
+
+    if (!teamSelector) {
+        console.error("Prediction team selector not found.");
+        return;
+    }
+
+    const teams = AISP2_PREDICTION_SELECTOR_STATE.teams || [];
+
+    teamSelector.innerHTML = "";
+
+    if (!Array.isArray(teams) || teams.length === 0) {
+        clearPredictionSelect(teamSelector, "No teams loaded");
+        return;
+    }
+
+    teams.forEach(function(team) {
+        if (!team || !team.name) {
             return;
         }
 
-        if (data.teams.length > 0) {
-
-            const firstTeam =
-                data.teams[0];
-
-            teamSelector.value =
-                firstTeam.name;
-
-            await loadPlayersForSelectedTeam(
-                firstTeam.name
-            );
-        }
-
-    } catch (error) {
-
-        console.error(
-            "Failed loading database-backed MLB teams:",
-            error
+        addPredictionOption(
+            teamSelector,
+            team.name,
+            team.name,
+            {
+                teamId: team.id,
+                mlbTeamId: team.mlb_team_id,
+                abbreviation: team.abbreviation || ""
+            }
         );
+    });
 
-        renderPredictionError(
-            "Could not load database-backed teams and players. Check /api/player-explorer/bootstrap."
-        );
+    const defaultTeam =
+        AISP2_PREDICTION_SELECTOR_STATE.bootstrap &&
+        AISP2_PREDICTION_SELECTOR_STATE.bootstrap.default_team
+            ? AISP2_PREDICTION_SELECTOR_STATE.bootstrap.default_team
+            : teams[0];
+
+    if (defaultTeam && defaultTeam.name) {
+        teamSelector.value = defaultTeam.name;
+        renderPredictionPlayersForTeam(defaultTeam);
     }
 }
 
 
-async function loadPlayersForSelectedTeam(teamName) {
-
-    const playerSelector =
-        getPlayerSelector();
+function renderPredictionPlayersForTeam(team) {
+    const playerSelector = getPredictionPlayerSelectorSafe();
 
     if (!playerSelector) {
+        console.error("Prediction player selector not found.");
         return;
     }
 
     playerSelector.innerHTML = "";
 
-    const team =
-        AISP2_MLB_CACHE.teamMap[teamName];
-
-    if (!team || team.id === undefined || team.id === null) {
-
-        const emptyOption =
-            document.createElement("option");
-
-        emptyOption.value =
-            "";
-
-        emptyOption.textContent =
-            "No team selected";
-
-        playerSelector.appendChild(emptyOption);
-
-        return;
-    }
-
-    const teamId =
-        String(team.id);
-
-    const players =
-        AISP2_MLB_CACHE.playersByTeam[teamId] || [];
+    const players = getPredictionPlayersForTeam(team);
 
     if (!Array.isArray(players) || players.length === 0) {
+        clearPredictionSelect(playerSelector, "No players loaded for this team");
 
-        const emptyOption =
-            document.createElement("option");
-
-        emptyOption.value =
-            "";
-
-        emptyOption.textContent =
-            "No players loaded for this team";
-
-        playerSelector.appendChild(emptyOption);
+        console.warn(
+            "No players found for selected team.",
+            {
+                selectedTeam: team,
+                availablePlayerKeys: Object.keys(AISP2_PREDICTION_SELECTOR_STATE.playersByTeam || {})
+            }
+        );
 
         return;
     }
 
     players.forEach(function(player) {
-
         if (!player) {
             return;
         }
 
         const playerName =
             player.full_name ||
-            player.name ||
             player.player_name ||
+            player.name ||
             "";
 
         if (!playerName) {
             return;
         }
 
-        const option =
-            document.createElement("option");
-
-        option.value =
-            playerName;
-
-        option.textContent =
-            playerName;
-
-        if (player.id !== undefined && player.id !== null) {
-            option.dataset.playerId =
-                String(player.id);
-        }
-
-        if (player.mlb_player_id !== undefined && player.mlb_player_id !== null) {
-            option.dataset.mlbPlayerId =
-                String(player.mlb_player_id);
-        }
-
-        playerSelector.appendChild(option);
+        addPredictionOption(
+            playerSelector,
+            playerName,
+            playerName,
+            {
+                playerId: player.id,
+                mlbPlayerId: player.mlb_player_id,
+                position: player.position || "",
+                positionCode: player.position_code || ""
+            }
+        );
     });
 
     if (playerSelector.options.length > 0) {
         playerSelector.selectedIndex = 0;
     }
 }
+
+
+async function loadPredictionPlayerExplorerBootstrap() {
+    const response = await fetch("/api/player-explorer/bootstrap", {
+        method: "GET",
+        headers: {
+            "Accept": "application/json"
+        }
+    });
+
+    let data = null;
+
+    try {
+        data = await response.json();
+    } catch (error) {
+        throw new Error("Bootstrap endpoint returned invalid JSON.");
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data.message ||
+            data.error ||
+            "Bootstrap endpoint failed."
+        );
+    }
+
+    if (!Array.isArray(data.teams)) {
+        throw new Error("Bootstrap endpoint did not return a teams array.");
+    }
+
+    return data;
+}
+
+
+async function initializePredictionDatabaseSelectors() {
+    const teamSelector = getPredictionTeamSelectorSafe();
+    const playerSelector = getPredictionPlayerSelectorSafe();
+
+    if (!teamSelector || !playerSelector) {
+        console.error(
+            "Prediction selector initialization blocked.",
+            {
+                hasTeamSelector: Boolean(teamSelector),
+                hasPlayerSelector: Boolean(playerSelector)
+            }
+        );
+        return;
+    }
+
+    clearPredictionSelect(playerSelector, "Loading players...");
+
+    try {
+        const bootstrap = await loadPredictionPlayerExplorerBootstrap();
+
+        AISP2_PREDICTION_SELECTOR_STATE.bootstrap = bootstrap;
+        AISP2_PREDICTION_SELECTOR_STATE.teams = bootstrap.teams || [];
+        AISP2_PREDICTION_SELECTOR_STATE.playersByTeam = bootstrap.players_by_team || {};
+        AISP2_PREDICTION_SELECTOR_STATE.bootstrapLoaded = true;
+
+        buildPredictionTeamIndexes(
+            AISP2_PREDICTION_SELECTOR_STATE.teams
+        );
+
+        renderPredictionTeamsFromBootstrap();
+
+        if (!teamSelector.dataset.aisp2PredictionPlayersBound) {
+            teamSelector.addEventListener("change", function(event) {
+                const selectedTeam = resolvePredictionTeamFromSelectorValue(
+                    event.target.value
+                );
+
+                renderPredictionPlayersForTeam(selectedTeam);
+            });
+
+            teamSelector.dataset.aisp2PredictionPlayersBound = "true";
+        }
+
+        const selectedTeam = resolvePredictionTeamFromSelectorValue(teamSelector.value);
+        renderPredictionPlayersForTeam(selectedTeam);
+
+        console.info(
+            "AISP2 Prediction selectors loaded.",
+            {
+                teamCount: AISP2_PREDICTION_SELECTOR_STATE.teams.length,
+                playerGroups: Object.keys(AISP2_PREDICTION_SELECTOR_STATE.playersByTeam).length
+            }
+        );
+
+    } catch (error) {
+        console.error("Prediction selector bootstrap failed:", error);
+
+        clearPredictionSelect(playerSelector, "Player list unavailable");
+
+        if (typeof renderPredictionError === "function") {
+            renderPredictionError(
+                "Could not load players. Check /api/player-explorer/bootstrap."
+            );
+        }
+    }
+}
+
+
+document.addEventListener("DOMContentLoaded", function() {
+    initializePredictionDatabaseSelectors();
+});
+
+
+window.AISP2PredictionSelectors = {
+    state: AISP2_PREDICTION_SELECTOR_STATE,
+    reload: initializePredictionDatabaseSelectors,
+    renderPlayersForTeam: function(teamValue) {
+        const team = resolvePredictionTeamFromSelectorValue(teamValue);
+        renderPredictionPlayersForTeam(team);
+    }
+};
