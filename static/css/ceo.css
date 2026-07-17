@@ -1,0 +1,467 @@
+﻿/* ============================================================
+   AISP2 BASEBALL INTELLIGENCE PLATFORM
+   FILE: static/css/ceo.css
+   PHASE: 13 PART 7.2
+   PURPOSE:
+   CEO-only neon baseball blue command theme.
+
+   Scope:
+   - This file is linked only from templates/admin_dashboard.html.
+   - The /ceo route is protected server-side.
+   - This theme is not loaded by public pages.
+   - This theme is not loaded by normal /account user dashboard.
+
+   Visual Direction:
+   - Deep darkmode
+   - Neon baseball blue
+   - Private command center
+   - Executive model-control dashboard
+   ============================================================ */
+
+
+/* ============================================================
+   SECTION 01 - CEO THEME TOKENS
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] {
+    --ceo-black: #00040d;
+    --ceo-navy-0: #020817;
+    --ceo-navy-1: #031026;
+    --ceo-navy-2: #061b38;
+    --ceo-navy-3: #07264d;
+
+    --ceo-blue-0: #38bdf8;
+    --ceo-blue-1: #4dd8ff;
+    --ceo-blue-2: #73e8ff;
+    --ceo-blue-3: #b9f5ff;
+
+    --ceo-mint: #8df5bd;
+    --ceo-gold: #ffe29e;
+    --ceo-red: #ff8f8f;
+
+    --ceo-text-0: #f4fbff;
+    --ceo-text-1: rgba(230, 247, 255, 0.88);
+    --ceo-text-2: rgba(205, 231, 246, 0.72);
+    --ceo-text-3: rgba(185, 213, 232, 0.54);
+
+    --ceo-line-blue: rgba(77, 216, 255, 0.24);
+    --ceo-line-blue-strong: rgba(77, 216, 255, 0.46);
+    --ceo-line-mint: rgba(141, 245, 189, 0.26);
+
+    --ceo-glow-blue: 0 0 28px rgba(77, 216, 255, 0.24);
+    --ceo-glow-blue-strong: 0 0 48px rgba(77, 216, 255, 0.34);
+    --ceo-glow-mint: 0 0 34px rgba(141, 245, 189, 0.22);
+}
+
+
+/* ============================================================
+   SECTION 02 - CEO BACKGROUND SYSTEM
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"],
+html[data-aisp2-page="admin-dashboard"] body {
+    background: var(--ceo-black) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] body {
+    color: var(--ceo-text-0) !important;
+    background:
+        radial-gradient(circle at 12% 6%, rgba(56, 189, 248, 0.24), transparent 28%),
+        radial-gradient(circle at 86% 10%, rgba(77, 216, 255, 0.16), transparent 30%),
+        radial-gradient(circle at 50% 110%, rgba(141, 245, 189, 0.10), transparent 34%),
+        linear-gradient(145deg, #00040d 0%, #020817 38%, #031026 68%, #02050e 100%) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] body::before {
+    opacity: 0.72 !important;
+    background:
+        linear-gradient(90deg, rgba(77, 216, 255, 0.055) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(77, 216, 255, 0.038) 1px, transparent 1px) !important;
+    background-size: 46px 46px !important;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.88), transparent 84%) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background:
+        linear-gradient(115deg, transparent 0%, rgba(77, 216, 255, 0.08) 44%, transparent 47%),
+        linear-gradient(245deg, transparent 0%, rgba(141, 245, 189, 0.045) 58%, transparent 61%);
+    mix-blend-mode: screen;
+    opacity: 0.42;
+}
+
+
+/* ============================================================
+   SECTION 03 - CEO TOP BAR
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .admin-topbar {
+    min-height: 76px !important;
+    background:
+        linear-gradient(90deg, rgba(0, 5, 16, 0.96), rgba(3, 16, 38, 0.92)) !important;
+    border-bottom: 1px solid var(--ceo-line-blue) !important;
+    box-shadow:
+        0 16px 50px rgba(0, 0, 0, 0.34),
+        0 1px 0 rgba(77, 216, 255, 0.18) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .admin-brand {
+    color: var(--ceo-text-0) !important;
+    text-shadow: 0 0 22px rgba(77, 216, 255, 0.28) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .brand-icon {
+    background:
+        radial-gradient(circle at 32% 24%, rgba(244, 251, 255, 0.62), transparent 24%),
+        radial-gradient(circle at 66% 70%, rgba(77, 216, 255, 0.48), transparent 34%),
+        linear-gradient(135deg, rgba(56, 189, 248, 0.45), rgba(2, 8, 23, 0.88)) !important;
+    border-color: var(--ceo-line-blue-strong) !important;
+    box-shadow: var(--ceo-glow-blue) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .admin-nav a {
+    color: rgba(230, 247, 255, 0.82) !important;
+    transition:
+        color 160ms ease,
+        text-shadow 160ms ease,
+        transform 160ms ease !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .admin-nav a:hover {
+    color: var(--ceo-blue-2) !important;
+    text-shadow: 0 0 18px rgba(77, 216, 255, 0.46) !important;
+    transform: translateY(-1px) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .logout-link {
+    border-color: rgba(77, 216, 255, 0.24) !important;
+    background: rgba(77, 216, 255, 0.075) !important;
+}
+
+
+/* ============================================================
+   SECTION 04 - CEO HERO COMMAND CENTER
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .admin-shell {
+    position: relative !important;
+    z-index: 3 !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .admin-hero {
+    gap: 18px !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .hero-main {
+    min-height: 330px !important;
+    border-color: var(--ceo-line-blue) !important;
+    background:
+        radial-gradient(circle at 18% 0%, rgba(77, 216, 255, 0.22), transparent 34%),
+        radial-gradient(circle at 86% 70%, rgba(141, 245, 189, 0.09), transparent 32%),
+        linear-gradient(145deg, rgba(3, 16, 38, 0.96), rgba(1, 6, 17, 0.94)) !important;
+    box-shadow:
+        var(--ceo-glow-blue),
+        0 30px 90px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .hero-main::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(77,216,255,0.10), transparent 14%, transparent 86%, rgba(77,216,255,0.08)),
+        radial-gradient(circle at 10% 10%, rgba(255,255,255,0.09), transparent 18%);
+    opacity: 0.56;
+}
+
+html[data-aisp2-page="admin-dashboard"] .hero-title {
+    color: var(--ceo-text-0) !important;
+    text-shadow:
+        0 0 34px rgba(77, 216, 255, 0.26),
+        0 18px 40px rgba(0, 0, 0, 0.36) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .hero-title span {
+    background:
+        linear-gradient(135deg, #f4fbff 0%, #73e8ff 44%, #38bdf8 66%, #8df5bd 100%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    color: transparent !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .section-copy {
+    color: var(--ceo-text-2) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .eyebrow {
+    border-color: var(--ceo-line-blue) !important;
+    background: rgba(77, 216, 255, 0.075) !important;
+    color: var(--ceo-blue-2) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .eyebrow-dot {
+    background: var(--ceo-blue-1) !important;
+    box-shadow: 0 0 20px rgba(77, 216, 255, 0.90) !important;
+}
+
+
+/* ============================================================
+   SECTION 05 - CEO PANELS AND CARDS
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .panel {
+    position: relative !important;
+    border-color: var(--ceo-line-blue) !important;
+    background:
+        radial-gradient(circle at 16% 0%, rgba(77, 216, 255, 0.13), transparent 34%),
+        linear-gradient(145deg, rgba(3, 16, 38, 0.92), rgba(1, 6, 17, 0.91)) !important;
+    box-shadow:
+        0 22px 70px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inset 0 0 32px rgba(77, 216, 255, 0.035);
+}
+
+html[data-aisp2-page="admin-dashboard"] .identity-card,
+html[data-aisp2-page="admin-dashboard"] .metric-card,
+html[data-aisp2-page="admin-dashboard"] .executive-card,
+html[data-aisp2-page="admin-dashboard"] .command-row,
+html[data-aisp2-page="admin-dashboard"] .pipeline-step,
+html[data-aisp2-page="admin-dashboard"] .readiness-chip {
+    border-color: rgba(77, 216, 255, 0.19) !important;
+    background:
+        radial-gradient(circle at 0% 0%, rgba(77, 216, 255, 0.10), transparent 40%),
+        linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.055),
+        0 12px 32px rgba(0,0,0,0.20) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .identity-card:hover,
+html[data-aisp2-page="admin-dashboard"] .metric-card:hover,
+html[data-aisp2-page="admin-dashboard"] .executive-card:hover,
+html[data-aisp2-page="admin-dashboard"] .command-row:hover,
+html[data-aisp2-page="admin-dashboard"] .pipeline-step:hover {
+    border-color: rgba(77, 216, 255, 0.36) !important;
+    box-shadow:
+        var(--ceo-glow-blue),
+        inset 0 1px 0 rgba(255,255,255,0.07) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .section-title {
+    color: var(--ceo-text-0) !important;
+    text-shadow: 0 0 20px rgba(77,216,255,0.16) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .identity-card span,
+html[data-aisp2-page="admin-dashboard"] .metric-card span,
+html[data-aisp2-page="admin-dashboard"] .executive-card span,
+html[data-aisp2-page="admin-dashboard"] .readiness-chip span {
+    color: rgba(185, 229, 249, 0.62) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .identity-card strong,
+html[data-aisp2-page="admin-dashboard"] .metric-card strong,
+html[data-aisp2-page="admin-dashboard"] .executive-card strong,
+html[data-aisp2-page="admin-dashboard"] .readiness-chip strong {
+    color: var(--ceo-text-0) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .identity-card.good strong,
+html[data-aisp2-page="admin-dashboard"] .metric-card.good strong,
+html[data-aisp2-page="admin-dashboard"] .executive-card.good strong {
+    color: var(--ceo-mint) !important;
+    text-shadow: var(--ceo-glow-mint) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .metric-card.info strong,
+html[data-aisp2-page="admin-dashboard"] .executive-card.info strong {
+    color: var(--ceo-blue-2) !important;
+    text-shadow: var(--ceo-glow-blue) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .metric-card.warn strong,
+html[data-aisp2-page="admin-dashboard"] .executive-card.warn strong,
+html[data-aisp2-page="admin-dashboard"] .identity-card.warn strong {
+    color: var(--ceo-gold) !important;
+}
+
+
+/* ============================================================
+   SECTION 06 - CEO BUTTONS AND STATUS PILLS
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .hero-button,
+html[data-aisp2-page="admin-dashboard"] .admin-button {
+    border-color: rgba(77, 216, 255, 0.24) !important;
+    background: rgba(77, 216, 255, 0.075) !important;
+    color: var(--ceo-text-0) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.055) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .hero-button:hover,
+html[data-aisp2-page="admin-dashboard"] .admin-button:hover {
+    transform: translateY(-1px) !important;
+    border-color: rgba(77, 216, 255, 0.48) !important;
+    color: var(--ceo-blue-2) !important;
+    box-shadow: var(--ceo-glow-blue) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .hero-button.primary,
+html[data-aisp2-page="admin-dashboard"] .admin-button.primary {
+    color: #00101d !important;
+    border: 0 !important;
+    background:
+        linear-gradient(135deg, var(--ceo-blue-2), var(--ceo-blue-0) 58%, var(--ceo-mint)) !important;
+    box-shadow:
+        0 0 34px rgba(77, 216, 255, 0.24),
+        0 18px 48px rgba(0, 0, 0, 0.34) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .status-pill {
+    border-color: rgba(77, 216, 255, 0.22) !important;
+    background: rgba(77, 216, 255, 0.07) !important;
+    color: var(--ceo-blue-2) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .status-pill.good {
+    border-color: rgba(141, 245, 189, 0.27) !important;
+    color: var(--ceo-mint) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .status-pill.warn {
+    border-color: rgba(255, 226, 158, 0.27) !important;
+    color: var(--ceo-gold) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .status-pill.danger {
+    border-color: rgba(255, 143, 143, 0.27) !important;
+    color: var(--ceo-red) !important;
+}
+
+
+/* ============================================================
+   SECTION 07 - CEO EXECUTIVE SNAPSHOT
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .executive-grid {
+    gap: 12px !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .executive-card {
+    min-height: 116px !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .executive-card strong {
+    font-size: clamp(1.7rem, 3vw, 3.2rem) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .executive-card.large {
+    background:
+        radial-gradient(circle at 0% 0%, rgba(77, 216, 255, 0.18), transparent 45%),
+        linear-gradient(145deg, rgba(6, 27, 56, 0.84), rgba(1, 6, 17, 0.92)) !important;
+}
+
+
+/* ============================================================
+   SECTION 08 - CEO PIPELINE
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .pipeline-index {
+    border-color: rgba(77, 216, 255, 0.30) !important;
+    background: rgba(77, 216, 255, 0.10) !important;
+    color: var(--ceo-blue-2) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .pipeline-title,
+html[data-aisp2-page="admin-dashboard"] .command-title {
+    color: var(--ceo-text-0) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .pipeline-meta,
+html[data-aisp2-page="admin-dashboard"] .command-meta {
+    color: var(--ceo-text-3) !important;
+}
+
+
+/* ============================================================
+   SECTION 09 - CEO SECURITY PANEL
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] .security-panel {
+    border-color: rgba(255, 226, 158, 0.30) !important;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(255, 226, 158, 0.10), transparent 34%),
+        linear-gradient(145deg, rgba(3, 16, 38, 0.92), rgba(1, 6, 17, 0.92)) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] .security-warning {
+    border-color: rgba(255, 226, 158, 0.28) !important;
+    background: rgba(255, 226, 158, 0.08) !important;
+    color: rgba(255, 244, 216, 0.92) !important;
+}
+
+
+/* ============================================================
+   SECTION 10 - CEO RUNTIME DIAGNOSTICS
+   ============================================================ */
+
+html[data-aisp2-page="admin-dashboard"] [data-account-runtime-banner] {
+    background:
+        linear-gradient(145deg, rgba(3, 16, 38, 0.92), rgba(1, 6, 17, 0.92)) !important;
+    border-color: rgba(77, 216, 255, 0.24) !important;
+    box-shadow: var(--ceo-glow-blue) !important;
+}
+
+html[data-aisp2-page="admin-dashboard"] [data-account-diagnostics-panel] {
+    border-color: rgba(77, 216, 255, 0.20) !important;
+}
+
+
+/* ============================================================
+   SECTION 11 - CEO RESPONSIVE POLISH
+   ============================================================ */
+
+@media (max-width: 1320px) {
+    html[data-aisp2-page="admin-dashboard"] .hero-side {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 760px) {
+    html[data-aisp2-page="admin-dashboard"] .admin-topbar {
+        min-height: auto !important;
+    }
+
+    html[data-aisp2-page="admin-dashboard"] .hero-title {
+        font-size: clamp(3rem, 17vw, 5.2rem) !important;
+    }
+
+    html[data-aisp2-page="admin-dashboard"] .hero-side {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+
+/* ============================================================
+   SECTION 12 - CEO THEME COMPLETION MARKER
+   ============================================================ */
+
+.ceo-neon-baseball-blue-theme-phase-13-part-7-2 {
+    display: none;
+}
