@@ -1543,3 +1543,540 @@ window.AISP2PredictionSelectors = {
     }
 };
 
+
+/* ============================================================
+   AISP2 BASEBALL
+   FILE: static/js/prediction.js
+   PHASE 14 PART 4.0 - PREDICTION ACCOUNT INTEGRATION
+
+   PURPOSE:
+   Connect Prediction Workbench to authenticated account APIs.
+
+   APIs:
+   - POST /api/account/searches
+   - POST /api/account/follow/player
+   - POST /api/account/follow/team
+   - GET  /api/auth/me
+   - POST /predict/player now persists prediction history when logged in
+
+   SECURITY:
+   - Does not read HttpOnly cookies.
+   - Uses same-origin credentials.
+   - If logged out, backend returns auth error and UI points to login.
+   ============================================================ */
+
+(function initializeAISP2PredictionAccountIntegration() {
+    "use strict";
+
+    const VERSION = "phase_14_part_4_0_prediction_account_integration";
+
+    const state = {
+        account: null,
+        authenticated: false,
+        lastTeam: null,
+        lastPlayer: null,
+        lastOutcome: null,
+        lastPrediction: null,
+        lastSavedSearchKey: null,
+        initializedAt: new Date().toISOString()
+    };
+
+    function $(selector) {
+        return document.querySelector(selector);
+    }
+
+    function all(selector) {
+        return Array.from(document.querySelectorAll(selector));
+    }
+
+    function safeText(value, fallback) {
+        const text = String(value ?? "").trim();
+        return text || fallback || "";
+    }
+
+    function normalize(value) {
+        return safeText(value, "").toLowerCase().replace(/\s+/g, " ").trim();
+    }
+
+    function setStatus(message, kind) {
+        const target = $("[data-prediction-account-status]");
+        if (!target) {
+            return;
+        }
+
+        target.textContent = message;
+        target.dataset.status = kind || "info";
+    }
+
+    function getSelectedText(select) {
+        if (!select) {
+            return "";
+        }
+
+        const option = select.options && select.selectedIndex >= 0
+            ? select.options[select.selectedIndex]
+            : null;
+
+        return safeText(
+            option ? option.textContent : select.value,
+            safeText(select.value, "")
+        );
+    }
+
+    function findTeamControl() {
+        return (
+            $("[data-team-select]") ||
+            $("#teamSelect") ||
+            $("#team-select") ||
+            $("select[name='team']") ||
+            $("select[data-prediction-team]")
+        );
+    }
+
+    function findPlayerControl() {
+        return (
+            $("[data-player-select]") ||
+            $("#playerSelect") ||
+            $("#player-select") ||
+            $("select[name='player']") ||
+            $("input[name='player']") ||
+            $("select[data-prediction-player]")
+        );
+    }
+
+    function findOutcomeControl() {
+        return (
+            $("[data-outcome-select]") ||
+            $("#outcomeSelect") ||
+            $("#outcome-select") ||
+            $("select[name='outcome']") ||
+            $("select[data-prediction-outcome]")
+        );
+    }
+
+    function getCurrentSelection() {
+        const teamControl = findTeamControl();
+        const playerControl = findPlayerControl();
+        const outcomeControl = findOutcomeControl();
+
+        const teamValue = teamControl ? teamControl.value : "";
+        const playerValue = playerControl ? playerControl.value : "";
+        const outcomeValue = outcomeControl ? outcomeControl.value : "";
+
+        const teamName = getSelectedText(teamControl);
+        const playerName = getSelectedText(playerControl);
+        const outcomeLabel = getSelectedText(outcomeControl);
+
+        return {
+            team_id: /^\d+$/.test(String(teamValue || "")) ? Number(teamValue) : null,
+            team_name: safeText(teamName || teamValue, null),
+            player_id: /^\d+$/.test(String(playerValue || "")) ? Number(playerValue) : null,
+            player_name: safeText(playerName || playerValue, null),
+            outcome_key: safeText(outcomeValue, "home_run"),
+            outcome_label: safeText(outcomeLabel || outcomeValue, "Home Run")
+        };
+    }
+
+    async function fetchJson(url, options) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                ...(options && options.headers ? options.headers : {})
+            },
+            ...(options || {})
+        });
+
+        let payload = null;
+
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = {
+                success: false,
+                detail: "Non-JSON response received."
+            };
+        }
+
+        if (!response.ok) {
+            const message = payload.detail || payload.error || `Request failed with HTTP ${response.status}`;
+            const wrapped = new Error(message);
+            wrapped.status = response.status;
+            wrapped.payload = payload;
+            throw wrapped;
+        }
+
+        return payload;
+    }
+
+    async function loadAccount() {
+        try {
+            const payload = await fetchJson("/api/auth/me", { method: "GET" });
+            state.account = payload.account || payload.user || payload;
+            state.authenticated = Boolean(payload.authenticated || payload.success || state.account);
+            setStatus("Account connected. Prediction memory is enabled.", "good");
+            return state.account;
+        } catch (error) {
+            state.account = null;
+            state.authenticated = false;
+            setStatus("Log in to save searches, follow players, and track prediction history.", "warn");
+            return null;
+        }
+    }
+
+    function loginHint() {
+        setStatus("Login required. Use the Login link or ask the chatbot: login", "warn");
+    }
+
+    async function saveSearch(reason) {
+        const selection = getCurrentSelection();
+
+        if (!selection.player_name && !selection.team_name) {
+            return null;
+        }
+
+        const key = [
+            normalize(selection.team_name),
+            normalize(selection.player_name),
+            normalize(selection.outcome_key),
+            reason || "manual"
+        ].join("|");
+
+        if (reason !== "manual" && key === state.lastSavedSearchKey) {
+            return null;
+        }
+
+        state.lastSavedSearchKey = key;
+
+        try {
+            const payload = await fetchJson("/api/account/searches", {
+                method: "POST",
+                body: JSON.stringify({
+                    query: [
+                        selection.team_name,
+                        selection.player_name,
+                        selection.outcome_label
+                    ].filter(Boolean).join(" "),
+                    search_type: "prediction_workbench",
+                    source_page: "prediction_workbench",
+                    entity_type: selection.player_name ? "player_prediction" : "team",
+                    entity_id: selection.player_id || selection.team_id || null,
+                    entity_name: selection.player_name || selection.team_name || null,
+                    player_id: selection.player_id,
+                    player_name: selection.player_name,
+                    team_id: selection.team_id,
+                    team_name: selection.team_name,
+                    outcome_key: selection.outcome_key,
+                    outcome_label: selection.outcome_label,
+                    result_count: 1,
+                    is_saved: true,
+                    metadata: {
+                        phase: "Phase 14 Part 4.0",
+                        reason: reason || "manual",
+                        frontend_version: VERSION
+                    }
+                })
+            });
+
+            setStatus("Search saved to your account memory.", "good");
+            return payload;
+        } catch (error) {
+            if (error.status === 401 || error.status === 403) {
+                loginHint();
+                return null;
+            }
+
+            setStatus(`Save search failed: ${error.message}`, "danger");
+            return null;
+        }
+    }
+
+    async function followPlayer() {
+        const selection = getCurrentSelection();
+
+        if (!selection.player_name && !selection.player_id) {
+            setStatus("Choose a player before following.", "warn");
+            return null;
+        }
+
+        try {
+            const payload = await fetchJson("/api/account/follow/player", {
+                method: "POST",
+                body: JSON.stringify({
+                    player_id: selection.player_id,
+                    player_name: selection.player_name,
+                    team_id: selection.team_id,
+                    team_name: selection.team_name,
+                    source_page: "prediction_workbench",
+                    alert_preferences: {
+                        stat_changes: true,
+                        prediction_updates: true,
+                        game_day_context: true
+                    },
+                    metadata: {
+                        phase: "Phase 14 Part 4.0",
+                        frontend_version: VERSION
+                    }
+                })
+            });
+
+            setStatus("Player followed. This player is now linked to your account.", "good");
+            return payload;
+        } catch (error) {
+            if (error.status === 401 || error.status === 403) {
+                loginHint();
+                return null;
+            }
+
+            setStatus(`Follow player failed: ${error.message}`, "danger");
+            return null;
+        }
+    }
+
+    async function followTeam() {
+        const selection = getCurrentSelection();
+
+        if (!selection.team_name && !selection.team_id) {
+            setStatus("Choose a team before following.", "warn");
+            return null;
+        }
+
+        try {
+            const payload = await fetchJson("/api/account/follow/team", {
+                method: "POST",
+                body: JSON.stringify({
+                    team_id: selection.team_id,
+                    team_name: selection.team_name,
+                    source_page: "prediction_workbench",
+                    alert_preferences: {
+                        stat_changes: true,
+                        prediction_updates: true,
+                        game_day_context: true
+                    },
+                    metadata: {
+                        phase: "Phase 14 Part 4.0",
+                        frontend_version: VERSION
+                    }
+                })
+            });
+
+            setStatus("Team followed. This team is now linked to your account.", "good");
+            return payload;
+        } catch (error) {
+            if (error.status === 401 || error.status === 403) {
+                loginHint();
+                return null;
+            }
+
+            setStatus(`Follow team failed: ${error.message}`, "danger");
+            return null;
+        }
+    }
+
+    function attachSelectionListeners() {
+        const controls = [
+            findTeamControl(),
+            findPlayerControl(),
+            findOutcomeControl()
+        ].filter(Boolean);
+
+        controls.forEach((control) => {
+            if (control.dataset.accountMemoryListener === "true") {
+                return;
+            }
+
+            control.dataset.accountMemoryListener = "true";
+
+            control.addEventListener("change", function handleAccountMemorySelectionChange() {
+                window.clearTimeout(control.__aisp2AccountMemoryTimer);
+                control.__aisp2AccountMemoryTimer = window.setTimeout(function delayedSaveSearch() {
+                    saveSearch("selection_change");
+                }, 650);
+            });
+        });
+    }
+
+    function attachButtonListeners() {
+        all("[data-account-action]").forEach((button) => {
+            if (button.dataset.accountActionAttached === "true") {
+                return;
+            }
+
+            button.dataset.accountActionAttached = "true";
+
+            button.addEventListener("click", async function handlePredictionAccountAction() {
+                const action = button.dataset.accountAction;
+
+                if (action === "save-search") {
+                    await saveSearch("manual");
+                }
+
+                if (action === "follow-player") {
+                    await followPlayer();
+                }
+
+                if (action === "follow-team") {
+                    await followTeam();
+                }
+            });
+        });
+    }
+
+    function patchFetchForPredictionHistory() {
+        if (window.__AISP2_PREDICTION_ACCOUNT_FETCH_PATCHED__) {
+            return;
+        }
+
+        if (typeof window.fetch !== "function") {
+            return;
+        }
+
+        window.__AISP2_PREDICTION_ACCOUNT_FETCH_PATCHED__ = true;
+
+        const originalFetch = window.fetch;
+
+        window.fetch = function patchedPredictionAccountFetch(resource, options) {
+            const responsePromise = originalFetch.apply(this, arguments);
+
+            try {
+                const url = String(
+                    typeof resource === "string"
+                        ? resource
+                        : resource && resource.url
+                            ? resource.url
+                            : ""
+                );
+
+                if (url.indexOf("/predict/player") >= 0) {
+                    responsePromise.then(function inspectPredictionResponse(response) {
+                        try {
+                            response.clone().json().then(function handlePredictionPayload(payload) {
+                                state.lastPrediction = payload;
+
+                                if (payload && payload.account_history && payload.account_history.saved) {
+                                    setStatus("Prediction saved to your account ledger.", "good");
+                                } else if (payload && payload.account_history && payload.account_history.reason === "not_authenticated") {
+                                    setStatus("Prediction ran. Log in to save it to your ledger.", "warn");
+                                } else {
+                                    setStatus("Prediction completed. Account history status checked.", "info");
+                                }
+                            }).catch(function noop() {});
+                        } catch (error) {
+                            return null;
+                        }
+                        return null;
+                    }).catch(function noop() {});
+                }
+            } catch (error) {
+                return responsePromise;
+            }
+
+            return responsePromise;
+        };
+    }
+
+    function injectStyles() {
+        if (document.querySelector("[data-aisp2-prediction-account-style]")) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.dataset.aisp2PredictionAccountStyle = "true";
+        style.textContent = `
+            .prediction-account-action-bar {
+                margin: 18px 0;
+                padding: 18px;
+                border-radius: 24px;
+                border: 1px solid rgba(77, 216, 255, 0.22);
+                background:
+                    radial-gradient(circle at 0% 0%, rgba(77, 216, 255, 0.13), transparent 38%),
+                    rgba(5, 18, 38, 0.72);
+                box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
+            }
+            .prediction-account-action-copy strong {
+                display: block;
+                color: rgba(244, 251, 255, 0.96);
+                font-size: 1.02rem;
+            }
+            .prediction-account-action-copy p {
+                margin: 6px 0 0;
+                color: rgba(220, 238, 250, 0.68);
+                line-height: 1.45;
+            }
+            .prediction-account-eyebrow {
+                display: inline-flex;
+                margin-bottom: 8px;
+                color: #73e8ff;
+                font-size: 0.72rem;
+                font-weight: 950;
+                letter-spacing: 0.11em;
+                text-transform: uppercase;
+            }
+            .prediction-account-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin-top: 14px;
+            }
+            .prediction-account-button {
+                min-height: 38px;
+                border: 1px solid rgba(77, 216, 255, 0.28);
+                border-radius: 999px;
+                padding: 0 14px;
+                background: rgba(255,255,255,0.055);
+                color: rgba(244,251,255,0.94);
+                font-weight: 900;
+                cursor: pointer;
+                text-decoration: none;
+            }
+            .prediction-account-button:hover {
+                border-color: rgba(115, 232, 255, 0.54);
+                color: #73e8ff;
+            }
+            .prediction-account-button.secondary {
+                color: #8df5bd;
+            }
+            .prediction-account-status {
+                margin-top: 12px;
+                color: rgba(220, 238, 250, 0.72);
+                font-size: 0.88rem;
+                font-weight: 800;
+            }
+            .prediction-account-status[data-status="good"] { color: #8df5bd; }
+            .prediction-account-status[data-status="warn"] { color: #ffe29e; }
+            .prediction-account-status[data-status="danger"] { color: #ff9f9f; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function boot() {
+        injectStyles();
+        attachButtonListeners();
+        attachSelectionListeners();
+        patchFetchForPredictionHistory();
+        loadAccount();
+
+        window.setInterval(attachSelectionListeners, 1500);
+        window.setInterval(attachButtonListeners, 1500);
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+    } else {
+        boot();
+    }
+
+    window.AISP2PredictionAccountIntegration = {
+        version: VERSION,
+        state,
+        saveSearch,
+        followPlayer,
+        followTeam,
+        getCurrentSelection,
+        reloadAccount: loadAccount
+    };
+
+    window.AISP2_PREDICTION_ACCOUNT_INTEGRATION_PHASE_14_PART_4 = true;
+}());
+

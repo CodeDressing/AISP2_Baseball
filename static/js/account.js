@@ -672,3 +672,427 @@
    ============================================================ */
 
 window.AISP2_ACCOUNT_JS_PHASE_13_PART_7 = true;
+
+/* ============================================================
+   AISP2 BASEBALL
+   FILE: static/js/account.js
+   PHASE 14 PART 4.0 - LIVE ACCOUNT DASHBOARD INTEGRATION
+
+   PURPOSE:
+   Hydrate the protected account dashboard with real account data:
+   - saved searches
+   - followed players
+   - followed teams
+   - prediction history
+
+   APIs:
+   - GET /api/account/searches
+   - GET /api/account/subscriptions
+   - GET /api/account/predictions
+   ============================================================ */
+
+(function initializeAISP2LiveAccountDashboardIntegration() {
+    "use strict";
+
+    const VERSION = "phase_14_part_4_0_live_account_dashboard_integration";
+
+    const state = {
+        searches: [],
+        players: [],
+        teams: [],
+        predictions: [],
+        failures: [],
+        loadedAt: null
+    };
+
+    function $(selector) {
+        return document.querySelector(selector);
+    }
+
+    function safeText(value, fallback) {
+        const text = String(value ?? "").trim();
+        return text || fallback || "";
+    }
+
+    function setStatus(message, kind) {
+        const target = $("[data-account-live-status]");
+        if (!target) {
+            return;
+        }
+
+        target.textContent = message;
+        target.dataset.status = kind || "info";
+    }
+
+    function setCount(name, value) {
+        const target = $(`[data-account-live-count="${name}"]`);
+        if (target) {
+            target.textContent = String(value || 0);
+        }
+    }
+
+    function listTarget(name) {
+        return $(`[data-account-live-list="${name}"]`);
+    }
+
+    function clearList(name) {
+        const target = listTarget(name);
+        if (!target) {
+            return null;
+        }
+
+        target.innerHTML = "";
+        return target;
+    }
+
+    function emptyItem(message) {
+        const node = document.createElement("div");
+        node.className = "account-live-empty";
+        node.textContent = message;
+        return node;
+    }
+
+    function item(title, meta, detail) {
+        const node = document.createElement("div");
+        node.className = "account-live-item";
+
+        const titleNode = document.createElement("strong");
+        titleNode.textContent = safeText(title, "Untitled");
+
+        const metaNode = document.createElement("span");
+        metaNode.textContent = safeText(meta, "No metadata");
+
+        node.appendChild(titleNode);
+        node.appendChild(metaNode);
+
+        if (detail) {
+            const detailNode = document.createElement("p");
+            detailNode.textContent = detail;
+            node.appendChild(detailNode);
+        }
+
+        return node;
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, {
+            method: "GET",
+            credentials: "same-origin",
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+
+        let payload = null;
+
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = {
+                success: false,
+                detail: "Non-JSON response received."
+            };
+        }
+
+        if (!response.ok) {
+            const message = payload.detail || payload.error || `Request failed with HTTP ${response.status}`;
+            const wrapped = new Error(message);
+            wrapped.status = response.status;
+            wrapped.payload = payload;
+            throw wrapped;
+        }
+
+        return payload;
+    }
+
+    function renderSearches(searches) {
+        const target = clearList("searches");
+        if (!target) {
+            return;
+        }
+
+        setCount("searches", searches.length);
+
+        if (!searches.length) {
+            target.appendChild(emptyItem("No saved searches yet."));
+            return;
+        }
+
+        searches.slice(0, 12).forEach((search) => {
+            target.appendChild(item(
+                search.query || search.entity_name || "Saved search",
+                `${search.search_type || "search"} | ${search.source_page || "unknown"}`,
+                [
+                    search.player_name,
+                    search.team_name,
+                    search.outcome_label
+                ].filter(Boolean).join(" | ")
+            ));
+        });
+    }
+
+    function renderPlayers(players) {
+        const target = clearList("players");
+        if (!target) {
+            return;
+        }
+
+        setCount("players", players.length);
+
+        if (!players.length) {
+            target.appendChild(emptyItem("No followed players yet."));
+            return;
+        }
+
+        players.slice(0, 12).forEach((player) => {
+            target.appendChild(item(
+                player.player_name || `Player ${player.player_id || player.mlb_player_id || ""}`,
+                player.team_name || "Team pending",
+                `Status: ${player.status || "active"}`
+            ));
+        });
+    }
+
+    function renderTeams(teams) {
+        const target = clearList("teams");
+        if (!target) {
+            return;
+        }
+
+        setCount("teams", teams.length);
+
+        if (!teams.length) {
+            target.appendChild(emptyItem("No followed teams yet."));
+            return;
+        }
+
+        teams.slice(0, 12).forEach((team) => {
+            target.appendChild(item(
+                team.team_name || `Team ${team.team_id || team.mlb_team_id || ""}`,
+                team.team_abbreviation || "MLB team",
+                `Status: ${team.status || "active"}`
+            ));
+        });
+    }
+
+    function renderPredictions(predictions) {
+        const target = clearList("predictions");
+        if (!target) {
+            return;
+        }
+
+        setCount("predictions", predictions.length);
+
+        if (!predictions.length) {
+            target.appendChild(emptyItem("No prediction history yet."));
+            return;
+        }
+
+        predictions.slice(0, 20).forEach((prediction) => {
+            const probability = prediction.predicted_probability;
+            const confidence = prediction.confidence;
+
+            target.appendChild(item(
+                `${prediction.player_name_snapshot || "Player"} - ${prediction.outcome_label || prediction.outcome_key || "Prediction"}`,
+                [
+                    prediction.team_name_snapshot,
+                    probability !== null && probability !== undefined ? `${probability}%` : null,
+                    confidence !== null && confidence !== undefined ? `Confidence ${confidence}%` : null
+                ].filter(Boolean).join(" | "),
+                `Lifecycle: ${prediction.prediction_lifecycle || "pending_result"} | Model: ${prediction.model_name || "AISP2"}`
+            ));
+        });
+    }
+
+    function injectStyles() {
+        if (document.querySelector("[data-aisp2-account-live-style]")) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.dataset.aisp2AccountLiveStyle = "true";
+        style.textContent = `
+            .account-live-data-shell {
+                margin: 24px auto;
+                width: min(1180px, calc(100% - 32px));
+                padding: clamp(18px, 3vw, 28px);
+                border-radius: 30px;
+                border: 1px solid rgba(77, 216, 255, 0.22);
+                background:
+                    radial-gradient(circle at 0% 0%, rgba(77, 216, 255, 0.14), transparent 36%),
+                    rgba(5, 18, 38, 0.72);
+                box-shadow: 0 24px 80px rgba(0,0,0,0.26);
+            }
+            .account-live-eyebrow {
+                color: #73e8ff;
+                font-size: 0.72rem;
+                font-weight: 950;
+                text-transform: uppercase;
+                letter-spacing: 0.12em;
+            }
+            .account-live-header h2 {
+                margin: 8px 0 8px;
+                color: rgba(244,251,255,0.97);
+                font-size: clamp(1.8rem, 4vw, 3.2rem);
+                letter-spacing: -0.05em;
+            }
+            .account-live-header p {
+                margin: 0;
+                color: rgba(220, 238, 250, 0.68);
+                line-height: 1.55;
+            }
+            .account-live-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 14px;
+                margin-top: 18px;
+            }
+            .account-live-panel {
+                min-height: 220px;
+                padding: 16px;
+                border-radius: 22px;
+                border: 1px solid rgba(77, 216, 255, 0.18);
+                background: rgba(255,255,255,0.045);
+            }
+            .account-live-panel.wide {
+                grid-column: 1 / -1;
+            }
+            .account-live-panel-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+            .account-live-panel-header span {
+                color: rgba(225,242,255,0.72);
+                font-weight: 950;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                font-size: 0.74rem;
+            }
+            .account-live-panel-header strong {
+                color: #8df5bd;
+                font-size: 1.4rem;
+            }
+            .account-live-list {
+                display: grid;
+                gap: 10px;
+            }
+            .account-live-item,
+            .account-live-empty {
+                padding: 12px;
+                border-radius: 16px;
+                border: 1px solid rgba(255,255,255,0.08);
+                background: rgba(0,0,0,0.16);
+            }
+            .account-live-item strong {
+                display: block;
+                color: rgba(244,251,255,0.96);
+                margin-bottom: 4px;
+            }
+            .account-live-item span,
+            .account-live-item p,
+            .account-live-empty {
+                color: rgba(220,238,250,0.66);
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+            .account-live-item p {
+                margin: 6px 0 0;
+            }
+            .account-live-status {
+                margin-top: 14px;
+                color: rgba(220,238,250,0.68);
+                font-weight: 850;
+            }
+            .account-live-status[data-status="good"] { color: #8df5bd; }
+            .account-live-status[data-status="warn"] { color: #ffe29e; }
+            .account-live-status[data-status="danger"] { color: #ff9f9f; }
+            @media (max-width: 980px) {
+                .account-live-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    async function loadSearches() {
+        const payload = await fetchJson("/api/account/searches?limit=25");
+        state.searches = payload.searches || [];
+        renderSearches(state.searches);
+    }
+
+    async function loadSubscriptions() {
+        const payload = await fetchJson("/api/account/subscriptions?kind=all&limit=100");
+        state.players = payload.players || [];
+        state.teams = payload.teams || [];
+        renderPlayers(state.players);
+        renderTeams(state.teams);
+    }
+
+    async function loadPredictions() {
+        const payload = await fetchJson("/api/account/predictions?limit=25");
+        state.predictions = payload.predictions || [];
+        renderPredictions(state.predictions);
+    }
+
+    async function reloadLiveAccountDashboard() {
+        injectStyles();
+        setStatus("Loading live account data...", "info");
+
+        const jobs = [
+            loadSearches(),
+            loadSubscriptions(),
+            loadPredictions()
+        ];
+
+        const results = await Promise.allSettled(jobs);
+
+        state.failures = results
+            .filter((result) => result.status === "rejected")
+            .map((result) => String(result.reason && result.reason.message ? result.reason.message : result.reason));
+
+        state.loadedAt = new Date().toISOString();
+
+        if (state.failures.length) {
+            if (state.failures.some((message) => message.toLowerCase().includes("authentication"))) {
+                setStatus("Login required to load live account data.", "warn");
+            } else {
+                setStatus(`Some account data could not load: ${state.failures.join(" | ")}`, "danger");
+            }
+        } else {
+            setStatus("Live account data loaded.", "good");
+        }
+
+        return state;
+    }
+
+    function boot() {
+        if (!$("[data-account-live-data-shell]")) {
+            return;
+        }
+
+        reloadLiveAccountDashboard();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+    } else {
+        boot();
+    }
+
+    window.AISP2LiveAccountDashboardIntegration = {
+        version: VERSION,
+        state,
+        reload: reloadLiveAccountDashboard,
+        renderSearches,
+        renderPlayers,
+        renderTeams,
+        renderPredictions
+    };
+
+    window.AISP2_LIVE_ACCOUNT_DASHBOARD_PHASE_14_PART_4 = true;
+}());
+
