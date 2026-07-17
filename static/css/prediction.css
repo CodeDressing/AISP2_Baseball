@@ -1285,3 +1285,159 @@ body {
     }
 }
 
+
+/* ============================================================
+   SECTION 1001 - PHASE 12 PART 5.12 COMPACT HERO HEADER
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Compress Prediction Workbench hero/header so it uses fewer
+   lines, has less vertical weight, and reads like a premium
+   enterprise command header.
+   ============================================================ */
+
+
+/* ============================================================
+   1001.01 - HERO CONTAINER COMPRESSION
+   ============================================================ */
+
+.prediction-hero,
+.prediction-header {
+    min-height: unset !important;
+    padding: 22px 28px !important;
+    border-radius: 24px !important;
+    display: grid !important;
+    align-items: center !important;
+}
+
+.prediction-hero-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+    max-width: 100% !important;
+}
+
+.prediction-workbench .prediction-hero {
+    margin-bottom: 0 !important;
+}
+
+
+/* ============================================================
+   1001.02 - MAKE TITLE TAKE LESS VERTICAL SPACE
+   ============================================================ */
+
+.prediction-title {
+    max-width: none !important;
+    font-size: clamp(3.25rem, 5.4vw, 5.25rem) !important;
+    line-height: 0.88 !important;
+    letter-spacing: -0.07em !important;
+    margin: 0 !important;
+}
+
+/* Prefer one-line title on wide screens. */
+@media (min-width: 1180px) {
+    .prediction-title {
+        white-space: nowrap !important;
+        font-size: clamp(3.25rem, 5.1vw, 5rem) !important;
+    }
+}
+
+
+/* ============================================================
+   1001.03 - EYEBROW SMALLER AND CLEANER
+   ============================================================ */
+
+.eyebrow,
+.prediction-eyebrow {
+    margin-bottom: 4px !important;
+    padding: 6px 11px !important;
+    font-size: 0.66rem !important;
+    letter-spacing: 0.14em !important;
+    border-radius: 999px !important;
+}
+
+.eyebrow .pulse,
+.prediction-eyebrow .pulse,
+.pulse {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+
+/* ============================================================
+   1001.04 - SUBTITLE COMPACT WIDTH AND LINE HEIGHT
+   ============================================================ */
+
+.prediction-subtitle {
+    max-width: 980px !important;
+    font-size: 0.94rem !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+    color: rgba(224, 239, 252, 0.82) !important;
+}
+
+
+/* ============================================================
+   1001.05 - DESKTOP COMMAND-BAR VERSION
+   ============================================================ */
+
+@media (min-width: 1280px) {
+    .prediction-hero,
+    .prediction-header {
+        padding-top: 20px !important;
+        padding-bottom: 20px !important;
+    }
+
+    .prediction-hero-copy {
+        gap: 7px !important;
+    }
+
+    .prediction-title {
+        line-height: 0.86 !important;
+    }
+
+    .prediction-subtitle {
+        max-width: 1040px !important;
+    }
+}
+
+
+/* ============================================================
+   1001.06 - LAPTOP / TABLET SAFETY
+   ============================================================ */
+
+@media (max-width: 1179px) {
+    .prediction-title {
+        white-space: normal !important;
+        font-size: clamp(3rem, 8vw, 4.8rem) !important;
+        line-height: 0.92 !important;
+    }
+
+    .prediction-hero,
+    .prediction-header {
+        padding: 22px !important;
+    }
+}
+
+
+/* ============================================================
+   1001.07 - MOBILE SAFETY
+   ============================================================ */
+
+@media (max-width: 720px) {
+    .prediction-title {
+        font-size: clamp(2.7rem, 14vw, 4rem) !important;
+        line-height: 0.94 !important;
+    }
+
+    .prediction-subtitle {
+        font-size: 0.9rem !important;
+        line-height: 1.45 !important;
+    }
+
+    .prediction-hero,
+    .prediction-header {
+        padding: 18px !important;
+        border-radius: 20px !important;
+    }
+}
+
