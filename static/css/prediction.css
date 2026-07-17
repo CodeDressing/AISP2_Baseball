@@ -640,3 +640,480 @@ git commit -m "PHASE 12 PART 5.6 | 2026-07-16 | Upgrade Prediction Workbench Pre
 git push origin main
 
 git status
+/* ============================================================
+   SECTION 100 - PHASE 12 PART 5.7 DENSE ENTERPRISE WORKBENCH
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Remove excessive negative space and convert the Prediction
+   Workbench into a denser professional analytics cockpit.
+   ============================================================ */
+
+
+/* ============================================================
+   100.01 - GLOBAL DENSITY
+   ============================================================ */
+
+.prediction-container {
+    width: min(1480px, calc(100vw - 56px)) !important;
+    max-width: 1480px !important;
+    padding-top: 42px !important;
+    padding-bottom: 64px !important;
+}
+
+.prediction-header {
+    max-width: 1040px !important;
+    margin-bottom: 24px !important;
+}
+
+.prediction-title {
+    margin-bottom: 14px !important;
+}
+
+.prediction-subtitle {
+    max-width: 980px !important;
+    line-height: 1.55 !important;
+    margin-bottom: 0 !important;
+}
+
+
+/* ============================================================
+   100.02 - COMPACT TOP STATUS ROW
+   ============================================================ */
+
+.prediction-header .prediction-stat-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    margin-top: 20px !important;
+}
+
+.prediction-header .prediction-stat-chip {
+    min-height: 54px !important;
+    padding: 12px 14px !important;
+    border-radius: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+}
+
+.prediction-header .prediction-stat-chip span,
+.prediction-header .prediction-stat-chip strong {
+    display: inline !important;
+}
+
+.prediction-header .prediction-stat-chip span {
+    font-size: 0.68rem !important;
+    line-height: 1 !important;
+}
+
+.prediction-header .prediction-stat-chip strong {
+    font-size: 0.88rem !important;
+    line-height: 1 !important;
+}
+
+
+/* ============================================================
+   100.03 - COMPACT CONTROL PANEL
+   ============================================================ */
+
+.prediction-selector-panel {
+    padding: 22px !important;
+    margin-top: 22px !important;
+    margin-bottom: 22px !important;
+    border-radius: 26px !important;
+}
+
+.prediction-selector-panel > div:first-child {
+    align-items: center !important;
+}
+
+.prediction-selector-panel h2 {
+    margin-bottom: 6px !important;
+}
+
+.prediction-selector-panel .prediction-subtitle {
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
+}
+
+[data-selector-status-card] {
+    min-width: 180px !important;
+    min-height: 58px !important;
+    padding: 12px 14px !important;
+}
+
+.prediction-form-grid {
+    grid-template-columns: minmax(210px, 0.9fr) minmax(260px, 1.05fr) minmax(180px, 0.62fr) !important;
+    gap: 16px !important;
+    margin-top: 18px !important;
+}
+
+.prediction-field label {
+    margin-bottom: 7px !important;
+}
+
+.prediction-field select,
+.prediction-field input {
+    min-height: 50px !important;
+    border-radius: 15px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.prediction-field small,
+.prediction-field .prediction-explanation-text {
+    margin-top: 6px !important;
+    font-size: 0.76rem !important;
+    line-height: 1.35 !important;
+}
+
+.prediction-action-row {
+    margin-top: 16px !important;
+    gap: 10px !important;
+}
+
+.prediction-primary-button,
+.prediction-secondary-button {
+    min-height: 46px !important;
+    padding: 0 22px !important;
+}
+
+
+/* ============================================================
+   100.04 - DIAGNOSTICS AS COMPACT GRID, NOT TALL BLOCKS
+   ============================================================ */
+
+.prediction-selector-panel [data-selector-diagnostics],
+.prediction-selector-panel .prediction-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 14px !important;
+}
+
+.prediction-selector-panel .prediction-stat-chip {
+    min-height: 52px !important;
+    padding: 11px 13px !important;
+    border-radius: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+}
+
+.prediction-selector-panel .prediction-stat-chip span,
+.prediction-selector-panel .prediction-stat-chip strong {
+    display: inline !important;
+}
+
+.prediction-selector-panel .prediction-stat-chip span {
+    font-size: 0.64rem !important;
+}
+
+.prediction-selector-panel .prediction-stat-chip strong {
+    font-size: 0.82rem !important;
+}
+
+[data-selector-warning] {
+    margin-top: 12px !important;
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
+    font-size: 0.86rem !important;
+    line-height: 1.45 !important;
+}
+
+
+/* ============================================================
+   100.05 - MAIN RESULT GRID DENSITY
+   ============================================================ */
+
+.prediction-result-grid {
+    grid-template-columns: minmax(0, 1.42fr) minmax(380px, 0.78fr) !important;
+    gap: 22px !important;
+    margin-top: 20px !important;
+}
+
+.main-probability-card {
+    min-height: unset !important;
+    padding: 28px !important;
+    border-radius: 28px !important;
+}
+
+.prediction-player-name {
+    margin-top: 8px !important;
+    margin-bottom: 10px !important;
+}
+
+.prediction-outcome-label {
+    margin-top: 2px !important;
+}
+
+.prediction-big-number {
+    margin-top: 24px !important;
+    margin-bottom: 8px !important;
+    font-size: clamp(5.6rem, 8.4vw, 9.2rem) !important;
+}
+
+.prediction-confidence {
+    margin-top: 4px !important;
+}
+
+.main-probability-card .prediction-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 22px !important;
+}
+
+.main-probability-card .prediction-stat-chip {
+    min-height: 66px !important;
+    padding: 13px 15px !important;
+    border-radius: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+}
+
+.main-probability-card .prediction-stat-chip span,
+.main-probability-card .prediction-stat-chip strong {
+    display: inline !important;
+}
+
+.main-probability-card .prediction-stat-chip span {
+    font-size: 0.67rem !important;
+}
+
+.main-probability-card .prediction-stat-chip strong {
+    font-size: 0.86rem !important;
+}
+
+[data-result-ai-explanation] {
+    margin-top: 20px !important;
+    padding: 16px 0 0 !important;
+    font-size: 0.92rem !important;
+    line-height: 1.55 !important;
+}
+
+
+/* ============================================================
+   100.06 - AI PANEL DENSITY
+   ============================================================ */
+
+.prediction-explanation-panel {
+    padding: 24px !important;
+    border-radius: 28px !important;
+}
+
+[data-ai-intelligence-panel] {
+    top: 78px !important;
+}
+
+[data-ai-intelligence-panel] .prediction-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 16px !important;
+}
+
+[data-ai-intelligence-panel] .prediction-stat-chip {
+    min-height: 60px !important;
+    padding: 12px 13px !important;
+    border-radius: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+}
+
+[data-ai-intelligence-panel] .prediction-stat-chip span,
+[data-ai-intelligence-panel] .prediction-stat-chip strong {
+    display: inline !important;
+}
+
+[data-ai-intelligence-panel] .prediction-stat-chip span {
+    font-size: 0.62rem !important;
+}
+
+[data-ai-intelligence-panel] .prediction-stat-chip strong {
+    font-size: 0.82rem !important;
+}
+
+[data-ai-intelligence-panel] section {
+    margin-top: 16px !important;
+    padding-top: 14px !important;
+}
+
+[data-intelligence-reasoning],
+[data-intelligence-summary] {
+    font-size: 0.9rem !important;
+    line-height: 1.55 !important;
+}
+
+[data-intelligence-warnings],
+[data-intelligence-next-data] {
+    font-size: 0.86rem !important;
+    line-height: 1.45 !important;
+}
+
+
+/* ============================================================
+   100.07 - SUPPORTING INTELLIGENCE ROW
+   ============================================================ */
+
+[data-supporting-intelligence] {
+    margin-top: 14px !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+[data-supporting-intelligence] .prediction-stat-chip {
+    min-height: 54px !important;
+    padding: 12px 14px !important;
+    border-radius: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+}
+
+[data-supporting-intelligence] .prediction-stat-chip span,
+[data-supporting-intelligence] .prediction-stat-chip strong {
+    display: inline !important;
+}
+
+
+/* ============================================================
+   100.08 - LOWER SECTIONS: TURN TEXT INTO DENSE PANELS
+   ============================================================ */
+
+[data-matchup-analysis-panel],
+[data-monte-carlo-panel],
+[data-ai-analyst-notes] {
+    margin-top: 18px !important;
+    padding: 24px !important;
+    border-radius: 26px !important;
+}
+
+[data-matchup-analysis-panel] .prediction-stat-grid,
+[data-monte-carlo-panel] .prediction-stat-grid,
+[data-ai-analyst-notes] .prediction-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 16px !important;
+}
+
+[data-matchup-analysis-panel] .prediction-stat-chip,
+[data-monte-carlo-panel] .prediction-stat-chip,
+[data-ai-analyst-notes] .prediction-stat-chip {
+    min-height: 56px !important;
+    padding: 12px 14px !important;
+    border-radius: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+}
+
+[data-matchup-analysis-panel] .prediction-stat-chip span,
+[data-matchup-analysis-panel] .prediction-stat-chip strong,
+[data-monte-carlo-panel] .prediction-stat-chip span,
+[data-monte-carlo-panel] .prediction-stat-chip strong,
+[data-ai-analyst-notes] .prediction-stat-chip span,
+[data-ai-analyst-notes] .prediction-stat-chip strong {
+    display: inline !important;
+}
+
+.prop-grid {
+    margin-top: 18px !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+.prop-card {
+    min-height: 92px !important;
+    padding: 16px !important;
+    border-radius: 18px !important;
+}
+
+.prop-probability {
+    margin-top: 12px !important;
+    font-size: 1.25rem !important;
+}
+
+
+/* ============================================================
+   100.09 - STATUS COLORING
+   ============================================================ */
+
+[data-selector-health],
+[data-selector-state],
+[data-prediction-api-status],
+[data-result-probability],
+[data-prop-home-run],
+[data-prop-hit],
+[data-prop-rbi],
+[data-prop-run-scored],
+[data-prop-total-bases],
+[data-prop-strikeout] {
+    color: #91ffc8 !important;
+}
+
+[data-result-risk],
+[data-intelligence-risk],
+[data-warehouse-status],
+[data-result-warehouse-status],
+[data-intelligence-warehouse] {
+    color: #ffe09c !important;
+}
+
+[data-selector-source],
+[data-bootstrap-source],
+[data-result-source],
+[data-intelligence-data-source] {
+    color: #91e7ff !important;
+}
+
+
+/* ============================================================
+   100.10 - RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1320px) {
+    .prediction-result-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    [data-ai-intelligence-panel] {
+        position: relative !important;
+        top: auto !important;
+    }
+
+    .prop-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 980px) {
+    .prediction-container {
+        width: min(100%, calc(100vw - 28px)) !important;
+    }
+
+    .prediction-header .prediction-stat-grid,
+    .prediction-selector-panel [data-selector-diagnostics],
+    .prediction-selector-panel .prediction-stat-grid,
+    .prediction-form-grid,
+    [data-supporting-intelligence],
+    [data-matchup-analysis-panel] .prediction-stat-grid,
+    [data-monte-carlo-panel] .prediction-stat-grid,
+    [data-ai-analyst-notes] .prediction-stat-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .main-probability-card .prediction-stat-grid,
+    [data-ai-intelligence-panel] .prediction-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .main-probability-card .prediction-stat-grid,
+    [data-ai-intelligence-panel] .prediction-stat-grid,
+    .prop-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
