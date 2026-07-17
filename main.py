@@ -9894,6 +9894,59 @@ def aisp2_auth_account_dashboard_html(
     )
 
 
+
+# ============================================================
+# SECTION 15.94 - PHASE 13 PART 7.3 - PROTECTED PAGE AUTH REDIRECTS
+# FILE: main.py
+# PURPOSE:
+# Browser UX fix for protected account pages.
+#
+# Before this section:
+#   Visiting /ceo or /account while logged out returned:
+#   {"detail":"Authentication required."}
+#
+# After this section:
+#   Visiting /ceo or /account while logged out redirects to:
+#   /auth/login
+#
+# API routes still return JSON errors.
+# ============================================================
+
+@app.exception_handler(HTTPException)
+async def aisp2_protected_page_http_exception_handler(
+    request: Request,
+    exc: HTTPException,
+):
+    from fastapi.responses import JSONResponse, RedirectResponse
+
+    path = str(request.url.path or "")
+
+    protected_browser_pages = {
+        "/account",
+        "/ceo",
+    }
+
+    if exc.status_code == 401 and path in protected_browser_pages:
+        return RedirectResponse(
+            url="/auth/login?message=Please%20log%20in%20to%20continue",
+            status_code=303,
+        )
+
+    if exc.status_code == 403 and path == "/ceo":
+        return RedirectResponse(
+            url="/auth/login?message=CEO%20access%20required",
+            status_code=303,
+        )
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+        },
+        headers=getattr(exc, "headers", None),
+    )
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -10422,6 +10475,7 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
 
 
 
