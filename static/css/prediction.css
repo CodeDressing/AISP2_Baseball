@@ -1667,3 +1667,415 @@ body {
     }
 }
 
+
+/* ============================================================
+   SECTION 1004 - PHASE 12 PART 5.15 FINAL THREE-COLUMN COCKPIT
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Finalize Prediction Workbench section placement:
+   - Prediction Controls on the left.
+   - AISP2 Intelligence Engine in the center.
+   - AI Prediction Intelligence on the right.
+   ============================================================ */
+
+
+/* ============================================================
+   1004.01 - MASTER PAGE GRID
+   ============================================================ */
+
+.prediction-workbench {
+    width: min(1640px, calc(100vw - 36px)) !important;
+    max-width: 1640px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+
+    display: grid !important;
+    grid-template-columns:
+        minmax(300px, 0.76fr)
+        minmax(560px, 1.72fr)
+        minmax(330px, 0.84fr) !important;
+
+    grid-template-areas:
+        "hero hero hero"
+        "controls result ai"
+        "support support support"
+        "status status status"
+        "error error error" !important;
+
+    gap: 16px !important;
+    align-items: start !important;
+}
+
+
+/* ============================================================
+   1004.02 - SECTION ASSIGNMENTS
+   ============================================================ */
+
+.prediction-hero,
+.prediction-header {
+    grid-area: hero !important;
+}
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    grid-area: controls !important;
+}
+
+.prediction-core-grid,
+.prediction-result-grid {
+    display: contents !important;
+}
+
+.main-probability-card {
+    grid-area: result !important;
+}
+
+.prediction-explanation-panel {
+    grid-area: ai !important;
+}
+
+.supporting-analysis-grid {
+    grid-area: support !important;
+}
+
+.runtime-status-bottom,
+.runtime-status-grid.runtime-status-bottom {
+    grid-area: status !important;
+}
+
+.prediction-error-panel {
+    grid-area: error !important;
+}
+
+
+/* ============================================================
+   1004.03 - REMOVE OLD CONTROLS RIGHT-SIDE VISUAL PLACEHOLDER
+   ============================================================ */
+
+.prediction-controls-card::after,
+.prediction-selector-panel::after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+        "heading"
+        "form"
+        "actions"
+        "diagnostics"
+        "warning" !important;
+    padding: 18px !important;
+    gap: 12px !important;
+    min-height: auto !important;
+    height: auto !important;
+}
+
+
+/* ============================================================
+   1004.04 - LEFT COLUMN: PREDICTION CONTROLS
+   ============================================================ */
+
+.prediction-controls-card .panel-heading-row,
+.prediction-selector-panel > div:first-child {
+    grid-area: heading !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    align-items: start !important;
+}
+
+.prediction-controls-card .selector-state-badge,
+.prediction-selector-panel [data-selector-status-card] {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    padding: 10px 12px !important;
+}
+
+.prediction-controls-card .panel-title,
+.prediction-selector-panel h2 {
+    font-size: 1.35rem !important;
+    line-height: 1.05 !important;
+    margin: 0 0 4px !important;
+}
+
+.prediction-controls-card .panel-copy,
+.prediction-selector-panel .prediction-subtitle {
+    max-width: 100% !important;
+    font-size: 0.82rem !important;
+    line-height: 1.38 !important;
+}
+
+.prediction-controls-card .prediction-form-grid,
+.prediction-selector-panel .prediction-form-grid {
+    grid-area: form !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 9px !important;
+    margin: 0 !important;
+}
+
+.prediction-controls-card .prediction-field,
+.prediction-selector-panel .prediction-field {
+    grid-column: auto !important;
+    gap: 5px !important;
+}
+
+.prediction-controls-card .prediction-field label,
+.prediction-selector-panel .prediction-field label {
+    font-size: 0.58rem !important;
+    letter-spacing: 0.15em !important;
+}
+
+.prediction-controls-card .prediction-field select,
+.prediction-selector-panel .prediction-field select {
+    min-height: 40px !important;
+    padding: 0 12px !important;
+    border-radius: 12px !important;
+    font-size: 0.84rem !important;
+}
+
+.prediction-controls-card .field-note,
+.prediction-selector-panel .prediction-field small {
+    min-height: 12px !important;
+    font-size: 0.68rem !important;
+    line-height: 1.25 !important;
+}
+
+.prediction-controls-card .prediction-action-row,
+.prediction-selector-panel .prediction-action-row {
+    grid-area: actions !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin: 0 !important;
+}
+
+.prediction-controls-card .prediction-primary-button,
+.prediction-controls-card .prediction-secondary-button,
+.prediction-selector-panel .prediction-primary-button,
+.prediction-selector-panel .prediction-secondary-button {
+    min-height: 38px !important;
+    width: 100% !important;
+    padding: 0 10px !important;
+    font-size: 0.76rem !important;
+    white-space: nowrap !important;
+}
+
+.prediction-controls-card .diagnostic-mini-grid,
+.prediction-selector-panel [data-selector-diagnostics],
+.prediction-selector-panel .prediction-stat-grid {
+    grid-area: diagnostics !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 7px !important;
+    margin: 0 !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card,
+.prediction-selector-panel .prediction-stat-chip {
+    min-height: 42px !important;
+    padding: 8px 10px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card span,
+.prediction-selector-panel .prediction-stat-chip span {
+    font-size: 0.54rem !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card strong,
+.prediction-selector-panel .prediction-stat-chip strong {
+    font-size: 0.76rem !important;
+    line-height: 1.15 !important;
+}
+
+.prediction-controls-card .selector-diagnostic-bar,
+.prediction-selector-panel [data-selector-warning] {
+    grid-area: warning !important;
+    min-height: 34px !important;
+    padding: 8px 10px !important;
+    font-size: 0.72rem !important;
+    line-height: 1.3 !important;
+}
+
+
+/* ============================================================
+   1004.05 - CENTER COLUMN: AISP2 INTELLIGENCE ENGINE
+   ============================================================ */
+
+.main-probability-card {
+    min-height: 640px !important;
+    padding: 22px !important;
+    border-radius: 26px !important;
+}
+
+.result-header-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 14px !important;
+    align-items: start !important;
+}
+
+.prediction-player-name {
+    font-size: clamp(3rem, 4.9vw, 5.4rem) !important;
+    line-height: 0.88 !important;
+    letter-spacing: -0.07em !important;
+}
+
+.probability-row {
+    display: grid !important;
+    grid-template-columns: minmax(250px, 0.62fr) minmax(300px, 1fr) !important;
+    gap: 18px !important;
+    align-items: center !important;
+    margin-top: 18px !important;
+}
+
+.prediction-big-number {
+    font-size: clamp(5rem, 7.5vw, 8.6rem) !important;
+    line-height: 0.82 !important;
+}
+
+.main-probability-card .dense-grid-4,
+.main-probability-card .prediction-stat-grid,
+.main-probability-card .metric-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.main-probability-card .prediction-stat-chip {
+    min-height: 58px !important;
+    padding: 11px 12px !important;
+}
+
+
+/* ============================================================
+   1004.06 - RIGHT COLUMN: AI PREDICTION INTELLIGENCE
+   ============================================================ */
+
+.prediction-explanation-panel {
+    min-height: 640px !important;
+    padding: 20px !important;
+    border-radius: 26px !important;
+}
+
+.prediction-explanation-title {
+    font-size: clamp(1.6rem, 2vw, 2.15rem) !important;
+    line-height: 1.05 !important;
+}
+
+.prediction-explanation-panel .metric-card-grid,
+.prediction-explanation-panel .prediction-stat-grid,
+.prediction-explanation-panel .dense-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+}
+
+.prediction-explanation-panel .prediction-stat-chip {
+    min-height: 50px !important;
+    padding: 10px 12px !important;
+}
+
+.prediction-explanation-panel .prediction-stat-chip span {
+    font-size: 0.56rem !important;
+}
+
+.prediction-explanation-panel .prediction-stat-chip strong {
+    font-size: 0.78rem !important;
+    line-height: 1.22 !important;
+}
+
+.prediction-explanation-panel .prediction-explanation-text,
+.prediction-explanation-panel .prediction-list {
+    font-size: 0.82rem !important;
+    line-height: 1.45 !important;
+}
+
+
+/* ============================================================
+   1004.07 - SUPPORTING SECTIONS BELOW
+   ============================================================ */
+
+.supporting-analysis-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+}
+
+
+/* ============================================================
+   1004.08 - RESPONSIVE FALLBACKS
+   ============================================================ */
+
+@media (max-width: 1420px) {
+    .prediction-workbench {
+        grid-template-columns:
+            minmax(280px, 0.78fr)
+            minmax(520px, 1.5fr) !important;
+        grid-template-areas:
+            "hero hero"
+            "controls result"
+            "ai ai"
+            "support support"
+            "status status"
+            "error error" !important;
+    }
+
+    .prediction-explanation-panel {
+        min-height: auto !important;
+    }
+
+    .prediction-explanation-panel .metric-card-grid,
+    .prediction-explanation-panel .prediction-stat-grid,
+    .prediction-explanation-panel .dense-grid-2 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 1080px) {
+    .prediction-workbench {
+        grid-template-columns: 1fr !important;
+        grid-template-areas:
+            "hero"
+            "controls"
+            "result"
+            "ai"
+            "support"
+            "status"
+            "error" !important;
+    }
+
+    .main-probability-card,
+    .prediction-explanation-panel {
+        min-height: auto !important;
+    }
+
+    .prediction-controls-card .prediction-action-row,
+    .prediction-selector-panel .prediction-action-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 760px) {
+    .main-probability-card .dense-grid-4,
+    .main-probability-card .prediction-stat-grid,
+    .main-probability-card .metric-card-grid,
+    .prediction-explanation-panel .metric-card-grid,
+    .prediction-explanation-panel .prediction-stat-grid,
+    .prediction-explanation-panel .dense-grid-2,
+    .supporting-analysis-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .probability-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+
