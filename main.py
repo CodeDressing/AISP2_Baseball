@@ -9437,6 +9437,229 @@ def aisp2_auth_login_html(
 """
 
 
+
+# ============================================================
+# SECTION 15.92 - PHASE 13 PART 4.0 - TEMPLATE-BACKED ACCOUNT DASHBOARD RENDERER
+# FILE: main.py
+# PURPOSE:
+# Render templates/account_dashboard.html for protected user
+# account dashboards while preserving CEO dashboard support.
+# ============================================================
+
+def aisp2_auth_html_escape(value: Any) -> str:
+    import html
+
+    if value is None:
+        return "Not Available"
+
+    return html.escape(str(value), quote=True)
+
+
+def aisp2_auth_account_metric_counts(account: Mapping[str, Any]) -> dict[str, Any]:
+    counts = {
+        "saved_search_count": 0,
+        "recent_search_count": 0,
+        "player_subscription_count": 0,
+        "team_subscription_count": 0,
+        "prediction_history_count": 0,
+        "pending_result_count": 0,
+        "resolved_prediction_count": 0,
+        "training_feedback_count": 0,
+    }
+
+    account_id = account.get("id")
+
+    if not account_id or not aisp2_auth_database_available():
+        return counts
+
+    try:
+        with managed_database_session() as database_session:
+            if AuthUserSearchHistoryModel is not None:
+                counts["saved_search_count"] = (
+                    database_session.query(AuthUserSearchHistoryModel)
+                    .filter(AuthUserSearchHistoryModel.account_id == int(account_id))
+                    .count()
+                )
+                counts["recent_search_count"] = counts["saved_search_count"]
+
+            if AuthUserPlayerSubscriptionModel is not None:
+                counts["player_subscription_count"] = (
+                    database_session.query(AuthUserPlayerSubscriptionModel)
+                    .filter(AuthUserPlayerSubscriptionModel.account_id == int(account_id))
+                    .count()
+                )
+
+            if AuthUserTeamSubscriptionModel is not None:
+                counts["team_subscription_count"] = (
+                    database_session.query(AuthUserTeamSubscriptionModel)
+                    .filter(AuthUserTeamSubscriptionModel.account_id == int(account_id))
+                    .count()
+                )
+
+            if AuthUserPredictionHistoryModel is not None:
+                prediction_query = (
+                    database_session.query(AuthUserPredictionHistoryModel)
+                    .filter(AuthUserPredictionHistoryModel.account_id == int(account_id))
+                )
+
+                counts["prediction_history_count"] = prediction_query.count()
+
+                try:
+                    counts["pending_result_count"] = (
+                        prediction_query
+                        .filter(AuthUserPredictionHistoryModel.resolution_status.is_(None))
+                        .count()
+                    )
+                except Exception:
+                    counts["pending_result_count"] = 0
+
+                try:
+                    counts["resolved_prediction_count"] = (
+                        prediction_query
+                        .filter(AuthUserPredictionHistoryModel.resolution_status.isnot(None))
+                        .count()
+                    )
+                except Exception:
+                    counts["resolved_prediction_count"] = 0
+
+            if AuthModelTrainingFeedbackEventModel is not None:
+                counts["training_feedback_count"] = (
+                    database_session.query(AuthModelTrainingFeedbackEventModel)
+                    .filter(AuthModelTrainingFeedbackEventModel.account_id == int(account_id))
+                    .count()
+                )
+
+    except Exception as error:
+        LOGGER.warning("Account dashboard metric counts failed: %s", error)
+
+    return counts
+
+
+def aisp2_auth_render_template_text(
+    template_text: str,
+    context: Mapping[str, Any],
+) -> str:
+    rendered = template_text
+
+    for key, value in context.items():
+        rendered = rendered.replace(
+            "{{ " + str(key) + " }}",
+            aisp2_auth_html_escape(value),
+        )
+
+    return rendered
+
+
+def aisp2_auth_account_dashboard_html(
+    account: Mapping[str, Any],
+    *,
+    title: str,
+    ceo: bool = False,
+) -> str:
+    if ceo:
+        return f"""
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>AISP2 CEO Command Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #020914, #031a1c);
+            color: #f3f9ff;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+        .shell {{
+            width: min(1180px, calc(100vw - 36px));
+            margin: 34px auto;
+            display: grid;
+            gap: 18px;
+        }}
+        .panel {{
+            border: 1px solid rgba(143,211,255,0.18);
+            border-radius: 28px;
+            background: rgba(8,28,46,0.90);
+            padding: 26px;
+        }}
+        h1 {{
+            margin: 0 0 12px;
+            font-size: clamp(3rem, 8vw, 6rem);
+            line-height: 0.9;
+            letter-spacing: -0.07em;
+        }}
+        a {{
+            color: #84e8ff;
+            font-weight: 900;
+            text-decoration: none;
+            margin-right: 16px;
+        }}
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="panel">
+            <h1>AISP2 CEO Command</h1>
+            <p>Master access confirmed for {aisp2_auth_html_escape(account.get("username"))}.</p>
+            <a href="/account">User Dashboard</a>
+            <a href="/api/auth/admin/overview">Admin Overview JSON</a>
+            <a href="/api/auth/schema/status">Auth Schema Status</a>
+            <a href="/tools/prediction">Prediction Workbench</a>
+            <a href="/auth/logout">Logout</a>
+        </section>
+    </main>
+</body>
+</html>
+"""
+
+    template_path = TEMPLATE_DIRECTORY / "account_dashboard.html"
+
+    if not template_path.exists():
+        return f"""
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>AISP2 Account Dashboard</title></head>
+<body style="background:#020914;color:#f3f9ff;font-family:system-ui;padding:40px;">
+    <main style="max-width:760px;margin:0 auto;">
+        <h1>AISP2 Account Dashboard</h1>
+        <p>templates/account_dashboard.html was not found.</p>
+        <p>Signed in as {aisp2_auth_html_escape(account.get("username"))}.</p>
+        <a href="/auth/logout">Logout</a>
+    </main>
+</body>
+</html>
+"""
+
+    counts = aisp2_auth_account_metric_counts(account)
+
+    context = {
+        "account_id": account.get("id"),
+        "email": account.get("email"),
+        "username": account.get("username"),
+        "display_name": account.get("display_name") or account.get("username") or "AISP2 User",
+        "role": account.get("role"),
+        "account_status": account.get("account_status"),
+        "is_active": account.get("is_active"),
+        "is_email_verified": account.get("is_email_verified"),
+        "is_ceo_master": account.get("is_ceo_master"),
+        "last_login_at": account.get("last_login_at") or "Not Available",
+        "last_seen_at": account.get("last_seen_at") or "Not Available",
+        "created_at": account.get("created_at") or "Not Available",
+        "secure_login_ready": "Ready",
+        "sessions_ready": "Ready",
+        "subscriptions_ready": "Schema Ready",
+        "prediction_ledger_ready": "Schema Ready",
+        **counts,
+    }
+
+    return aisp2_auth_render_template_text(
+        template_path.read_text(encoding="utf-8"),
+        context,
+    )
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -9965,5 +10188,6 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
 
 

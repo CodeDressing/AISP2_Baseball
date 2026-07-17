@@ -1,0 +1,1004 @@
+﻿<!doctype html>
+<html lang="en" data-aisp2-page="account-dashboard">
+<head>
+    <!-- ======================================================
+         AISP2 BASEBALL INTELLIGENCE PLATFORM
+         FILE: templates/account_dashboard.html
+         PHASE: 13 PART 4.0
+         PURPOSE:
+         Protected user dashboard for account memory, saved
+         searches, followed players, followed teams, prediction
+         history, actual-result follow-up, and model-learning
+         feedback readiness.
+
+         SECURITY DESIGN:
+         - This page is served only by protected /account route.
+         - Session validation happens in main.py.
+         - Template receives public-safe account payload only.
+         - No passwords, tokens, or secrets are rendered here.
+         ====================================================== -->
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AISP2 Account Dashboard</title>
+    <meta name="description" content="AISP2 protected account dashboard for saved baseball searches, subscriptions, prediction history, and model feedback readiness.">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="theme-color" content="#020914">
+
+    <style>
+        /* =====================================================
+           SECTION 01 - DESIGN TOKENS
+           ===================================================== */
+
+        :root {
+            color-scheme: dark;
+
+            --bg-0: #010611;
+            --bg-1: #020914;
+            --bg-2: #031421;
+            --bg-3: #031c1c;
+
+            --panel-0: rgba(6, 20, 35, 0.90);
+            --panel-1: rgba(8, 29, 47, 0.88);
+            --panel-2: rgba(12, 43, 62, 0.74);
+
+            --border-0: rgba(143, 211, 255, 0.13);
+            --border-1: rgba(143, 211, 255, 0.22);
+            --border-good: rgba(137, 245, 189, 0.28);
+            --border-warn: rgba(255, 226, 158, 0.30);
+
+            --text-0: #f3f9ff;
+            --text-1: rgba(231, 244, 255, 0.88);
+            --text-2: rgba(215, 234, 248, 0.72);
+            --text-3: rgba(215, 234, 248, 0.54);
+
+            --cyan: #84e8ff;
+            --mint: #8df5bd;
+            --gold: #ffe29e;
+            --red: #ff8f8f;
+
+            --radius-xl: 30px;
+            --radius-lg: 22px;
+            --radius-md: 15px;
+            --radius-pill: 999px;
+
+            --shadow-xl: 0 30px 100px rgba(0, 0, 0, 0.42);
+            --shadow-md: 0 18px 54px rgba(0, 0, 0, 0.26);
+
+            --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        /* =====================================================
+           SECTION 02 - GLOBAL FOUNDATION
+           ===================================================== */
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--bg-0);
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text-0);
+            font-family: var(--font);
+            background:
+                radial-gradient(circle at 14% 0%, rgba(80, 194, 255, 0.15), transparent 30%),
+                radial-gradient(circle at 88% 12%, rgba(124, 255, 191, 0.11), transparent 30%),
+                linear-gradient(145deg, var(--bg-0), var(--bg-2) 48%, var(--bg-3));
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+            background-size: 54px 54px;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent 78%);
+            opacity: 0.55;
+        }
+
+        a {
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 900;
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        /* =====================================================
+           SECTION 03 - TOP NAV
+           ===================================================== */
+
+        .account-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            min-height: 66px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 0 clamp(18px, 4vw, 42px);
+            background: rgba(1, 8, 22, 0.82);
+            border-bottom: 1px solid rgba(143, 211, 255, 0.09);
+            backdrop-filter: blur(18px);
+        }
+
+        .account-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-0);
+            font-weight: 950;
+            letter-spacing: -0.03em;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 11px;
+            background:
+                radial-gradient(circle at 30% 20%, rgba(255,255,255,0.35), transparent 30%),
+                linear-gradient(135deg, rgba(132,232,255,0.28), rgba(141,245,189,0.16));
+            border: 1px solid rgba(143, 211, 255, 0.16);
+        }
+
+        .account-nav {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .account-nav a {
+            color: rgba(232, 244, 255, 0.78);
+            font-size: 0.86rem;
+        }
+
+        .logout-link {
+            padding: 9px 13px;
+            border-radius: var(--radius-pill);
+            background: rgba(255,255,255,0.055);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+        }
+
+        /* =====================================================
+           SECTION 04 - PAGE SHELL
+           ===================================================== */
+
+        .account-shell {
+            position: relative;
+            z-index: 2;
+            width: min(1540px, calc(100vw - 38px));
+            margin: 26px auto 70px;
+            display: grid;
+            gap: 16px;
+        }
+
+        .panel {
+            border: 1px solid var(--border-0);
+            border-radius: var(--radius-xl);
+            background:
+                radial-gradient(circle at 20% 0%, rgba(101, 204, 255, 0.10), transparent 34%),
+                linear-gradient(145deg, var(--panel-1), rgba(5, 18, 31, 0.88));
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+
+        .panel-inner {
+            padding: clamp(18px, 2.4vw, 28px);
+        }
+
+        .section-title {
+            margin: 0 0 8px;
+            font-size: clamp(1.45rem, 2.1vw, 2.15rem);
+            line-height: 1.05;
+            letter-spacing: -0.045em;
+        }
+
+        .section-copy {
+            margin: 0;
+            color: var(--text-2);
+            line-height: 1.55;
+            font-size: 0.96rem;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            width: fit-content;
+            padding: 7px 11px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.16);
+            background: rgba(255, 255, 255, 0.052);
+            color: var(--cyan);
+            font-size: 0.68rem;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .eyebrow-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--mint);
+            box-shadow: 0 0 18px rgba(141, 245, 189, 0.82);
+        }
+
+        /* =====================================================
+           SECTION 05 - HERO
+           ===================================================== */
+
+        .account-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.38fr) minmax(360px, 0.62fr);
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .hero-main {
+            min-height: 280px;
+            display: grid;
+            align-content: center;
+        }
+
+        .hero-title {
+            max-width: 900px;
+            margin: 18px 0 12px;
+            font-size: clamp(3.2rem, 7vw, 7rem);
+            line-height: 0.86;
+            letter-spacing: -0.08em;
+            color: var(--text-0);
+        }
+
+        .hero-title span {
+            display: block;
+            background: linear-gradient(135deg, #f3f9ff 0%, #aee9ff 48%, #8df5bd 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .hero-actions {
+            margin-top: 22px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .hero-button {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.16);
+            background: rgba(255,255,255,0.055);
+            color: var(--text-0);
+            font-size: 0.84rem;
+            font-weight: 950;
+        }
+
+        .hero-button.primary {
+            color: #02101b;
+            border: 0;
+            background: linear-gradient(135deg, var(--cyan), var(--mint));
+        }
+
+        .hero-side {
+            display: grid;
+            gap: 10px;
+        }
+
+        .identity-card {
+            padding: 18px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-0);
+            background: rgba(255,255,255,0.045);
+        }
+
+        .identity-card span {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--text-3);
+            font-size: 0.66rem;
+            font-weight: 950;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+
+        .identity-card strong {
+            display: block;
+            color: var(--text-0);
+            font-size: 1rem;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+        }
+
+        .identity-card.good strong {
+            color: var(--mint);
+        }
+
+        .identity-card.warn strong {
+            color: var(--gold);
+        }
+
+        /* =====================================================
+           SECTION 06 - DASHBOARD GRID
+           ===================================================== */
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: minmax(300px, 0.88fr) minmax(480px, 1.44fr) minmax(330px, 0.88fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .column-stack {
+            display: grid;
+            gap: 16px;
+        }
+
+        /* =====================================================
+           SECTION 07 - METRIC CARDS
+           ===================================================== */
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .metric-card {
+            min-height: 82px;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background:
+                linear-gradient(145deg, rgba(255,255,255,0.056), rgba(255,255,255,0.026));
+        }
+
+        .metric-card span {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-3);
+            font-size: 0.64rem;
+            font-weight: 950;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+
+        .metric-card strong {
+            color: var(--text-0);
+            font-size: 1.05rem;
+            line-height: 1.28;
+        }
+
+        .metric-card.good strong {
+            color: var(--mint);
+        }
+
+        .metric-card.info strong {
+            color: var(--cyan);
+        }
+
+        .metric-card.warn strong {
+            color: var(--gold);
+        }
+
+        /* =====================================================
+           SECTION 08 - LIST MODULES
+           ===================================================== */
+
+        .list-module {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .list-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+            min-height: 58px;
+            padding: 12px 13px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(143, 211, 255, 0.11);
+            background: rgba(255,255,255,0.038);
+        }
+
+        .list-row-title {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--text-0);
+            font-size: 0.95rem;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .list-row-meta {
+            display: block;
+            color: var(--text-3);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .status-pill {
+            padding: 7px 9px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background: rgba(255,255,255,0.050);
+            color: var(--cyan);
+            font-size: 0.66rem;
+            font-weight: 950;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-pill.good {
+            color: var(--mint);
+            border-color: rgba(137,245,189,0.20);
+        }
+
+        .status-pill.warn {
+            color: var(--gold);
+            border-color: rgba(255,226,158,0.22);
+        }
+
+        .empty-state {
+            margin-top: 16px;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            border: 1px dashed rgba(143, 211, 255, 0.16);
+            color: var(--text-2);
+            line-height: 1.52;
+            background: rgba(255,255,255,0.025);
+        }
+
+        .empty-state strong {
+            color: var(--text-0);
+        }
+
+        /* =====================================================
+           SECTION 09 - PREDICTION TIMELINE
+           ===================================================== */
+
+        .prediction-ledger {
+            display: grid;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .prediction-ledger-row {
+            display: grid;
+            grid-template-columns: 82px minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            padding: 14px;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background:
+                radial-gradient(circle at 0% 0%, rgba(132,232,255,0.08), transparent 36%),
+                rgba(255,255,255,0.038);
+        }
+
+        .probability-badge {
+            width: 72px;
+            height: 72px;
+            display: grid;
+            place-items: center;
+            border-radius: 22px;
+            background: rgba(137,245,189,0.10);
+            border: 1px solid rgba(137,245,189,0.22);
+            color: var(--mint);
+            font-size: 1.35rem;
+            font-weight: 950;
+            letter-spacing: -0.06em;
+        }
+
+        .prediction-name {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-0);
+            font-size: 1.05rem;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .prediction-detail {
+            color: var(--text-2);
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
+        /* =====================================================
+           SECTION 10 - READINESS STRIP
+           ===================================================== */
+
+        .readiness-strip {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .readiness-chip {
+            min-height: 78px;
+            padding: 13px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background: rgba(255,255,255,0.038);
+        }
+
+        .readiness-chip span {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--text-3);
+            font-size: 0.62rem;
+            font-weight: 950;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .readiness-chip strong {
+            color: var(--mint);
+            font-size: 0.92rem;
+            line-height: 1.3;
+        }
+
+        /* =====================================================
+           SECTION 11 - RESPONSIVE
+           ===================================================== */
+
+        @media (max-width: 1260px) {
+            .account-hero,
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-side {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 900px) {
+            .account-shell {
+                width: min(100%, calc(100vw - 24px));
+                margin-top: 18px;
+            }
+
+            .hero-side,
+            .metric-grid,
+            .readiness-strip {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .prediction-ledger-row {
+                grid-template-columns: 1fr;
+            }
+
+            .probability-badge {
+                width: 100%;
+                height: auto;
+                min-height: 54px;
+            }
+        }
+
+        @media (max-width: 620px) {
+            .account-topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                padding-top: 14px;
+                padding-bottom: 14px;
+            }
+
+            .account-nav {
+                gap: 10px;
+            }
+
+            .hero-side,
+            .metric-grid,
+            .readiness-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-title {
+                font-size: clamp(3rem, 17vw, 5rem);
+            }
+
+            .list-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ======================================================
+         SECTION 12 - TOP NAVIGATION
+         ====================================================== -->
+
+    <header class="account-topbar">
+        <a class="account-brand" href="/account">
+            <span class="brand-icon">⚾</span>
+            <span>AISP2 Account</span>
+        </a>
+
+        <nav class="account-nav" aria-label="Account navigation">
+            <a href="/tools/prediction">Predictions</a>
+            <a href="/players">Players</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/api/auth/me">Account API</a>
+            <a class="logout-link" href="/auth/logout">Logout</a>
+        </nav>
+    </header>
+
+    <!-- ======================================================
+         SECTION 13 - ACCOUNT DASHBOARD SHELL
+         ====================================================== -->
+
+    <main class="account-shell">
+        <!-- ==================================================
+             SECTION 14 - HERO
+             ================================================== -->
+
+        <section class="account-hero">
+            <article class="panel hero-main">
+                <div class="panel-inner">
+                    <div class="eyebrow">
+                        <span class="eyebrow-dot" aria-hidden="true"></span>
+                        Protected User Dashboard
+                    </div>
+
+                    <h1 class="hero-title">
+                        Welcome,
+                        <span>{{ display_name }}</span>
+                    </h1>
+
+                    <p class="section-copy">
+                        This dashboard is the account memory center for saved searches,
+                        followed players, followed teams, prediction history, actual-result
+                        follow-up, and future model training feedback.
+                    </p>
+
+                    <div class="hero-actions">
+                        <a class="hero-button primary" href="/tools/prediction">Run Prediction</a>
+                        <a class="hero-button" href="/players">Explore Players</a>
+                        <a class="hero-button" href="/api/auth/me">Inspect Session</a>
+                    </div>
+                </div>
+            </article>
+
+            <aside class="hero-side">
+                <article class="identity-card">
+                    <span>Username</span>
+                    <strong>{{ username }}</strong>
+                </article>
+
+                <article class="identity-card">
+                    <span>Role</span>
+                    <strong>{{ role }}</strong>
+                </article>
+
+                <article class="identity-card good">
+                    <span>Account Status</span>
+                    <strong>{{ account_status }}</strong>
+                </article>
+
+                <article class="identity-card">
+                    <span>Account ID</span>
+                    <strong>{{ account_id }}</strong>
+                </article>
+
+                <article class="identity-card">
+                    <span>Last Login</span>
+                    <strong>{{ last_login_at }}</strong>
+                </article>
+
+                <article class="identity-card warn">
+                    <span>CEO Master</span>
+                    <strong>{{ is_ceo_master }}</strong>
+                </article>
+            </aside>
+        </section>
+
+        <!-- ==================================================
+             SECTION 15 - DASHBOARD BODY
+             ================================================== -->
+
+        <section class="dashboard-grid">
+            <!-- ==============================================
+                 SECTION 15.01 - LEFT COLUMN
+                 ============================================== -->
+
+            <div class="column-stack">
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Account Memory</h2>
+                        <p class="section-copy">
+                            AISP2 will remember what this account searches, follows, and predicts.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card info">
+                                <span>Saved Searches</span>
+                                <strong>{{ saved_search_count }}</strong>
+                            </div>
+
+                            <div class="metric-card info">
+                                <span>Recent Searches</span>
+                                <strong>{{ recent_search_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Player Follows</span>
+                                <strong>{{ player_subscription_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Team Follows</span>
+                                <strong>{{ team_subscription_count }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Saved Searches</h2>
+                        <p class="section-copy">
+                            The next account API pass will write player/team searches into this feed.
+                        </p>
+
+                        <div class="empty-state">
+                            <strong>No saved searches displayed yet.</strong><br>
+                            Schema exists. Next phase connects search capture from the Workbench,
+                            Player Explorer, and chatbot into this account.
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Followed Players</h2>
+                        <p class="section-copy">
+                            Subscribed players will appear here with stat movement and prediction alerts.
+                        </p>
+
+                        <div class="list-module">
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Player subscription schema</span>
+                                    <span class="list-row-meta">Ready for account-specific player tracking.</span>
+                                </div>
+                                <span class="status-pill good">Ready</span>
+                            </div>
+
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Player alert preferences</span>
+                                    <span class="list-row-meta">Home runs, hits, RBI, strikeouts, and prediction movement.</span>
+                                </div>
+                                <span class="status-pill warn">Next API</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <!-- ==============================================
+                 SECTION 15.02 - CENTER COLUMN
+                 ============================================== -->
+
+            <div class="column-stack">
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Prediction Ledger</h2>
+                        <p class="section-copy">
+                            Every logged-in prediction should become an auditable record with
+                            probability, confidence, source, model, data coverage, and eventual result.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card info">
+                                <span>Total Predictions</span>
+                                <strong>{{ prediction_history_count }}</strong>
+                            </div>
+
+                            <div class="metric-card warn">
+                                <span>Pending Results</span>
+                                <strong>{{ pending_result_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Resolved</span>
+                                <strong>{{ resolved_prediction_count }}</strong>
+                            </div>
+
+                            <div class="metric-card">
+                                <span>Training Events</span>
+                                <strong>{{ training_feedback_count }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="prediction-ledger">
+                            <div class="prediction-ledger-row">
+                                <div class="probability-badge">—</div>
+                                <div>
+                                    <span class="prediction-name">Prediction history capture</span>
+                                    <div class="prediction-detail">
+                                        Next phase records each /predict/player response to the user account
+                                        so the model can compare predicted probability against actual outcomes.
+                                    </div>
+                                </div>
+                                <span class="status-pill warn">Next Phase</span>
+                            </div>
+
+                            <div class="prediction-ledger-row">
+                                <div class="probability-badge">✓</div>
+                                <div>
+                                    <span class="prediction-name">Outcome resolution schema</span>
+                                    <div class="prediction-detail">
+                                        Database model exists for actual result follow-up, correctness,
+                                        probability error, and training readiness.
+                                    </div>
+                                </div>
+                                <span class="status-pill good">Schema Ready</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Model Learning Feedback</h2>
+                        <p class="section-copy">
+                            The goal is for resolved predictions to become training feedback:
+                            features, prediction, actual result, error, and model version.
+                        </p>
+
+                        <div class="readiness-strip">
+                            <div class="readiness-chip">
+                                <span>Feature Snapshot</span>
+                                <strong>Schema Ready</strong>
+                            </div>
+
+                            <div class="readiness-chip">
+                                <span>Actual Result</span>
+                                <strong>Schema Ready</strong>
+                            </div>
+
+                            <div class="readiness-chip">
+                                <span>Error Scoring</span>
+                                <strong>Schema Ready</strong>
+                            </div>
+
+                            <div class="readiness-chip">
+                                <span>Training Queue</span>
+                                <strong>Schema Ready</strong>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <!-- ==============================================
+                 SECTION 15.03 - RIGHT COLUMN
+                 ============================================== -->
+
+            <div class="column-stack">
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Followed Teams</h2>
+                        <p class="section-copy">
+                            Subscribed teams will appear here with schedule, roster, stat, and prediction tracking.
+                        </p>
+
+                        <div class="list-module">
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Team subscription schema</span>
+                                    <span class="list-row-meta">Ready for team-specific tracking dashboards.</span>
+                                </div>
+                                <span class="status-pill good">Ready</span>
+                            </div>
+
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Schedule and roster alerts</span>
+                                    <span class="list-row-meta">Will use schedule ingestion and roster updates.</span>
+                                </div>
+                                <span class="status-pill warn">Next API</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Account Readiness</h2>
+                        <p class="section-copy">
+                            Phase 13 account foundations are online. The next work connects live user actions.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card good">
+                                <span>Secure Login</span>
+                                <strong>{{ secure_login_ready }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Sessions</span>
+                                <strong>{{ sessions_ready }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Subscriptions</span>
+                                <strong>{{ subscriptions_ready }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Prediction Ledger</span>
+                                <strong>{{ prediction_ledger_ready }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Next Account Actions</h2>
+                        <div class="list-module">
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Capture searches</span>
+                                    <span class="list-row-meta">Write Workbench, Player Explorer, and chat searches to account memory.</span>
+                                </div>
+                                <span class="status-pill warn">13.5</span>
+                            </div>
+
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Save predictions</span>
+                                    <span class="list-row-meta">Store prediction requests and responses per account.</span>
+                                </div>
+                                <span class="status-pill warn">13.6</span>
+                            </div>
+
+                            <div class="list-row">
+                                <div>
+                                    <span class="list-row-title">Follow players and teams</span>
+                                    <span class="list-row-meta">Add subscription buttons throughout the platform.</span>
+                                </div>
+                                <span class="status-pill warn">13.7</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
