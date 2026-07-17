@@ -9947,6 +9947,745 @@ async def aisp2_protected_page_http_exception_handler(
     )
 
 
+
+# ============================================================
+# SECTION 15.95 - PHASE 14 PART 1.0 - ACCOUNT MEMORY API ROUTES
+# FILE: main.py
+# PURPOSE:
+# Authenticated account-memory endpoints for saving, listing,
+# and deleting user search activity.
+#
+# Routes:
+#   POST   /api/account/searches
+#   GET    /api/account/searches
+#   DELETE /api/account/searches/{search_id}
+#   GET    /api/account/searches/health
+#
+# Security:
+#   - Requires active authenticated account.
+#   - Reads account identity from the secure HttpOnly session.
+#   - Never accepts account_id from the client.
+#   - Only allows users to read/delete their own search rows.
+#   - Writes audit events when audit model is available.
+# ============================================================
+
+
+# ============================================================
+# SECTION 15.95.01 - ACCOUNT MEMORY CONSTANTS
+# ============================================================
+
+AISP2_ACCOUNT_MEMORY_VERSION: Final[str] = "phase_14_part_1_0_account_memory_api_routes"
+AISP2_ACCOUNT_MEMORY_DEFAULT_LIMIT: Final[int] = 25
+AISP2_ACCOUNT_MEMORY_MAX_LIMIT: Final[int] = 100
+
+AISP2_ACCOUNT_SEARCH_TYPES: Final[set[str]] = {
+    "general",
+    "player",
+    "team",
+    "prediction",
+    "chat",
+    "dashboard",
+    "player_explorer",
+    "prediction_workbench",
+}
+
+AISP2_ACCOUNT_SEARCH_SOURCES: Final[set[str]] = {
+    "unknown",
+    "chat",
+    "dashboard",
+    "player_explorer",
+    "prediction_workbench",
+    "navbar",
+    "api",
+}
+
+
+# ============================================================
+# SECTION 15.95.02 - ACCOUNT MEMORY REQUEST CONTRACTS
+# ============================================================
+
+class AccountSearchCreateRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    search_type: str | None = Field(default="general", max_length=80)
+    source_page: str | None = Field(default="unknown", max_length=160)
+    entity_type: str | None = Field(default=None, max_length=80)
+    entity_id: int | None = None
+    entity_name: str | None = Field(default=None, max_length=255)
+    player_id: int | None = None
+    player_name: str | None = Field(default=None, max_length=255)
+    team_id: int | None = None
+    team_name: str | None = Field(default=None, max_length=255)
+    outcome_key: str | None = Field(default=None, max_length=120)
+    outcome_label: str | None = Field(default=None, max_length=160)
+    result_count: int | None = None
+    is_saved: bool = True
+    metadata: dict[str, Any] | None = None
+
+
+class AccountSearchListResponse(BaseModel):
+    success: bool
+    account_id: int
+    count: int
+    limit: int
+    offset: int
+    searches: list[dict[str, Any]]
+    memory_version: str
+
+
+# ============================================================
+# SECTION 15.95.03 - ACCOUNT MEMORY LOW-LEVEL HELPERS
+# ============================================================
+
+def aisp2_account_memory_model_available() -> bool:
+    return AuthUserSearchHistoryModel is not None and callable(managed_database_session)
+
+
+def aisp2_account_memory_require_model() -> None:
+    if not callable(managed_database_session):
+        raise HTTPException(
+            status_code=503,
+            detail="managed_database_session is unavailable.",
+        )
+
+    if AuthUserSearchHistoryModel is None:
+        raise HTTPException(
+            status_code=503,
+            detail="UserSearchHistory ORM model is unavailable. Complete Phase 13 account models first.",
+        )
+
+
+def aisp2_account_memory_account_id(account: Mapping[str, Any]) -> int:
+    account_id = account.get("id")
+
+    try:
+        resolved = int(account_id)
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticated account ID is unavailable.",
+        )
+
+    if resolved <= 0:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticated account ID is invalid.",
+        )
+
+    return resolved
+
+
+def aisp2_account_memory_clean_text(
+    value: Any,
+    *,
+    fallback: str | None = None,
+    maximum: int = 500,
+) -> str | None:
+    if value is None:
+        return fallback
+
+    text = str(value).strip()
+
+    if not text:
+        return fallback
+
+    return text[:maximum]
+
+
+def aisp2_account_memory_normalize_query(value: str) -> str:
+    return normalize_text(value)[:500]
+
+
+def aisp2_account_memory_normalize_type(value: str | None) -> str:
+    cleaned = normalize_text(value or "general").replace(" ", "_")
+
+    if cleaned not in AISP2_ACCOUNT_SEARCH_TYPES:
+        return "general"
+
+    return cleaned
+
+
+def aisp2_account_memory_normalize_source(value: str | None) -> str:
+    cleaned = normalize_text(value or "unknown").replace(" ", "_")
+
+    if cleaned not in AISP2_ACCOUNT_SEARCH_SOURCES:
+        return cleaned[:160] if cleaned else "unknown"
+
+    return cleaned
+
+
+def aisp2_account_memory_columns() -> set[str]:
+    try:
+        return {
+            column.name
+            for column in AuthUserSearchHistoryModel.__table__.columns
+        }
+    except Exception:
+        return set()
+
+
+def aisp2_account_memory_has_column(column_name: str) -> bool:
+    return column_name in aisp2_account_memory_columns()
+
+
+def aisp2_account_memory_set_if_present(
+    row: Any,
+    field_name: str,
+    value: Any,
+) -> None:
+    if value is None:
+        return
+
+    if hasattr(row, field_name):
+        try:
+            setattr(row, field_name, value)
+        except Exception:
+            return
+
+
+def aisp2_account_memory_json(value: Mapping[str, Any] | None) -> str | None:
+    if not value:
+        return None
+
+    try:
+        return json.dumps(dict(value), default=str, sort_keys=True)
+    except Exception:
+        return json.dumps({"unserializable": str(value)}, default=str)
+
+
+def aisp2_account_memory_parse_json(value: Any) -> Any:
+    if value is None:
+        return None
+
+    if isinstance(value, (dict, list)):
+        return value
+
+    try:
+        return json.loads(str(value))
+    except Exception:
+        return value
+
+
+def aisp2_account_memory_row_value(row: Any, *names: str, default: Any = None) -> Any:
+    for name in names:
+        if hasattr(row, name):
+            value = getattr(row, name, None)
+
+            if value not in (None, ""):
+                return value
+
+    return default
+
+
+def aisp2_account_memory_iso(value: Any) -> str | None:
+    return iso_timestamp(value)
+
+
+# ============================================================
+# SECTION 15.95.04 - ACCOUNT MEMORY SERIALIZATION
+# ============================================================
+
+def aisp2_account_memory_public_payload(row: Any) -> dict[str, Any]:
+    metadata_value = aisp2_account_memory_row_value(
+        row,
+        "metadata_json",
+        "search_metadata_json",
+        "context_json",
+        "payload_json",
+        "request_json",
+    )
+
+    return {
+        "id": aisp2_account_memory_row_value(row, "id"),
+        "account_id": aisp2_account_memory_row_value(row, "account_id"),
+        "query": aisp2_account_memory_row_value(
+            row,
+            "query",
+            "query_text",
+            "search_query",
+            "search_text",
+            "raw_query",
+        ),
+        "normalized_query": aisp2_account_memory_row_value(
+            row,
+            "normalized_query",
+            "query_normalized",
+            "normalized_text",
+        ),
+        "search_type": aisp2_account_memory_row_value(
+            row,
+            "search_type",
+            "memory_type",
+            "query_type",
+            default="general",
+        ),
+        "source_page": aisp2_account_memory_row_value(
+            row,
+            "source_page",
+            "page",
+            "source",
+            default="unknown",
+        ),
+        "entity_type": aisp2_account_memory_row_value(row, "entity_type"),
+        "entity_id": aisp2_account_memory_row_value(row, "entity_id"),
+        "entity_name": aisp2_account_memory_row_value(row, "entity_name"),
+        "player_id": aisp2_account_memory_row_value(row, "player_id"),
+        "player_name": aisp2_account_memory_row_value(row, "player_name"),
+        "team_id": aisp2_account_memory_row_value(row, "team_id"),
+        "team_name": aisp2_account_memory_row_value(row, "team_name"),
+        "outcome_key": aisp2_account_memory_row_value(row, "outcome_key"),
+        "outcome_label": aisp2_account_memory_row_value(row, "outcome_label"),
+        "result_count": aisp2_account_memory_row_value(row, "result_count"),
+        "is_saved": aisp2_account_memory_row_value(row, "is_saved", default=True),
+        "metadata": aisp2_account_memory_parse_json(metadata_value),
+        "created_at": aisp2_account_memory_iso(
+            aisp2_account_memory_row_value(row, "created_at")
+        ),
+        "updated_at": aisp2_account_memory_iso(
+            aisp2_account_memory_row_value(row, "updated_at")
+        ),
+        "last_accessed_at": aisp2_account_memory_iso(
+            aisp2_account_memory_row_value(row, "last_accessed_at", "last_seen_at")
+        ),
+    }
+
+
+def aisp2_account_memory_sort_query(query):
+    model = AuthUserSearchHistoryModel
+
+    if hasattr(model, "created_at"):
+        return query.order_by(model.created_at.desc())
+
+    if hasattr(model, "id"):
+        return query.order_by(model.id.desc())
+
+    return query
+
+
+# ============================================================
+# SECTION 15.95.05 - ACCOUNT MEMORY ROW CONSTRUCTION
+# ============================================================
+
+def aisp2_account_memory_build_create_kwargs(
+    *,
+    account_id: int,
+    payload: AccountSearchCreateRequest,
+    request: Request,
+) -> dict[str, Any]:
+    columns = aisp2_account_memory_columns()
+
+    clean_query = aisp2_account_memory_clean_text(
+        payload.query,
+        maximum=500,
+    ) or ""
+
+    normalized_query = aisp2_account_memory_normalize_query(clean_query)
+    search_type = aisp2_account_memory_normalize_type(payload.search_type)
+    source_page = aisp2_account_memory_normalize_source(payload.source_page)
+
+    metadata = dict(payload.metadata or {})
+    metadata.setdefault("memory_version", AISP2_ACCOUNT_MEMORY_VERSION)
+    metadata.setdefault("path", str(request.url.path))
+    metadata.setdefault("created_by_route", "/api/account/searches")
+
+    candidate_values: dict[str, Any] = {
+        "account_id": account_id,
+        "query": clean_query,
+        "query_text": clean_query,
+        "search_query": clean_query,
+        "search_text": clean_query,
+        "raw_query": clean_query,
+        "normalized_query": normalized_query,
+        "query_normalized": normalized_query,
+        "normalized_text": normalized_query,
+        "search_type": search_type,
+        "memory_type": search_type,
+        "query_type": search_type,
+        "source_page": source_page,
+        "page": source_page,
+        "source": source_page,
+        "entity_type": aisp2_account_memory_clean_text(payload.entity_type, maximum=80),
+        "entity_id": payload.entity_id,
+        "entity_name": aisp2_account_memory_clean_text(payload.entity_name, maximum=255),
+        "player_id": payload.player_id,
+        "player_name": aisp2_account_memory_clean_text(payload.player_name, maximum=255),
+        "team_id": payload.team_id,
+        "team_name": aisp2_account_memory_clean_text(payload.team_name, maximum=255),
+        "outcome_key": aisp2_account_memory_clean_text(payload.outcome_key, maximum=120),
+        "outcome_label": aisp2_account_memory_clean_text(payload.outcome_label, maximum=160),
+        "result_count": payload.result_count,
+        "is_saved": bool(payload.is_saved),
+        "metadata_json": aisp2_account_memory_json(metadata),
+        "search_metadata_json": aisp2_account_memory_json(metadata),
+        "context_json": aisp2_account_memory_json(metadata),
+        "payload_json": aisp2_account_memory_json(metadata),
+        "request_json": aisp2_account_memory_json(
+            {
+                "query": clean_query,
+                "search_type": search_type,
+                "source_page": source_page,
+                "entity_type": payload.entity_type,
+                "entity_id": payload.entity_id,
+                "entity_name": payload.entity_name,
+                "player_id": payload.player_id,
+                "player_name": payload.player_name,
+                "team_id": payload.team_id,
+                "team_name": payload.team_name,
+                "outcome_key": payload.outcome_key,
+                "outcome_label": payload.outcome_label,
+                "result_count": payload.result_count,
+                "is_saved": payload.is_saved,
+                "metadata": metadata,
+            }
+        ),
+        "ip_address_hash": aisp2_auth_client_ip_hash(request),
+        "user_agent_hash": aisp2_auth_user_agent_hash(request),
+        "user_agent_preview": aisp2_auth_user_agent_preview(request),
+        "created_at": utc_now(),
+        "updated_at": utc_now(),
+        "last_accessed_at": utc_now(),
+    }
+
+    return {
+        key: value
+        for key, value in candidate_values.items()
+        if key in columns and value is not None
+    }
+
+
+def aisp2_account_memory_create_row(
+    *,
+    database_session,
+    account_id: int,
+    payload: AccountSearchCreateRequest,
+    request: Request,
+):
+    kwargs = aisp2_account_memory_build_create_kwargs(
+        account_id=account_id,
+        payload=payload,
+        request=request,
+    )
+
+    if "account_id" not in kwargs:
+        raise HTTPException(
+            status_code=500,
+            detail="UserSearchHistory model does not expose an account_id column.",
+        )
+
+    if not any(key in kwargs for key in ["query", "query_text", "search_query", "search_text", "raw_query"]):
+        raise HTTPException(
+            status_code=500,
+            detail="UserSearchHistory model does not expose a supported query text column.",
+        )
+
+    row = AuthUserSearchHistoryModel(**kwargs)
+
+    # Extra safe assignment for models with attributes but unusual constructors.
+    for key, value in kwargs.items():
+        aisp2_account_memory_set_if_present(row, key, value)
+
+    database_session.add(row)
+    database_session.flush()
+
+    return row
+
+
+# ============================================================
+# SECTION 15.95.06 - ACCOUNT MEMORY QUERY OPERATIONS
+# ============================================================
+
+def aisp2_account_memory_query_for_account(
+    database_session,
+    account_id: int,
+):
+    if not hasattr(AuthUserSearchHistoryModel, "account_id"):
+        raise HTTPException(
+            status_code=500,
+            detail="UserSearchHistory model does not expose account_id.",
+        )
+
+    return database_session.query(AuthUserSearchHistoryModel).filter(
+        AuthUserSearchHistoryModel.account_id == int(account_id)
+    )
+
+
+def aisp2_account_memory_get_row_for_account(
+    database_session,
+    *,
+    account_id: int,
+    search_id: int,
+):
+    if not hasattr(AuthUserSearchHistoryModel, "id"):
+        raise HTTPException(
+            status_code=500,
+            detail="UserSearchHistory model does not expose id.",
+        )
+
+    return (
+        aisp2_account_memory_query_for_account(database_session, account_id)
+        .filter(AuthUserSearchHistoryModel.id == int(search_id))
+        .first()
+    )
+
+
+def aisp2_account_memory_filter_query(
+    query,
+    *,
+    search_type: str | None,
+    source_page: str | None,
+    query_text: str | None,
+):
+    if search_type and hasattr(AuthUserSearchHistoryModel, "search_type"):
+        query = query.filter(
+            AuthUserSearchHistoryModel.search_type == aisp2_account_memory_normalize_type(search_type)
+        )
+
+    if source_page and hasattr(AuthUserSearchHistoryModel, "source_page"):
+        query = query.filter(
+            AuthUserSearchHistoryModel.source_page == aisp2_account_memory_normalize_source(source_page)
+        )
+
+    if query_text:
+        cleaned = aisp2_account_memory_clean_text(query_text, maximum=500)
+        if cleaned:
+            from sqlalchemy import or_
+
+            predicates = []
+
+            for column_name in ["query", "query_text", "search_query", "search_text", "raw_query"]:
+                if hasattr(AuthUserSearchHistoryModel, column_name):
+                    predicates.append(
+                        getattr(AuthUserSearchHistoryModel, column_name).ilike(f"%{cleaned}%")
+                    )
+
+            if predicates:
+                query = query.filter(or_(*predicates))
+
+    return query
+
+
+# ============================================================
+# SECTION 15.95.07 - ACCOUNT MEMORY API ROUTES
+# ============================================================
+
+@app.post("/api/account/searches")
+def api_account_create_search(
+    request: Request,
+    payload: AccountSearchCreateRequest,
+) -> dict[str, Any]:
+    account, session = aisp2_auth_require_account(request)
+    aisp2_account_memory_require_model()
+
+    account_id = aisp2_account_memory_account_id(account)
+
+    with managed_database_session() as database_session:
+        row = aisp2_account_memory_create_row(
+            database_session=database_session,
+            account_id=account_id,
+            payload=payload,
+            request=request,
+        )
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account_id,
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="account_search_saved",
+            severity="info",
+            event_summary="Account search was saved.",
+            request=request,
+            event_json={
+                "search_id": getattr(row, "id", None),
+                "search_type": payload.search_type,
+                "source_page": payload.source_page,
+                "query": payload.query,
+            },
+        )
+
+        row_payload = aisp2_account_memory_public_payload(row)
+
+    return {
+        "success": True,
+        "status": "saved",
+        "memory_version": AISP2_ACCOUNT_MEMORY_VERSION,
+        "account_id": account_id,
+        "search": row_payload,
+    }
+
+
+@app.get("/api/account/searches")
+def api_account_list_searches(
+    request: Request,
+    limit: int = Query(default=AISP2_ACCOUNT_MEMORY_DEFAULT_LIMIT, ge=1, le=AISP2_ACCOUNT_MEMORY_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    search_type: str | None = None,
+    source_page: str | None = None,
+    q: str | None = None,
+) -> dict[str, Any]:
+    account, _session = aisp2_auth_require_account(request)
+    aisp2_account_memory_require_model()
+
+    account_id = aisp2_account_memory_account_id(account)
+
+    with managed_database_session() as database_session:
+        query = aisp2_account_memory_query_for_account(
+            database_session,
+            account_id,
+        )
+
+        query = aisp2_account_memory_filter_query(
+            query,
+            search_type=search_type,
+            source_page=source_page,
+            query_text=q,
+        )
+
+        total_count = query.count()
+
+        query = aisp2_account_memory_sort_query(query)
+
+        rows = (
+            query
+            .offset(int(offset))
+            .limit(int(limit))
+            .all()
+        )
+
+        searches = [
+            aisp2_account_memory_public_payload(row)
+            for row in rows
+        ]
+
+    return {
+        "success": True,
+        "memory_version": AISP2_ACCOUNT_MEMORY_VERSION,
+        "account_id": account_id,
+        "count": len(searches),
+        "total_count": total_count,
+        "limit": int(limit),
+        "offset": int(offset),
+        "filters": {
+            "search_type": search_type,
+            "source_page": source_page,
+            "q": q,
+        },
+        "searches": searches,
+    }
+
+
+@app.delete("/api/account/searches/{search_id}")
+def api_account_delete_search(
+    request: Request,
+    search_id: int,
+) -> dict[str, Any]:
+    account, session = aisp2_auth_require_account(request)
+    aisp2_account_memory_require_model()
+
+    account_id = aisp2_account_memory_account_id(account)
+
+    with managed_database_session() as database_session:
+        row = aisp2_account_memory_get_row_for_account(
+            database_session,
+            account_id=account_id,
+            search_id=search_id,
+        )
+
+        if row is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Search record was not found for this account.",
+            )
+
+        row_payload = aisp2_account_memory_public_payload(row)
+
+        database_session.delete(row)
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account_id,
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="account_search_deleted",
+            severity="info",
+            event_summary="Account search was deleted.",
+            request=request,
+            event_json={
+                "search_id": search_id,
+                "deleted_search": row_payload,
+            },
+        )
+
+    return {
+        "success": True,
+        "status": "deleted",
+        "memory_version": AISP2_ACCOUNT_MEMORY_VERSION,
+        "account_id": account_id,
+        "deleted_search_id": int(search_id),
+    }
+
+
+# ============================================================
+# SECTION 15.95.08 - ACCOUNT MEMORY HEALTH AND COMPLETION GATE
+# ============================================================
+
+def validate_account_memory_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+
+    required_routes = {
+        "/api/account/searches",
+        "/api/account/searches/{search_id}",
+        "/api/account/searches/health",
+    }
+
+    columns = sorted(aisp2_account_memory_columns()) if AuthUserSearchHistoryModel is not None else []
+
+    checks = {
+        "auth_account_required": callable(aisp2_auth_require_account),
+        "database_session_available": callable(managed_database_session),
+        "search_history_model_available": AuthUserSearchHistoryModel is not None,
+        "account_id_column_available": "account_id" in columns,
+        "query_column_available": any(
+            column in columns
+            for column in ["query", "query_text", "search_query", "search_text", "raw_query"]
+        ),
+        "create_payload_contract_available": callable(AccountSearchCreateRequest),
+        "create_route_registered": "/api/account/searches" in route_paths,
+        "delete_route_registered": "/api/account/searches/{search_id}" in route_paths,
+        "health_route_registered": "/api/account/searches/health" in route_paths,
+        "public_serializer_available": callable(aisp2_account_memory_public_payload),
+        "no_client_account_id_required": "account_id" not in AccountSearchCreateRequest.model_fields,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 1.0",
+        "memory_version": AISP2_ACCOUNT_MEMORY_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name for name, value in checks.items()
+            if not value
+        ],
+        "required_routes": sorted(required_routes),
+        "registered_required_routes": sorted(required_routes.intersection(route_paths)),
+        "missing_required_routes": sorted(required_routes - route_paths),
+        "search_history_columns": columns,
+        "completion_gate": {
+            "authenticated_user_can_save_search": checks["create_route_registered"] and checks["auth_account_required"],
+            "authenticated_user_can_list_searches": checks["create_route_registered"],
+            "authenticated_user_can_delete_own_search": checks["delete_route_registered"],
+            "user_memory_schema_detected": checks["search_history_model_available"],
+        },
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/account/searches/health")
+def api_account_searches_health() -> dict[str, Any]:
+    return validate_account_memory_runtime()
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -10475,6 +11214,7 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
 
 
 
