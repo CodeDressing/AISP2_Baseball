@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # AISP2 BASEBALL INTELLIGENCE PLATFORM
 # FILE: main.py
 # PURPOSE:
@@ -806,7 +806,7 @@ def _aisp2_player_explorer_normalize(value: _AISP2PlayerExplorerAny) -> str:
         .replace(".", " ")
         .replace(",", " ")
         .replace("'", "")
-        .replace("’", "")
+        .replace("â€™", "")
         .replace("-", " ")
         .replace("_", " ")
     )
@@ -7717,6 +7717,1623 @@ def player_explorer_integrity() -> dict[str, Any]:
     return build_player_intelligence_integrity_report()
 
 
+
+# ============================================================
+# SECTION 15.90 - PHASE 13 PART 2.0 - SECURE AUTH AND SESSION ROUTES
+# FILE: main.py
+# PURPOSE:
+# Secure account and session route foundation for AISP2.
+#
+# Supports:
+#   - CEO master account
+#   - Standard user account
+#   - PBKDF2 password hashing
+#   - Secure session cookies
+#   - Token hashing before storage
+#   - Account dashboard route
+#   - CEO dashboard route
+#   - Current-account API
+#   - Logout route
+#   - Gated CEO seed route
+#   - Gated account-table creation route
+#
+# Security Position:
+#   - Plaintext passwords are never stored.
+#   - Session cookies store only the raw random session token.
+#   - Database stores only a SHA-256 hash of the session token.
+#   - Seed and schema mutation endpoints require an environment token.
+# ============================================================
+
+
+# ============================================================
+# SECTION 15.90.01 - AUTH OPTIONAL IMPORTS
+# ============================================================
+
+try:
+    from database import Base as AISP2_AUTH_BASE
+    from database import engine as AISP2_AUTH_ENGINE
+except Exception as auth_database_import_error:  # pragma: no cover
+    AISP2_AUTH_BASE = None
+    AISP2_AUTH_ENGINE = None
+
+try:
+    from models import UserAccount as AuthUserAccountModel
+    from models import UserSession as AuthUserSessionModel
+    from models import UserSearchHistory as AuthUserSearchHistoryModel
+    from models import UserPlayerSubscription as AuthUserPlayerSubscriptionModel
+    from models import UserTeamSubscription as AuthUserTeamSubscriptionModel
+    from models import UserPredictionHistory as AuthUserPredictionHistoryModel
+    from models import PredictionOutcomeResolution as AuthPredictionOutcomeResolutionModel
+    from models import ModelTrainingFeedbackEvent as AuthModelTrainingFeedbackEventModel
+    from models import AccountAuditLog as AuthAccountAuditLogModel
+except Exception as auth_model_import_error:  # pragma: no cover
+    AuthUserAccountModel = None
+    AuthUserSessionModel = None
+    AuthUserSearchHistoryModel = None
+    AuthUserPlayerSubscriptionModel = None
+    AuthUserTeamSubscriptionModel = None
+    AuthUserPredictionHistoryModel = None
+    AuthPredictionOutcomeResolutionModel = None
+    AuthModelTrainingFeedbackEventModel = None
+    AuthAccountAuditLogModel = None
+
+
+# ============================================================
+# SECTION 15.90.02 - AUTH CONSTANTS
+# ============================================================
+
+AISP2_AUTH_VERSION: Final[str] = "phase_13_part_2_0_secure_auth_routes"
+AISP2_AUTH_COOKIE_NAME: Final[str] = "aisp2_session"
+AISP2_AUTH_COOKIE_MAX_AGE_SECONDS: Final[int] = 60 * 60 * 24 * 14
+AISP2_AUTH_PBKDF2_ITERATIONS: Final[int] = 390000
+AISP2_AUTH_PASSWORD_SCHEME: Final[str] = "pbkdf2_sha256"
+AISP2_AUTH_ROLE_CEO: Final[str] = "ceo_master"
+AISP2_AUTH_ROLE_ADMIN: Final[str] = "admin"
+AISP2_AUTH_ROLE_USER: Final[str] = "user"
+AISP2_AUTH_STATUS_ACTIVE: Final[str] = "active"
+AISP2_AUTH_SESSION_ACTIVE: Final[str] = "active"
+AISP2_AUTH_SESSION_REVOKED: Final[str] = "revoked"
+AISP2_AUTH_SESSION_EXPIRED: Final[str] = "expired"
+
+AISP2_AUTH_PUBLIC_ROUTES: Final[set[str]] = {
+    "/auth/login",
+    "/api/auth/login",
+    "/api/auth/schema/status",
+    "/api/auth/schema/ensure",
+    "/api/auth/seed-ceo",
+    "/health",
+    "/api/health",
+}
+
+
+# ============================================================
+# SECTION 15.90.03 - AUTH REQUEST CONTRACTS
+# ============================================================
+
+class AuthLoginRequest(BaseModel):
+    email_or_username: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=255)
+    remember_me: bool = True
+
+
+class AuthSeedCEORequest(BaseModel):
+    bootstrap_token: str = Field(min_length=8, max_length=255)
+    email: str = Field(min_length=5, max_length=255)
+    username: str = Field(min_length=3, max_length=120)
+    password: str = Field(min_length=12, max_length=255)
+    display_name: str | None = Field(default="Master Account", max_length=160)
+
+
+class AuthCreateFirstUserRequest(BaseModel):
+    bootstrap_token: str = Field(min_length=8, max_length=255)
+    email: str = Field(min_length=5, max_length=255)
+    username: str = Field(min_length=3, max_length=120)
+    password: str = Field(min_length=12, max_length=255)
+    display_name: str | None = Field(default="AISP2 User", max_length=160)
+
+
+class AuthSchemaEnsureRequest(BaseModel):
+    bootstrap_token: str = Field(min_length=8, max_length=255)
+
+
+# ============================================================
+# SECTION 15.90.04 - AUTH LOW-LEVEL SECURITY HELPERS
+# ============================================================
+
+def aisp2_auth_secure_compare(left: str | None, right: str | None) -> bool:
+    import hmac
+
+    if left is None or right is None:
+        return False
+
+    return hmac.compare_digest(
+        str(left),
+        str(right),
+    )
+
+
+def aisp2_auth_hash_session_token(raw_token: str) -> str:
+    return hashlib.sha256(
+        raw_token.encode("utf-8")
+    ).hexdigest()
+
+
+def aisp2_auth_generate_session_token() -> str:
+    import secrets
+
+    return secrets.token_urlsafe(48)
+
+
+def aisp2_auth_make_password_hash(password: str) -> str:
+    import base64
+    import secrets
+
+    salt = secrets.token_bytes(32)
+
+    derived = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        AISP2_AUTH_PBKDF2_ITERATIONS,
+    )
+
+    return "$".join(
+        [
+            AISP2_AUTH_PASSWORD_SCHEME,
+            str(AISP2_AUTH_PBKDF2_ITERATIONS),
+            base64.b64encode(salt).decode("ascii"),
+            base64.b64encode(derived).decode("ascii"),
+        ]
+    )
+
+
+def aisp2_auth_verify_password(password: str, password_hash: str | None) -> bool:
+    import base64
+    import hmac
+
+    if not password_hash:
+        return False
+
+    try:
+        scheme, iterations_text, salt_text, hash_text = str(password_hash).split("$", 3)
+
+        if scheme != AISP2_AUTH_PASSWORD_SCHEME:
+            return False
+
+        iterations = int(iterations_text)
+        salt = base64.b64decode(salt_text.encode("ascii"))
+        expected = base64.b64decode(hash_text.encode("ascii"))
+
+        derived = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            iterations,
+        )
+
+        return hmac.compare_digest(
+            derived,
+            expected,
+        )
+
+    except Exception:
+        return False
+
+
+def aisp2_auth_bootstrap_token_valid(provided_token: str | None) -> bool:
+    expected = os.getenv("AISP2_BOOTSTRAP_ADMIN_TOKEN", "").strip()
+
+    if not expected:
+        return False
+
+    return aisp2_auth_secure_compare(
+        provided_token,
+        expected,
+    )
+
+
+def aisp2_auth_seed_allowed() -> bool:
+    return os.getenv("AISP2_ALLOW_AUTH_SEED", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def aisp2_auth_cookie_secure() -> bool:
+    return os.getenv("AISP2_COOKIE_SECURE", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def aisp2_auth_session_expiration() -> datetime:
+    return utc_now() + timedelta(seconds=AISP2_AUTH_COOKIE_MAX_AGE_SECONDS)
+
+
+def aisp2_auth_mask_email(email: str | None) -> str | None:
+    if not email:
+        return None
+
+    text = str(email)
+
+    if "@" not in text:
+        return text[:2] + "***"
+
+    name, domain = text.split("@", 1)
+
+    if len(name) <= 2:
+        masked_name = name[0:1] + "***"
+    else:
+        masked_name = name[:2] + "***"
+
+    return masked_name + "@" + domain
+
+
+def aisp2_auth_client_ip_hash(request: Request) -> str | None:
+    raw_ip = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else None)
+    )
+
+    if not raw_ip:
+        return None
+
+    salt = os.getenv("AISP2_AUTH_IP_HASH_SALT", SERVICE_NAME)
+
+    return hashlib.sha256(
+        f"{salt}:{raw_ip}".encode("utf-8")
+    ).hexdigest()
+
+
+def aisp2_auth_user_agent_hash(request: Request) -> str | None:
+    user_agent = request.headers.get("User-Agent")
+
+    if not user_agent:
+        return None
+
+    salt = os.getenv("AISP2_AUTH_UA_HASH_SALT", SERVICE_NAME)
+
+    return hashlib.sha256(
+        f"{salt}:{user_agent}".encode("utf-8")
+    ).hexdigest()
+
+
+def aisp2_auth_user_agent_preview(request: Request) -> str | None:
+    user_agent = request.headers.get("User-Agent")
+
+    if not user_agent:
+        return None
+
+    return user_agent[:240]
+
+
+# ============================================================
+# SECTION 15.90.05 - AUTH DATABASE HELPERS
+# ============================================================
+
+def aisp2_auth_models_available() -> bool:
+    return all(
+        model is not None
+        for model in [
+            AuthUserAccountModel,
+            AuthUserSessionModel,
+            AuthUserSearchHistoryModel,
+            AuthUserPlayerSubscriptionModel,
+            AuthUserTeamSubscriptionModel,
+            AuthUserPredictionHistoryModel,
+            AuthPredictionOutcomeResolutionModel,
+            AuthModelTrainingFeedbackEventModel,
+            AuthAccountAuditLogModel,
+        ]
+    )
+
+
+def aisp2_auth_database_available() -> bool:
+    return callable(managed_database_session) and aisp2_auth_models_available()
+
+
+def aisp2_auth_require_database() -> None:
+    if not callable(managed_database_session):
+        raise HTTPException(
+            status_code=503,
+            detail="managed_database_session is unavailable.",
+        )
+
+    if not aisp2_auth_models_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Phase 13 account ORM models are unavailable. Complete Phase 13 Part 1.0 first.",
+        )
+
+
+def aisp2_auth_account_query(database_session, email_or_username: str):
+    from sqlalchemy import func, or_
+
+    normalized = str(email_or_username or "").strip().lower()
+
+    return (
+        database_session.query(AuthUserAccountModel)
+        .filter(
+            or_(
+                func.lower(AuthUserAccountModel.email) == normalized,
+                func.lower(AuthUserAccountModel.username) == normalized,
+            )
+        )
+        .first()
+    )
+
+
+def aisp2_auth_get_account_by_id(database_session, account_id: int):
+    return (
+        database_session.query(AuthUserAccountModel)
+        .filter(AuthUserAccountModel.id == int(account_id))
+        .first()
+    )
+
+
+def aisp2_auth_get_session_by_token(database_session, raw_token: str | None):
+    if not raw_token:
+        return None
+
+    token_hash = aisp2_auth_hash_session_token(raw_token)
+
+    return (
+        database_session.query(AuthUserSessionModel)
+        .filter(AuthUserSessionModel.session_token_hash == token_hash)
+        .first()
+    )
+
+
+def aisp2_auth_account_public_payload(account) -> dict[str, Any]:
+    if account is None:
+        return {}
+
+    return {
+        "id": getattr(account, "id", None),
+        "email": aisp2_auth_mask_email(getattr(account, "email", None)),
+        "username": getattr(account, "username", None),
+        "display_name": getattr(account, "display_name", None),
+        "role": getattr(account, "role", None),
+        "account_status": getattr(account, "account_status", None),
+        "is_active": getattr(account, "is_active", None),
+        "is_email_verified": getattr(account, "is_email_verified", None),
+        "is_ceo_master": getattr(account, "is_ceo_master", None),
+        "last_login_at": iso_timestamp(getattr(account, "last_login_at", None)),
+        "last_seen_at": iso_timestamp(getattr(account, "last_seen_at", None)),
+        "created_at": iso_timestamp(getattr(account, "created_at", None)),
+    }
+
+
+def aisp2_auth_session_public_payload(session) -> dict[str, Any]:
+    if session is None:
+        return {}
+
+    return {
+        "id": getattr(session, "id", None),
+        "session_status": getattr(session, "session_status", None),
+        "created_at": iso_timestamp(getattr(session, "created_at", None)),
+        "last_seen_at": iso_timestamp(getattr(session, "last_seen_at", None)),
+        "expires_at": iso_timestamp(getattr(session, "expires_at", None)),
+        "revoked_at": iso_timestamp(getattr(session, "revoked_at", None)),
+    }
+
+
+def aisp2_auth_write_audit_event(
+    database_session,
+    *,
+    account_id: int | None,
+    session_id: int | None = None,
+    event_type: str,
+    severity: str = "info",
+    event_summary: str | None = None,
+    request: Request | None = None,
+    event_json: Mapping[str, Any] | None = None,
+) -> None:
+    if AuthAccountAuditLogModel is None:
+        return
+
+    try:
+        audit_row = AuthAccountAuditLogModel(
+            account_id=account_id,
+            session_id=session_id,
+            event_type=event_type,
+            severity=severity,
+            source_page=str(request.url.path) if request is not None else None,
+            ip_address_hash=aisp2_auth_client_ip_hash(request) if request is not None else None,
+            user_agent_preview=aisp2_auth_user_agent_preview(request) if request is not None else None,
+            event_summary=event_summary,
+            event_json=json.dumps(dict(event_json or {}), default=str),
+        )
+        database_session.add(audit_row)
+
+    except Exception as error:
+        LOGGER.warning("Auth audit write failed: %s", error)
+
+
+# ============================================================
+# SECTION 15.90.06 - AUTH SESSION RESOLUTION
+# ============================================================
+
+def aisp2_auth_get_current_account_from_request(
+    request: Request,
+) -> tuple[Any | None, Any | None]:
+    if not aisp2_auth_database_available():
+        return None, None
+
+    raw_token = request.cookies.get(AISP2_AUTH_COOKIE_NAME)
+
+    if not raw_token:
+        return None, None
+
+    try:
+        with managed_database_session() as database_session:
+            session = aisp2_auth_get_session_by_token(
+                database_session,
+                raw_token,
+            )
+
+            if session is None:
+                return None, None
+
+            if getattr(session, "session_status", None) != AISP2_AUTH_SESSION_ACTIVE:
+                return None, None
+
+            expires_at = getattr(session, "expires_at", None)
+
+            if expires_at is not None:
+                parsed_expires = parse_runtime_datetime(expires_at)
+
+                if parsed_expires is not None and parsed_expires < utc_now():
+                    session.session_status = AISP2_AUTH_SESSION_EXPIRED
+                    database_session.add(session)
+                    return None, None
+
+            account = aisp2_auth_get_account_by_id(
+                database_session,
+                getattr(session, "account_id", 0),
+            )
+
+            if account is None:
+                return None, None
+
+            if getattr(account, "is_active", None) is not True:
+                return None, None
+
+            if getattr(account, "account_status", None) != AISP2_AUTH_STATUS_ACTIVE:
+                return None, None
+
+            session.last_seen_at = utc_now()
+            account.last_seen_at = utc_now()
+            database_session.add(session)
+            database_session.add(account)
+
+            # Detach scalar data before context closes.
+            account_payload = aisp2_auth_account_public_payload(account)
+            session_payload = aisp2_auth_session_public_payload(session)
+
+            return account_payload, session_payload
+
+    except Exception as error:
+        LOGGER.warning("Current auth account resolution failed: %s", error)
+        return None, None
+
+
+def aisp2_auth_require_account(
+    request: Request,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    account, session = aisp2_auth_get_current_account_from_request(request)
+
+    if not account:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required.",
+        )
+
+    return account, session or {}
+
+
+def aisp2_auth_require_ceo_or_admin(
+    request: Request,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    account, session = aisp2_auth_require_account(request)
+
+    role = str(account.get("role") or "")
+    is_ceo_master = bool(account.get("is_ceo_master"))
+
+    if not is_ceo_master and role not in {AISP2_AUTH_ROLE_CEO, AISP2_AUTH_ROLE_ADMIN}:
+        raise HTTPException(
+            status_code=403,
+            detail="CEO/admin access required.",
+        )
+
+    return account, session
+
+
+# ============================================================
+# SECTION 15.90.07 - AUTH HTML RENDERERS
+# ============================================================
+
+def aisp2_auth_login_html(
+    *,
+    message: str | None = None,
+    error: str | None = None,
+) -> str:
+    notice_html = ""
+
+    if message:
+        notice_html = f'<div class="auth-notice">{message}</div>'
+
+    if error:
+        notice_html = f'<div class="auth-error">{error}</div>'
+
+    return f"""
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>AISP2 Secure Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {{
+            color-scheme: dark;
+            --bg: #020914;
+            --panel: rgba(8, 28, 46, 0.92);
+            --line: rgba(131, 213, 255, 0.18);
+            --text: #f1f8ff;
+            --muted: rgba(218, 235, 248, 0.72);
+            --accent: #89f5bd;
+            --cyan: #84e8ff;
+            --danger: #ff8f8f;
+        }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background:
+                radial-gradient(circle at 20% 10%, rgba(96, 205, 255, 0.16), transparent 30%),
+                radial-gradient(circle at 80% 85%, rgba(111, 255, 186, 0.12), transparent 30%),
+                linear-gradient(145deg, #020914, #031a1c);
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+        .auth-shell {{
+            width: min(96vw, 460px);
+            padding: 28px;
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            background: var(--panel);
+            box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+        }}
+        .eyebrow {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.09);
+            color: var(--cyan);
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }}
+        .dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--accent);
+            box-shadow: 0 0 16px rgba(137,245,189,0.8);
+        }}
+        h1 {{
+            margin: 18px 0 8px;
+            font-size: clamp(2.2rem, 9vw, 3.6rem);
+            line-height: 0.92;
+            letter-spacing: -0.07em;
+        }}
+        p {{
+            margin: 0 0 20px;
+            color: var(--muted);
+            line-height: 1.55;
+        }}
+        label {{
+            display: block;
+            margin: 14px 0 7px;
+            font-size: 0.72rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: rgba(222,239,252,0.75);
+        }}
+        input {{
+            width: 100%;
+            min-height: 48px;
+            padding: 0 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(136, 207, 252, 0.22);
+            background: rgba(0, 7, 18, 0.78);
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 800;
+            outline: none;
+        }}
+        input:focus {{
+            border-color: rgba(137,245,189,0.7);
+            box-shadow: 0 0 0 4px rgba(137,245,189,0.10);
+        }}
+        button {{
+            width: 100%;
+            min-height: 50px;
+            margin-top: 20px;
+            border: 0;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #84e8ff, #8df5bd);
+            color: #02101b;
+            font-weight: 950;
+            cursor: pointer;
+        }}
+        .auth-error, .auth-notice {{
+            margin: 16px 0;
+            padding: 12px 14px;
+            border-radius: 14px;
+            font-weight: 800;
+            line-height: 1.45;
+        }}
+        .auth-error {{
+            background: rgba(255, 88, 88, 0.12);
+            border: 1px solid rgba(255, 143, 143, 0.35);
+            color: var(--danger);
+        }}
+        .auth-notice {{
+            background: rgba(137, 245, 189, 0.10);
+            border: 1px solid rgba(137, 245, 189, 0.25);
+            color: var(--accent);
+        }}
+        .footer {{
+            margin-top: 18px;
+            font-size: 0.76rem;
+            color: rgba(222,239,252,0.52);
+        }}
+        a {{
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 900;
+        }}
+    </style>
+</head>
+<body>
+    <main class="auth-shell">
+        <div class="eyebrow"><span class="dot"></span>AISP2 Secure Access</div>
+        <h1>Private Login</h1>
+        <p>Sign in to access account memory, saved searches, followed teams, followed players, and prediction history.</p>
+        {notice_html}
+        <form method="post" action="/auth/login">
+            <label for="email_or_username">Email or username</label>
+            <input id="email_or_username" name="email_or_username" autocomplete="username" required>
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+            <button type="submit">Enter AISP2</button>
+        </form>
+        <div class="footer">
+            CEO seed and account creation are token-gated by server environment variables.
+        </div>
+    </main>
+</body>
+</html>
+"""
+
+
+def aisp2_auth_account_dashboard_html(
+    account: Mapping[str, Any],
+    *,
+    title: str,
+    ceo: bool = False,
+) -> str:
+    role = account.get("role") or "user"
+    display_name = account.get("display_name") or account.get("username") or "AISP2 Account"
+
+    ceo_panel = ""
+
+    if ceo:
+        ceo_panel = """
+        <section class="panel">
+            <h2>CEO Master Controls</h2>
+            <div class="grid">
+                <a class="button" href="/api/auth/admin/overview">Admin Overview JSON</a>
+                <a class="button" href="/api/auth/schema/status">Auth Schema Status</a>
+                <a class="button" href="/api/system/data-readiness">Data Readiness</a>
+                <a class="button" href="/api/v2/player-explorer/health">Player Explorer Health</a>
+            </div>
+        </section>
+        """
+
+    return f"""
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{title}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {{
+            color-scheme: dark;
+            --bg: #020914;
+            --panel: rgba(8, 28, 46, 0.92);
+            --line: rgba(131, 213, 255, 0.18);
+            --text: #f1f8ff;
+            --muted: rgba(218, 235, 248, 0.72);
+            --accent: #89f5bd;
+            --cyan: #84e8ff;
+        }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 20% 10%, rgba(96, 205, 255, 0.16), transparent 30%),
+                radial-gradient(circle at 80% 85%, rgba(111, 255, 186, 0.12), transparent 30%),
+                linear-gradient(145deg, #020914, #031a1c);
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+        .nav {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 28px;
+            background: rgba(0, 8, 22, 0.72);
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            position: sticky;
+            top: 0;
+            backdrop-filter: blur(18px);
+        }}
+        .brand {{
+            font-weight: 950;
+            letter-spacing: -0.03em;
+        }}
+        .nav a {{
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 900;
+            margin-left: 18px;
+        }}
+        .shell {{
+            width: min(1180px, calc(100vw - 36px));
+            margin: 34px auto;
+            display: grid;
+            gap: 18px;
+        }}
+        .hero, .panel {{
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            background: var(--panel);
+            padding: 26px;
+            box-shadow: 0 24px 72px rgba(0, 0, 0, 0.24);
+        }}
+        .eyebrow {{
+            display: inline-flex;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.09);
+            color: var(--cyan);
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }}
+        h1 {{
+            margin: 16px 0 8px;
+            font-size: clamp(2.6rem, 8vw, 5.2rem);
+            line-height: 0.9;
+            letter-spacing: -0.07em;
+        }}
+        h2 {{
+            margin: 0 0 14px;
+            font-size: 1.4rem;
+        }}
+        p {{
+            color: var(--muted);
+            line-height: 1.55;
+        }}
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }}
+        .stat {{
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(137,213,255,0.14);
+            background: rgba(255,255,255,0.045);
+        }}
+        .stat span {{
+            display: block;
+            color: rgba(218,235,248,0.64);
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }}
+        .stat strong {{
+            color: var(--accent);
+            font-size: 1rem;
+        }}
+        .button {{
+            display: inline-flex;
+            min-height: 42px;
+            align-items: center;
+            justify-content: center;
+            padding: 0 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(137,213,255,0.18);
+            background: rgba(255,255,255,0.055);
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 950;
+        }}
+        @media (max-width: 900px) {{
+            .grid {{ grid-template-columns: 1fr 1fr; }}
+        }}
+        @media (max-width: 600px) {{
+            .grid {{ grid-template-columns: 1fr; }}
+        }}
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="brand">AISP2</div>
+        <div>
+            <a href="/tools/prediction">Predictions</a>
+            <a href="/players">Players</a>
+            <a href="/auth/logout">Logout</a>
+        </div>
+    </nav>
+
+    <main class="shell">
+        <section class="hero">
+            <div class="eyebrow">Secure Account Runtime</div>
+            <h1>{display_name}</h1>
+            <p>{title}. Your account layer is now ready to store searches, followed players, followed teams, prediction history, actual-result follow-up, and future model-training feedback.</p>
+        </section>
+
+        <section class="panel">
+            <h2>Account Identity</h2>
+            <div class="grid">
+                <div class="stat"><span>Username</span><strong>{account.get("username")}</strong></div>
+                <div class="stat"><span>Role</span><strong>{role}</strong></div>
+                <div class="stat"><span>Status</span><strong>{account.get("account_status")}</strong></div>
+                <div class="stat"><span>CEO Master</span><strong>{account.get("is_ceo_master")}</strong></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Account Intelligence Coming Next</h2>
+            <div class="grid">
+                <div class="stat"><span>Saved Searches</span><strong>Ready Schema</strong></div>
+                <div class="stat"><span>Player Follows</span><strong>Ready Schema</strong></div>
+                <div class="stat"><span>Team Follows</span><strong>Ready Schema</strong></div>
+                <div class="stat"><span>Prediction History</span><strong>Ready Schema</strong></div>
+            </div>
+        </section>
+
+        {ceo_panel}
+    </main>
+</body>
+</html>
+"""
+
+
+# ============================================================
+# SECTION 15.90.08 - AUTH SERVICE OPERATIONS
+# ============================================================
+
+def aisp2_auth_create_session_for_account(
+    database_session,
+    *,
+    account,
+    request: Request,
+) -> tuple[str, Any]:
+    raw_token = aisp2_auth_generate_session_token()
+    token_hash = aisp2_auth_hash_session_token(raw_token)
+
+    session = AuthUserSessionModel(
+        account_id=account.id,
+        session_token_hash=token_hash,
+        session_status=AISP2_AUTH_SESSION_ACTIVE,
+        ip_address_hash=aisp2_auth_client_ip_hash(request),
+        user_agent_hash=aisp2_auth_user_agent_hash(request),
+        user_agent_preview=aisp2_auth_user_agent_preview(request),
+        expires_at=aisp2_auth_session_expiration(),
+    )
+
+    database_session.add(session)
+    database_session.flush()
+
+    account.last_login_at = utc_now()
+    account.last_seen_at = utc_now()
+    account.failed_login_count = 0
+    database_session.add(account)
+
+    aisp2_auth_write_audit_event(
+        database_session,
+        account_id=account.id,
+        session_id=session.id,
+        event_type="login_success",
+        severity="info",
+        event_summary="User logged in successfully.",
+        request=request,
+    )
+
+    return raw_token, session
+
+
+def aisp2_auth_login_payload(
+    request: Request,
+    login: AuthLoginRequest,
+) -> JSONResponse:
+    aisp2_auth_require_database()
+
+    with managed_database_session() as database_session:
+        account = aisp2_auth_account_query(
+            database_session,
+            login.email_or_username,
+        )
+
+        if account is None:
+            aisp2_auth_write_audit_event(
+                database_session,
+                account_id=None,
+                event_type="login_failed_unknown_account",
+                severity="warning",
+                event_summary="Login failed because the account was not found.",
+                request=request,
+                event_json={"email_or_username": login.email_or_username},
+            )
+            raise HTTPException(status_code=401, detail="Invalid login.")
+
+        if getattr(account, "is_active", None) is not True:
+            aisp2_auth_write_audit_event(
+                database_session,
+                account_id=account.id,
+                event_type="login_failed_inactive_account",
+                severity="warning",
+                event_summary="Login failed because account is inactive.",
+                request=request,
+            )
+            raise HTTPException(status_code=403, detail="Account is inactive.")
+
+        if getattr(account, "account_status", None) != AISP2_AUTH_STATUS_ACTIVE:
+            aisp2_auth_write_audit_event(
+                database_session,
+                account_id=account.id,
+                event_type="login_failed_bad_status",
+                severity="warning",
+                event_summary="Login failed because account status is not active.",
+                request=request,
+                event_json={"account_status": getattr(account, "account_status", None)},
+            )
+            raise HTTPException(status_code=403, detail="Account is not active.")
+
+        if not aisp2_auth_verify_password(login.password, getattr(account, "password_hash", None)):
+            account.failed_login_count = int(getattr(account, "failed_login_count", 0) or 0) + 1
+            database_session.add(account)
+            aisp2_auth_write_audit_event(
+                database_session,
+                account_id=account.id,
+                event_type="login_failed_bad_password",
+                severity="warning",
+                event_summary="Login failed because password verification failed.",
+                request=request,
+            )
+            raise HTTPException(status_code=401, detail="Invalid login.")
+
+        raw_token, session = aisp2_auth_create_session_for_account(
+            database_session,
+            account=account,
+            request=request,
+        )
+
+        account_payload = aisp2_auth_account_public_payload(account)
+        session_payload = aisp2_auth_session_public_payload(session)
+
+    response = JSONResponse(
+        {
+            "success": True,
+            "status": "authenticated",
+            "auth_version": AISP2_AUTH_VERSION,
+            "account": account_payload,
+            "session": session_payload,
+            "redirect": "/ceo" if account_payload.get("is_ceo_master") else "/account",
+        }
+    )
+
+    response.set_cookie(
+        key=AISP2_AUTH_COOKIE_NAME,
+        value=raw_token,
+        max_age=AISP2_AUTH_COOKIE_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=aisp2_auth_cookie_secure(),
+        samesite="lax",
+        path="/",
+    )
+
+    return response
+
+
+async def aisp2_auth_parse_form_login_request(request: Request) -> AuthLoginRequest:
+    from urllib.parse import parse_qs
+
+    body = await request.body()
+    parsed = parse_qs(body.decode("utf-8"))
+
+    def first(name: str, fallback: str = "") -> str:
+        values = parsed.get(name)
+        if not values:
+            return fallback
+        return values[0]
+
+    return AuthLoginRequest(
+        email_or_username=first("email_or_username"),
+        password=first("password"),
+        remember_me=True,
+    )
+
+
+# ============================================================
+# SECTION 15.90.09 - AUTH API ROUTES
+# ============================================================
+
+@app.get("/api/auth/schema/status")
+def api_auth_schema_status() -> dict[str, Any]:
+    model_status = {
+        "UserAccount": AuthUserAccountModel is not None,
+        "UserSession": AuthUserSessionModel is not None,
+        "UserSearchHistory": AuthUserSearchHistoryModel is not None,
+        "UserPlayerSubscription": AuthUserPlayerSubscriptionModel is not None,
+        "UserTeamSubscription": AuthUserTeamSubscriptionModel is not None,
+        "UserPredictionHistory": AuthUserPredictionHistoryModel is not None,
+        "PredictionOutcomeResolution": AuthPredictionOutcomeResolutionModel is not None,
+        "ModelTrainingFeedbackEvent": AuthModelTrainingFeedbackEventModel is not None,
+        "AccountAuditLog": AuthAccountAuditLogModel is not None,
+    }
+
+    table_names = []
+
+    try:
+        if AISP2_AUTH_BASE is not None:
+            table_names = sorted(AISP2_AUTH_BASE.metadata.tables.keys())
+    except Exception:
+        table_names = []
+
+    expected_tables = [
+        "user_accounts",
+        "user_sessions",
+        "user_search_history",
+        "user_player_subscriptions",
+        "user_team_subscriptions",
+        "user_prediction_history",
+        "prediction_outcome_resolutions",
+        "model_training_feedback_events",
+        "account_audit_logs",
+    ]
+
+    metadata_table_set = set(table_names)
+
+    return {
+        "success": True,
+        "auth_version": AISP2_AUTH_VERSION,
+        "database_session_available": callable(managed_database_session),
+        "models_available": aisp2_auth_models_available(),
+        "model_status": model_status,
+        "expected_tables": expected_tables,
+        "metadata_tables_present": [
+            table_name for table_name in expected_tables
+            if table_name in metadata_table_set
+        ],
+        "metadata_tables_missing": [
+            table_name for table_name in expected_tables
+            if table_name not in metadata_table_set
+        ],
+        "seed_enabled": aisp2_auth_seed_allowed(),
+        "bootstrap_token_configured": bool(os.getenv("AISP2_BOOTSTRAP_ADMIN_TOKEN", "").strip()),
+        "cookie_name": AISP2_AUTH_COOKIE_NAME,
+        "cookie_secure": aisp2_auth_cookie_secure(),
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+@app.post("/api/auth/schema/ensure")
+def api_auth_schema_ensure(request: AuthSchemaEnsureRequest) -> dict[str, Any]:
+    if not aisp2_auth_seed_allowed():
+        raise HTTPException(
+            status_code=403,
+            detail="Auth schema ensure is disabled. Set AISP2_ALLOW_AUTH_SEED=1 temporarily.",
+        )
+
+    if not aisp2_auth_bootstrap_token_valid(request.bootstrap_token):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid bootstrap token.",
+        )
+
+    if AISP2_AUTH_BASE is None or AISP2_AUTH_ENGINE is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database Base or engine unavailable.",
+        )
+
+    AISP2_AUTH_BASE.metadata.create_all(bind=AISP2_AUTH_ENGINE)
+
+    return {
+        "success": True,
+        "status": "schema_ensured",
+        "auth_version": AISP2_AUTH_VERSION,
+        "message": "Auth/account tables were created if they were missing.",
+        "checked_at": utc_now().isoformat(),
+        "schema": api_auth_schema_status(),
+    }
+
+
+@app.post("/api/auth/seed-ceo")
+def api_auth_seed_ceo(
+    request: Request,
+    payload: AuthSeedCEORequest,
+) -> dict[str, Any]:
+    if not aisp2_auth_seed_allowed():
+        raise HTTPException(
+            status_code=403,
+            detail="CEO seed is disabled. Set AISP2_ALLOW_AUTH_SEED=1 temporarily.",
+        )
+
+    if not aisp2_auth_bootstrap_token_valid(payload.bootstrap_token):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid bootstrap token.",
+        )
+
+    aisp2_auth_require_database()
+
+    with managed_database_session() as database_session:
+        existing = aisp2_auth_account_query(
+            database_session,
+            payload.email,
+        )
+
+        if existing is None:
+            existing = aisp2_auth_account_query(
+                database_session,
+                payload.username,
+            )
+
+        if existing is not None:
+            existing.role = AISP2_AUTH_ROLE_CEO
+            existing.is_ceo_master = True
+            existing.account_status = AISP2_AUTH_STATUS_ACTIVE
+            existing.is_active = True
+            existing.display_name = payload.display_name or existing.display_name
+            existing.password_hash = aisp2_auth_make_password_hash(payload.password)
+            existing.password_algorithm = AISP2_AUTH_PASSWORD_SCHEME
+            database_session.add(existing)
+            account = existing
+            action = "updated_existing_ceo_account"
+        else:
+            account = AuthUserAccountModel(
+                email=payload.email.strip().lower(),
+                username=payload.username.strip(),
+                display_name=payload.display_name or "Master Account",
+                password_hash=aisp2_auth_make_password_hash(payload.password),
+                password_algorithm=AISP2_AUTH_PASSWORD_SCHEME,
+                role=AISP2_AUTH_ROLE_CEO,
+                account_status=AISP2_AUTH_STATUS_ACTIVE,
+                is_active=True,
+                is_email_verified=True,
+                is_ceo_master=True,
+            )
+            database_session.add(account)
+            database_session.flush()
+            action = "created_ceo_account"
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account.id,
+            event_type="ceo_account_seeded",
+            severity="security",
+            event_summary=f"CEO account {action}.",
+            request=request,
+            event_json={"action": action},
+        )
+
+        account_payload = aisp2_auth_account_public_payload(account)
+
+    return {
+        "success": True,
+        "status": action,
+        "auth_version": AISP2_AUTH_VERSION,
+        "account": account_payload,
+        "next": "Disable AISP2_ALLOW_AUTH_SEED after confirming login.",
+    }
+
+
+@app.post("/api/auth/seed-first-user")
+def api_auth_seed_first_user(
+    request: Request,
+    payload: AuthCreateFirstUserRequest,
+) -> dict[str, Any]:
+    if not aisp2_auth_seed_allowed():
+        raise HTTPException(
+            status_code=403,
+            detail="First-user seed is disabled. Set AISP2_ALLOW_AUTH_SEED=1 temporarily.",
+        )
+
+    if not aisp2_auth_bootstrap_token_valid(payload.bootstrap_token):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid bootstrap token.",
+        )
+
+    aisp2_auth_require_database()
+
+    with managed_database_session() as database_session:
+        existing = aisp2_auth_account_query(
+            database_session,
+            payload.email,
+        )
+
+        if existing is None:
+            existing = aisp2_auth_account_query(
+                database_session,
+                payload.username,
+            )
+
+        if existing is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="An account with that email or username already exists.",
+            )
+
+        account = AuthUserAccountModel(
+            email=payload.email.strip().lower(),
+            username=payload.username.strip(),
+            display_name=payload.display_name or "AISP2 User",
+            password_hash=aisp2_auth_make_password_hash(payload.password),
+            password_algorithm=AISP2_AUTH_PASSWORD_SCHEME,
+            role=AISP2_AUTH_ROLE_USER,
+            account_status=AISP2_AUTH_STATUS_ACTIVE,
+            is_active=True,
+            is_email_verified=False,
+            is_ceo_master=False,
+        )
+        database_session.add(account)
+        database_session.flush()
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account.id,
+            event_type="first_user_account_seeded",
+            severity="security",
+            event_summary="First user account seeded.",
+            request=request,
+        )
+
+        account_payload = aisp2_auth_account_public_payload(account)
+
+    return {
+        "success": True,
+        "status": "created_first_user_account",
+        "auth_version": AISP2_AUTH_VERSION,
+        "account": account_payload,
+    }
+
+
+@app.post("/api/auth/login")
+def api_auth_login(
+    request: Request,
+    login: AuthLoginRequest,
+) -> JSONResponse:
+    return aisp2_auth_login_payload(
+        request,
+        login,
+    )
+
+
+@app.get("/api/auth/me")
+def api_auth_me(request: Request) -> dict[str, Any]:
+    account, session = aisp2_auth_get_current_account_from_request(request)
+
+    return {
+        "success": True,
+        "authenticated": bool(account),
+        "auth_version": AISP2_AUTH_VERSION,
+        "account": account,
+        "session": session,
+    }
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout(request: Request) -> JSONResponse:
+    raw_token = request.cookies.get(AISP2_AUTH_COOKIE_NAME)
+
+    if aisp2_auth_database_available() and raw_token:
+        try:
+            with managed_database_session() as database_session:
+                session = aisp2_auth_get_session_by_token(
+                    database_session,
+                    raw_token,
+                )
+
+                if session is not None:
+                    session.session_status = AISP2_AUTH_SESSION_REVOKED
+                    session.revoked_at = utc_now()
+                    session.revoke_reason = "user_logout"
+                    database_session.add(session)
+
+                    aisp2_auth_write_audit_event(
+                        database_session,
+                        account_id=getattr(session, "account_id", None),
+                        session_id=getattr(session, "id", None),
+                        event_type="logout",
+                        severity="info",
+                        event_summary="User logged out.",
+                        request=request,
+                    )
+
+        except Exception as error:
+            LOGGER.warning("Logout session revoke failed: %s", error)
+
+    response = JSONResponse(
+        {
+            "success": True,
+            "status": "logged_out",
+        }
+    )
+
+    response.delete_cookie(
+        key=AISP2_AUTH_COOKIE_NAME,
+        path="/",
+    )
+
+    return response
+
+
+@app.get("/api/auth/admin/overview")
+def api_auth_admin_overview(request: Request) -> dict[str, Any]:
+    account, session = aisp2_auth_require_ceo_or_admin(request)
+    aisp2_auth_require_database()
+
+    with managed_database_session() as database_session:
+        user_count = database_session.query(AuthUserAccountModel).count()
+        active_user_count = (
+            database_session.query(AuthUserAccountModel)
+            .filter(AuthUserAccountModel.is_active.is_(True))
+            .count()
+        )
+        session_count = database_session.query(AuthUserSessionModel).count()
+        active_session_count = (
+            database_session.query(AuthUserSessionModel)
+            .filter(AuthUserSessionModel.session_status == AISP2_AUTH_SESSION_ACTIVE)
+            .count()
+        )
+        search_count = database_session.query(AuthUserSearchHistoryModel).count()
+        player_subscription_count = database_session.query(AuthUserPlayerSubscriptionModel).count()
+        team_subscription_count = database_session.query(AuthUserTeamSubscriptionModel).count()
+        prediction_history_count = database_session.query(AuthUserPredictionHistoryModel).count()
+        feedback_count = database_session.query(AuthModelTrainingFeedbackEventModel).count()
+        audit_count = database_session.query(AuthAccountAuditLogModel).count()
+
+    return {
+        "success": True,
+        "auth_version": AISP2_AUTH_VERSION,
+        "viewer": account,
+        "session": session,
+        "counts": {
+            "users": user_count,
+            "active_users": active_user_count,
+            "sessions": session_count,
+            "active_sessions": active_session_count,
+            "saved_searches": search_count,
+            "player_subscriptions": player_subscription_count,
+            "team_subscriptions": team_subscription_count,
+            "prediction_history": prediction_history_count,
+            "model_feedback_events": feedback_count,
+            "audit_events": audit_count,
+        },
+        "readiness": {
+            "ceo_account_ready": True,
+            "secure_sessions_ready": True,
+            "user_memory_schema_ready": True,
+            "subscriptions_schema_ready": True,
+            "prediction_history_schema_ready": True,
+            "model_feedback_schema_ready": True,
+        },
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+# ============================================================
+# SECTION 15.90.10 - AUTH PAGE ROUTES
+# ============================================================
+
+@app.get("/auth/login", response_class=HTMLResponse)
+def auth_login_page(
+    request: Request,
+    message: str | None = None,
+):
+    account, _session = aisp2_auth_get_current_account_from_request(request)
+
+    if account:
+        html = """
+        <!doctype html>
+        <html><head><meta http-equiv="refresh" content="0; url=/account"></head>
+        <body>Already signed in. Redirecting...</body></html>
+        """
+        return HTMLResponse(html)
+
+    return HTMLResponse(
+        aisp2_auth_login_html(message=message),
+    )
+
+
+@app.post("/auth/login", response_class=HTMLResponse)
+async def auth_login_form_submit(request: Request):
+    try:
+        login = await aisp2_auth_parse_form_login_request(request)
+        json_response = aisp2_auth_login_payload(
+            request,
+            login,
+        )
+        redirect_target = json.loads(json_response.body.decode("utf-8")).get("redirect", "/account")
+
+        html_response = HTMLResponse(
+            f"""
+            <!doctype html>
+            <html>
+            <head><meta http-equiv="refresh" content="0; url={redirect_target}"></head>
+            <body>Login successful. Redirecting...</body>
+            </html>
+            """
+        )
+
+        for header_value in json_response.headers.getlist("set-cookie"):
+            html_response.headers.append("set-cookie", header_value)
+
+        return html_response
+
+    except HTTPException as error:
+        return HTMLResponse(
+            aisp2_auth_login_html(error=str(error.detail)),
+            status_code=error.status_code,
+        )
+
+    except Exception as error:
+        LOGGER.exception("Auth form login failed")
+        return HTMLResponse(
+            aisp2_auth_login_html(error=f"Login failed: {error}"),
+            status_code=500,
+        )
+
+
+@app.get("/auth/logout", response_class=HTMLResponse)
+def auth_logout_page(request: Request):
+    json_response = api_auth_logout(request)
+
+    html_response = HTMLResponse(
+        """
+        <!doctype html>
+        <html>
+        <head><meta http-equiv="refresh" content="0; url=/auth/login?message=Logged%20out"></head>
+        <body>Logged out. Redirecting...</body>
+        </html>
+        """
+    )
+
+    for header_value in json_response.headers.getlist("set-cookie"):
+        html_response.headers.append("set-cookie", header_value)
+
+    return html_response
+
+
+@app.get("/account", response_class=HTMLResponse)
+def account_dashboard_page(request: Request):
+    account, _session = aisp2_auth_require_account(request)
+
+    return HTMLResponse(
+        aisp2_auth_account_dashboard_html(
+            account,
+            title="AISP2 Account Dashboard",
+            ceo=False,
+        )
+    )
+
+
+@app.get("/ceo", response_class=HTMLResponse)
+def ceo_dashboard_page(request: Request):
+    account, _session = aisp2_auth_require_ceo_or_admin(request)
+
+    return HTMLResponse(
+        aisp2_auth_account_dashboard_html(
+            account,
+            title="AISP2 CEO Command Dashboard",
+            ceo=True,
+        )
+    )
+
+
+# ============================================================
+# SECTION 15.90.11 - AUTH COMPLETION GATE
+# ============================================================
+
+def validate_auth_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+
+    required_routes = {
+        "/auth/login",
+        "/auth/logout",
+        "/account",
+        "/ceo",
+        "/api/auth/schema/status",
+        "/api/auth/schema/ensure",
+        "/api/auth/seed-ceo",
+        "/api/auth/seed-first-user",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/me",
+        "/api/auth/admin/overview",
+    }
+
+    checks = {
+        "account_models_available": aisp2_auth_models_available(),
+        "database_session_available": callable(managed_database_session),
+        "password_hash_roundtrip": aisp2_auth_verify_password(
+            "ExampleSecurePassword123!",
+            aisp2_auth_make_password_hash("ExampleSecurePassword123!"),
+        ),
+        "session_token_hash_stable": (
+            aisp2_auth_hash_session_token("abc") == aisp2_auth_hash_session_token("abc")
+        ),
+        "session_token_hash_not_plaintext": (
+            aisp2_auth_hash_session_token("abc") != "abc"
+        ),
+        "login_html_renderer_available": callable(aisp2_auth_login_html),
+        "account_dashboard_renderer_available": callable(aisp2_auth_account_dashboard_html),
+        "current_account_resolver_available": callable(aisp2_auth_get_current_account_from_request),
+        "required_routes_registered": required_routes.issubset(route_paths),
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "auth_version": AISP2_AUTH_VERSION,
+        "phase": "Phase 13 Part 2.0",
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name for name, value in checks.items()
+            if not value
+        ],
+        "required_routes": sorted(required_routes),
+        "missing_routes": sorted(required_routes - route_paths),
+        "schema": api_auth_schema_status(),
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/auth/health")
+def api_auth_health() -> dict[str, Any]:
+    return validate_auth_runtime()
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -8245,3 +9862,4 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
