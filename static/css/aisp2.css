@@ -588,3 +588,67 @@ static/css/dashboard.css
 static/css/mobile.css
     Future mobile-specific refinements.
 */
+/* ============================================================
+   SECTION 900 - PHASE 13 PART 7.1 - AUTH NAV LINKS
+   FILE: static/css/aisp2.css
+   PURPOSE:
+   Make Login / Account / CEO access visible in the main AISP2
+   top navigation bar.
+   ============================================================ */
+
+.aisp2-nav-link[data-auth-nav-link],
+.site-nav a[data-auth-nav-link],
+.main-nav a[data-auth-nav-link],
+nav a[data-auth-nav-link] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 34px !important;
+    padding: 0 13px !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(132, 232, 255, 0.20) !important;
+    background: rgba(255, 255, 255, 0.055) !important;
+    color: rgba(241, 248, 255, 0.92) !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    text-decoration: none !important;
+    transition:
+        transform 160ms ease,
+        border-color 160ms ease,
+        background 160ms ease,
+        color 160ms ease !important;
+}
+
+.aisp2-nav-link[data-auth-nav-link]:hover,
+.site-nav a[data-auth-nav-link]:hover,
+.main-nav a[data-auth-nav-link]:hover,
+nav a[data-auth-nav-link]:hover {
+    transform: translateY(-1px) !important;
+    border-color: rgba(141, 245, 189, 0.46) !important;
+    background: rgba(141, 245, 189, 0.105) !important;
+    color: #8df5bd !important;
+}
+
+.aisp2-auth-login-link,
+nav a.aisp2-auth-login-link {
+    border-color: rgba(141, 245, 189, 0.34) !important;
+    color: #8df5bd !important;
+}
+
+.aisp2-auth-ceo-link,
+nav a.aisp2-auth-ceo-link {
+    border-color: rgba(255, 226, 158, 0.32) !important;
+    color: #ffe29e !important;
+}
+
+@media (max-width: 760px) {
+    .aisp2-nav-link[data-auth-nav-link],
+    .site-nav a[data-auth-nav-link],
+    .main-nav a[data-auth-nav-link],
+    nav a[data-auth-nav-link] {
+        min-height: 32px !important;
+        padding: 0 10px !important;
+        font-size: 0.78rem !important;
+    }
+}
+
