@@ -10686,6 +10686,1168 @@ def api_account_searches_health() -> dict[str, Any]:
     return validate_account_memory_runtime()
 
 
+
+# ============================================================
+# SECTION 15.96 - PHASE 14 PART 2.0 - PLAYER AND TEAM SUBSCRIPTION API ROUTES
+# FILE: main.py
+# PURPOSE:
+# Authenticated player/team follow APIs for persistent account
+# personalization.
+#
+# Routes:
+#   POST   /api/account/follow/player
+#   DELETE /api/account/follow/player/{player_id}
+#   POST   /api/account/follow/team
+#   DELETE /api/account/follow/team/{team_id}
+#   GET    /api/account/subscriptions
+#   GET    /api/account/subscriptions/health
+#
+# Security:
+#   - Requires active authenticated account.
+#   - Never accepts account_id from the client.
+#   - Only reads/writes rows owned by the logged-in account.
+#   - Soft-deactivates when supported by the ORM.
+#   - Hard-deletes only when the ORM has no active-status column.
+#   - Writes audit events when the audit model is available.
+# ============================================================
+
+
+# ============================================================
+# SECTION 15.96.01 - SUBSCRIPTION CONSTANTS
+# ============================================================
+
+AISP2_ACCOUNT_SUBSCRIPTION_VERSION: Final[str] = "phase_14_part_2_0_player_team_subscription_api_routes"
+AISP2_ACCOUNT_SUBSCRIPTION_DEFAULT_LIMIT: Final[int] = 100
+AISP2_ACCOUNT_SUBSCRIPTION_MAX_LIMIT: Final[int] = 500
+
+AISP2_SUBSCRIPTION_KIND_PLAYER: Final[str] = "player"
+AISP2_SUBSCRIPTION_KIND_TEAM: Final[str] = "team"
+
+AISP2_SUBSCRIPTION_DEFAULT_ALERTS: Final[dict[str, bool]] = {
+    "stat_changes": True,
+    "prediction_updates": True,
+    "injury_context": False,
+    "lineup_context": True,
+    "game_day_context": True,
+}
+
+
+# ============================================================
+# SECTION 15.96.02 - SUBSCRIPTION REQUEST CONTRACTS
+# ============================================================
+
+class AccountPlayerFollowRequest(BaseModel):
+    player_id: int | None = None
+    mlb_player_id: int | None = None
+    player_name: str | None = Field(default=None, max_length=255)
+    team_id: int | None = None
+    mlb_team_id: int | None = None
+    team_name: str | None = Field(default=None, max_length=255)
+    source_page: str | None = Field(default="unknown", max_length=160)
+    alert_preferences: dict[str, Any] | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    metadata: dict[str, Any] | None = None
+
+
+class AccountTeamFollowRequest(BaseModel):
+    team_id: int | None = None
+    mlb_team_id: int | None = None
+    team_name: str | None = Field(default=None, max_length=255)
+    team_abbreviation: str | None = Field(default=None, max_length=40)
+    source_page: str | None = Field(default="unknown", max_length=160)
+    alert_preferences: dict[str, Any] | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    metadata: dict[str, Any] | None = None
+
+
+# ============================================================
+# SECTION 15.96.03 - SUBSCRIPTION MODEL HELPERS
+# ============================================================
+
+def aisp2_account_subscription_models_available() -> bool:
+    return (
+        callable(managed_database_session)
+        and AuthUserPlayerSubscriptionModel is not None
+        and AuthUserTeamSubscriptionModel is not None
+    )
+
+
+def aisp2_account_subscription_require_models() -> None:
+    if not callable(managed_database_session):
+        raise HTTPException(
+            status_code=503,
+            detail="managed_database_session is unavailable.",
+        )
+
+    missing_models = []
+
+    if AuthUserPlayerSubscriptionModel is None:
+        missing_models.append("UserPlayerSubscription")
+
+    if AuthUserTeamSubscriptionModel is None:
+        missing_models.append("UserTeamSubscription")
+
+    if missing_models:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Subscription ORM models are unavailable. Missing: "
+                + ", ".join(missing_models)
+            ),
+        )
+
+
+def aisp2_account_subscription_account_id(account: Mapping[str, Any]) -> int:
+    account_id = account.get("id")
+
+    try:
+        resolved = int(account_id)
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticated account ID is unavailable.",
+        )
+
+    if resolved <= 0:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticated account ID is invalid.",
+        )
+
+    return resolved
+
+
+def aisp2_subscription_model_columns(model: Any) -> set[str]:
+    try:
+        return {
+            column.name
+            for column in model.__table__.columns
+        }
+    except Exception:
+        return set()
+
+
+def aisp2_subscription_has_column(model: Any, column_name: str) -> bool:
+    return column_name in aisp2_subscription_model_columns(model)
+
+
+def aisp2_subscription_clean_text(
+    value: Any,
+    *,
+    fallback: str | None = None,
+    maximum: int = 255,
+) -> str | None:
+    if value is None:
+        return fallback
+
+    text = str(value).strip()
+
+    if not text:
+        return fallback
+
+    return text[:maximum]
+
+
+def aisp2_subscription_json(value: Mapping[str, Any] | None) -> str | None:
+    if not value:
+        return None
+
+    try:
+        return json.dumps(dict(value), default=str, sort_keys=True)
+    except Exception:
+        return json.dumps({"unserializable": str(value)}, default=str)
+
+
+def aisp2_subscription_parse_json(value: Any) -> Any:
+    if value is None:
+        return None
+
+    if isinstance(value, (dict, list)):
+        return value
+
+    try:
+        return json.loads(str(value))
+    except Exception:
+        return value
+
+
+def aisp2_subscription_row_value(row: Any, *names: str, default: Any = None) -> Any:
+    for name in names:
+        if hasattr(row, name):
+            value = getattr(row, name, None)
+
+            if value not in (None, ""):
+                return value
+
+    return default
+
+
+def aisp2_subscription_iso(value: Any) -> str | None:
+    return iso_timestamp(value)
+
+
+def aisp2_subscription_set_if_present(row: Any, field_name: str, value: Any) -> None:
+    if value is None:
+        return
+
+    if hasattr(row, field_name):
+        try:
+            setattr(row, field_name, value)
+        except Exception:
+            return
+
+
+def aisp2_subscription_now() -> datetime:
+    return utc_now()
+
+
+def aisp2_subscription_alert_preferences(
+    incoming: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    preferences = dict(AISP2_SUBSCRIPTION_DEFAULT_ALERTS)
+
+    if incoming:
+        for key, value in dict(incoming).items():
+            preferences[str(key)] = value
+
+    return preferences
+
+
+# ============================================================
+# SECTION 15.96.04 - PLAYER AND TEAM RESOLUTION SNAPSHOTS
+# ============================================================
+
+def aisp2_subscription_resolve_player_snapshot(
+    database_session,
+    payload: AccountPlayerFollowRequest,
+) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {
+        "player_id": payload.player_id,
+        "mlb_player_id": payload.mlb_player_id,
+        "player_name": aisp2_subscription_clean_text(payload.player_name, maximum=255),
+        "team_id": payload.team_id,
+        "mlb_team_id": payload.mlb_team_id,
+        "team_name": aisp2_subscription_clean_text(payload.team_name, maximum=255),
+        "resolved_from_database": False,
+    }
+
+    if PlayerModel is None:
+        return snapshot
+
+    try:
+        query = database_session.query(PlayerModel)
+        player = None
+
+        if payload.player_id is not None and hasattr(PlayerModel, "id"):
+            player = query.filter(PlayerModel.id == int(payload.player_id)).first()
+
+        if player is None and payload.mlb_player_id is not None and hasattr(PlayerModel, "mlb_player_id"):
+            player = query.filter(PlayerModel.mlb_player_id == int(payload.mlb_player_id)).first()
+
+        if player is None and payload.player_name and hasattr(PlayerModel, "full_name"):
+            player = query.filter(PlayerModel.full_name.ilike(str(payload.player_name))).first()
+
+        if player is not None:
+            snapshot["resolved_from_database"] = True
+            snapshot["player_id"] = getattr(player, "id", snapshot.get("player_id"))
+            snapshot["mlb_player_id"] = getattr(player, "mlb_player_id", snapshot.get("mlb_player_id"))
+            snapshot["player_name"] = getattr(player, "full_name", None) or snapshot.get("player_name")
+            snapshot["team_id"] = getattr(player, "current_team_id", None) or snapshot.get("team_id")
+
+            if snapshot.get("team_id") and TeamModel is not None:
+                team = (
+                    database_session.query(TeamModel)
+                    .filter(TeamModel.id == int(snapshot["team_id"]))
+                    .first()
+                )
+
+                if team is not None:
+                    snapshot["team_name"] = getattr(team, "name", None) or snapshot.get("team_name")
+                    snapshot["mlb_team_id"] = getattr(team, "mlb_team_id", None) or snapshot.get("mlb_team_id")
+
+    except Exception as error:
+        snapshot["resolution_error"] = str(error)
+
+    return snapshot
+
+
+def aisp2_subscription_resolve_team_snapshot(
+    database_session,
+    payload: AccountTeamFollowRequest,
+) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {
+        "team_id": payload.team_id,
+        "mlb_team_id": payload.mlb_team_id,
+        "team_name": aisp2_subscription_clean_text(payload.team_name, maximum=255),
+        "team_abbreviation": aisp2_subscription_clean_text(payload.team_abbreviation, maximum=40),
+        "resolved_from_database": False,
+    }
+
+    if TeamModel is None:
+        return snapshot
+
+    try:
+        query = database_session.query(TeamModel)
+        team = None
+
+        if payload.team_id is not None and hasattr(TeamModel, "id"):
+            team = query.filter(TeamModel.id == int(payload.team_id)).first()
+
+        if team is None and payload.mlb_team_id is not None and hasattr(TeamModel, "mlb_team_id"):
+            team = query.filter(TeamModel.mlb_team_id == int(payload.mlb_team_id)).first()
+
+        if team is None and payload.team_name and hasattr(TeamModel, "name"):
+            team = query.filter(TeamModel.name.ilike(str(payload.team_name))).first()
+
+        if team is None and payload.team_abbreviation and hasattr(TeamModel, "abbreviation"):
+            team = query.filter(TeamModel.abbreviation.ilike(str(payload.team_abbreviation))).first()
+
+        if team is not None:
+            snapshot["resolved_from_database"] = True
+            snapshot["team_id"] = getattr(team, "id", snapshot.get("team_id"))
+            snapshot["mlb_team_id"] = getattr(team, "mlb_team_id", snapshot.get("mlb_team_id"))
+            snapshot["team_name"] = getattr(team, "name", None) or snapshot.get("team_name")
+            snapshot["team_abbreviation"] = getattr(team, "abbreviation", None) or snapshot.get("team_abbreviation")
+
+    except Exception as error:
+        snapshot["resolution_error"] = str(error)
+
+    return snapshot
+
+
+def aisp2_subscription_validate_player_payload(snapshot: Mapping[str, Any]) -> None:
+    if snapshot.get("player_id") is None and snapshot.get("mlb_player_id") is None and not snapshot.get("player_name"):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide player_id, mlb_player_id, or player_name to follow a player.",
+        )
+
+
+def aisp2_subscription_validate_team_payload(snapshot: Mapping[str, Any]) -> None:
+    if snapshot.get("team_id") is None and snapshot.get("mlb_team_id") is None and not snapshot.get("team_name") and not snapshot.get("team_abbreviation"):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide team_id, mlb_team_id, team_name, or team_abbreviation to follow a team.",
+        )
+
+
+# ============================================================
+# SECTION 15.96.05 - SUBSCRIPTION ROW SERIALIZATION
+# ============================================================
+
+def aisp2_subscription_public_payload(row: Any, kind: str) -> dict[str, Any]:
+    metadata_value = aisp2_subscription_row_value(
+        row,
+        "metadata_json",
+        "subscription_metadata_json",
+        "context_json",
+        "payload_json",
+        "request_json",
+    )
+
+    alert_value = aisp2_subscription_row_value(
+        row,
+        "alert_preferences_json",
+        "preferences_json",
+        "notification_preferences_json",
+    )
+
+    return {
+        "id": aisp2_subscription_row_value(row, "id"),
+        "kind": kind,
+        "account_id": aisp2_subscription_row_value(row, "account_id"),
+        "player_id": aisp2_subscription_row_value(row, "player_id"),
+        "mlb_player_id": aisp2_subscription_row_value(row, "mlb_player_id"),
+        "player_name": aisp2_subscription_row_value(row, "player_name", "full_name", "entity_name"),
+        "team_id": aisp2_subscription_row_value(row, "team_id"),
+        "mlb_team_id": aisp2_subscription_row_value(row, "mlb_team_id"),
+        "team_name": aisp2_subscription_row_value(row, "team_name", "entity_name"),
+        "team_abbreviation": aisp2_subscription_row_value(row, "team_abbreviation", "abbreviation"),
+        "source_page": aisp2_subscription_row_value(row, "source_page", "source", default="unknown"),
+        "status": aisp2_subscription_row_value(row, "status", "subscription_status", default="active"),
+        "is_active": aisp2_subscription_row_value(row, "is_active", "active", default=True),
+        "notes": aisp2_subscription_row_value(row, "notes"),
+        "alert_preferences": aisp2_subscription_parse_json(alert_value),
+        "metadata": aisp2_subscription_parse_json(metadata_value),
+        "created_at": aisp2_subscription_iso(
+            aisp2_subscription_row_value(row, "created_at")
+        ),
+        "updated_at": aisp2_subscription_iso(
+            aisp2_subscription_row_value(row, "updated_at")
+        ),
+        "last_seen_at": aisp2_subscription_iso(
+            aisp2_subscription_row_value(row, "last_seen_at", "last_accessed_at")
+        ),
+    }
+
+
+def aisp2_subscription_sort_query(query, model):
+    if hasattr(model, "created_at"):
+        return query.order_by(model.created_at.desc())
+
+    if hasattr(model, "id"):
+        return query.order_by(model.id.desc())
+
+    return query
+
+
+# ============================================================
+# SECTION 15.96.06 - SUBSCRIPTION UPSERT HELPERS
+# ============================================================
+
+def aisp2_subscription_query_account_rows(database_session, model: Any, account_id: int):
+    if not hasattr(model, "account_id"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"{model.__name__} does not expose account_id.",
+        )
+
+    return database_session.query(model).filter(model.account_id == int(account_id))
+
+
+def aisp2_subscription_filter_active(query, model: Any):
+    if hasattr(model, "is_active"):
+        query = query.filter(model.is_active.is_(True))
+
+    elif hasattr(model, "active"):
+        query = query.filter(model.active.is_(True))
+
+    elif hasattr(model, "status"):
+        query = query.filter(model.status == "active")
+
+    elif hasattr(model, "subscription_status"):
+        query = query.filter(model.subscription_status == "active")
+
+    return query
+
+
+def aisp2_player_subscription_find_existing(
+    database_session,
+    account_id: int,
+    snapshot: Mapping[str, Any],
+):
+    model = AuthUserPlayerSubscriptionModel
+    query = aisp2_subscription_query_account_rows(database_session, model, account_id)
+
+    from sqlalchemy import or_
+
+    predicates = []
+
+    if snapshot.get("player_id") is not None and hasattr(model, "player_id"):
+        predicates.append(model.player_id == int(snapshot["player_id"]))
+
+    if snapshot.get("mlb_player_id") is not None and hasattr(model, "mlb_player_id"):
+        predicates.append(model.mlb_player_id == int(snapshot["mlb_player_id"]))
+
+    if snapshot.get("player_name") and hasattr(model, "player_name"):
+        predicates.append(model.player_name.ilike(str(snapshot["player_name"])))
+
+    if not predicates:
+        return None
+
+    return query.filter(or_(*predicates)).first()
+
+
+def aisp2_team_subscription_find_existing(
+    database_session,
+    account_id: int,
+    snapshot: Mapping[str, Any],
+):
+    model = AuthUserTeamSubscriptionModel
+    query = aisp2_subscription_query_account_rows(database_session, model, account_id)
+
+    from sqlalchemy import or_
+
+    predicates = []
+
+    if snapshot.get("team_id") is not None and hasattr(model, "team_id"):
+        predicates.append(model.team_id == int(snapshot["team_id"]))
+
+    if snapshot.get("mlb_team_id") is not None and hasattr(model, "mlb_team_id"):
+        predicates.append(model.mlb_team_id == int(snapshot["mlb_team_id"]))
+
+    if snapshot.get("team_name") and hasattr(model, "team_name"):
+        predicates.append(model.team_name.ilike(str(snapshot["team_name"])))
+
+    if snapshot.get("team_abbreviation") and hasattr(model, "team_abbreviation"):
+        predicates.append(model.team_abbreviation.ilike(str(snapshot["team_abbreviation"])))
+
+    if not predicates:
+        return None
+
+    return query.filter(or_(*predicates)).first()
+
+
+def aisp2_player_subscription_build_kwargs(
+    *,
+    account_id: int,
+    snapshot: Mapping[str, Any],
+    payload: AccountPlayerFollowRequest,
+    request: Request,
+) -> dict[str, Any]:
+    model = AuthUserPlayerSubscriptionModel
+    columns = aisp2_subscription_model_columns(model)
+    preferences = aisp2_subscription_alert_preferences(payload.alert_preferences)
+
+    metadata = dict(payload.metadata or {})
+    metadata.setdefault("subscription_version", AISP2_ACCOUNT_SUBSCRIPTION_VERSION)
+    metadata.setdefault("subscription_kind", AISP2_SUBSCRIPTION_KIND_PLAYER)
+    metadata.setdefault("path", str(request.url.path))
+    metadata.setdefault("resolved_from_database", bool(snapshot.get("resolved_from_database")))
+
+    candidate_values: dict[str, Any] = {
+        "account_id": account_id,
+        "player_id": snapshot.get("player_id"),
+        "mlb_player_id": snapshot.get("mlb_player_id"),
+        "player_name": snapshot.get("player_name"),
+        "full_name": snapshot.get("player_name"),
+        "entity_name": snapshot.get("player_name"),
+        "team_id": snapshot.get("team_id"),
+        "mlb_team_id": snapshot.get("mlb_team_id"),
+        "team_name": snapshot.get("team_name"),
+        "source_page": aisp2_subscription_clean_text(payload.source_page, fallback="unknown", maximum=160),
+        "source": aisp2_subscription_clean_text(payload.source_page, fallback="unknown", maximum=160),
+        "notes": aisp2_subscription_clean_text(payload.notes, maximum=1000),
+        "status": "active",
+        "subscription_status": "active",
+        "is_active": True,
+        "active": True,
+        "alert_preferences_json": aisp2_subscription_json(preferences),
+        "preferences_json": aisp2_subscription_json(preferences),
+        "notification_preferences_json": aisp2_subscription_json(preferences),
+        "metadata_json": aisp2_subscription_json(metadata),
+        "subscription_metadata_json": aisp2_subscription_json(metadata),
+        "context_json": aisp2_subscription_json(metadata),
+        "payload_json": aisp2_subscription_json(metadata),
+        "request_json": aisp2_subscription_json(
+            {
+                "player": dict(snapshot),
+                "source_page": payload.source_page,
+                "alert_preferences": preferences,
+                "metadata": metadata,
+            }
+        ),
+        "created_at": aisp2_subscription_now(),
+        "updated_at": aisp2_subscription_now(),
+        "last_seen_at": aisp2_subscription_now(),
+        "last_accessed_at": aisp2_subscription_now(),
+    }
+
+    return {
+        key: value
+        for key, value in candidate_values.items()
+        if key in columns and value is not None
+    }
+
+
+def aisp2_team_subscription_build_kwargs(
+    *,
+    account_id: int,
+    snapshot: Mapping[str, Any],
+    payload: AccountTeamFollowRequest,
+    request: Request,
+) -> dict[str, Any]:
+    model = AuthUserTeamSubscriptionModel
+    columns = aisp2_subscription_model_columns(model)
+    preferences = aisp2_subscription_alert_preferences(payload.alert_preferences)
+
+    metadata = dict(payload.metadata or {})
+    metadata.setdefault("subscription_version", AISP2_ACCOUNT_SUBSCRIPTION_VERSION)
+    metadata.setdefault("subscription_kind", AISP2_SUBSCRIPTION_KIND_TEAM)
+    metadata.setdefault("path", str(request.url.path))
+    metadata.setdefault("resolved_from_database", bool(snapshot.get("resolved_from_database")))
+
+    candidate_values: dict[str, Any] = {
+        "account_id": account_id,
+        "team_id": snapshot.get("team_id"),
+        "mlb_team_id": snapshot.get("mlb_team_id"),
+        "team_name": snapshot.get("team_name"),
+        "entity_name": snapshot.get("team_name"),
+        "team_abbreviation": snapshot.get("team_abbreviation"),
+        "abbreviation": snapshot.get("team_abbreviation"),
+        "source_page": aisp2_subscription_clean_text(payload.source_page, fallback="unknown", maximum=160),
+        "source": aisp2_subscription_clean_text(payload.source_page, fallback="unknown", maximum=160),
+        "notes": aisp2_subscription_clean_text(payload.notes, maximum=1000),
+        "status": "active",
+        "subscription_status": "active",
+        "is_active": True,
+        "active": True,
+        "alert_preferences_json": aisp2_subscription_json(preferences),
+        "preferences_json": aisp2_subscription_json(preferences),
+        "notification_preferences_json": aisp2_subscription_json(preferences),
+        "metadata_json": aisp2_subscription_json(metadata),
+        "subscription_metadata_json": aisp2_subscription_json(metadata),
+        "context_json": aisp2_subscription_json(metadata),
+        "payload_json": aisp2_subscription_json(metadata),
+        "request_json": aisp2_subscription_json(
+            {
+                "team": dict(snapshot),
+                "source_page": payload.source_page,
+                "alert_preferences": preferences,
+                "metadata": metadata,
+            }
+        ),
+        "created_at": aisp2_subscription_now(),
+        "updated_at": aisp2_subscription_now(),
+        "last_seen_at": aisp2_subscription_now(),
+        "last_accessed_at": aisp2_subscription_now(),
+    }
+
+    return {
+        key: value
+        for key, value in candidate_values.items()
+        if key in columns and value is not None
+    }
+
+
+def aisp2_subscription_upsert_row(row: Any, kwargs: Mapping[str, Any]) -> Any:
+    if row is None:
+        return None
+
+    for key, value in kwargs.items():
+        if key == "created_at":
+            continue
+        aisp2_subscription_set_if_present(row, key, value)
+
+    return row
+
+
+def aisp2_subscription_deactivate_or_delete(database_session, row: Any) -> str:
+    if hasattr(row, "is_active"):
+        row.is_active = False
+        aisp2_subscription_set_if_present(row, "status", "inactive")
+        aisp2_subscription_set_if_present(row, "subscription_status", "inactive")
+        aisp2_subscription_set_if_present(row, "updated_at", aisp2_subscription_now())
+        database_session.add(row)
+        return "deactivated"
+
+    if hasattr(row, "active"):
+        row.active = False
+        aisp2_subscription_set_if_present(row, "status", "inactive")
+        aisp2_subscription_set_if_present(row, "subscription_status", "inactive")
+        aisp2_subscription_set_if_present(row, "updated_at", aisp2_subscription_now())
+        database_session.add(row)
+        return "deactivated"
+
+    if hasattr(row, "status"):
+        row.status = "inactive"
+        aisp2_subscription_set_if_present(row, "updated_at", aisp2_subscription_now())
+        database_session.add(row)
+        return "deactivated"
+
+    if hasattr(row, "subscription_status"):
+        row.subscription_status = "inactive"
+        aisp2_subscription_set_if_present(row, "updated_at", aisp2_subscription_now())
+        database_session.add(row)
+        return "deactivated"
+
+    database_session.delete(row)
+    return "deleted"
+
+
+# ============================================================
+# SECTION 15.96.07 - SUBSCRIPTION API ROUTES
+# ============================================================
+
+@app.post("/api/account/follow/player")
+def api_account_follow_player(
+    request: Request,
+    payload: AccountPlayerFollowRequest,
+) -> dict[str, Any]:
+    account, session = aisp2_auth_require_account(request)
+    aisp2_account_subscription_require_models()
+
+    account_id = aisp2_account_subscription_account_id(account)
+
+    with managed_database_session() as database_session:
+        snapshot = aisp2_subscription_resolve_player_snapshot(
+            database_session,
+            payload,
+        )
+
+        aisp2_subscription_validate_player_payload(snapshot)
+
+        existing = aisp2_player_subscription_find_existing(
+            database_session,
+            account_id,
+            snapshot,
+        )
+
+        kwargs = aisp2_player_subscription_build_kwargs(
+            account_id=account_id,
+            snapshot=snapshot,
+            payload=payload,
+            request=request,
+        )
+
+        if "account_id" not in kwargs:
+            raise HTTPException(
+                status_code=500,
+                detail="UserPlayerSubscription model does not expose account_id.",
+            )
+
+        if existing is None:
+            row = AuthUserPlayerSubscriptionModel(**kwargs)
+            database_session.add(row)
+            action = "created"
+        else:
+            row = aisp2_subscription_upsert_row(existing, kwargs)
+            database_session.add(row)
+            action = "reactivated_or_updated"
+
+        database_session.flush()
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account_id,
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="player_subscription_saved",
+            severity="info",
+            event_summary="Account followed a player.",
+            request=request,
+            event_json={
+                "subscription_id": getattr(row, "id", None),
+                "action": action,
+                "player": dict(snapshot),
+            },
+        )
+
+        row_payload = aisp2_subscription_public_payload(
+            row,
+            AISP2_SUBSCRIPTION_KIND_PLAYER,
+        )
+
+    return {
+        "success": True,
+        "status": "followed",
+        "action": action,
+        "subscription_version": AISP2_ACCOUNT_SUBSCRIPTION_VERSION,
+        "account_id": account_id,
+        "subscription": row_payload,
+    }
+
+
+@app.delete("/api/account/follow/player/{player_id}")
+def api_account_unfollow_player(
+    request: Request,
+    player_id: int,
+) -> dict[str, Any]:
+    account, session = aisp2_auth_require_account(request)
+    aisp2_account_subscription_require_models()
+
+    account_id = aisp2_account_subscription_account_id(account)
+    model = AuthUserPlayerSubscriptionModel
+
+    with managed_database_session() as database_session:
+        query = aisp2_subscription_query_account_rows(
+            database_session,
+            model,
+            account_id,
+        )
+
+        from sqlalchemy import or_
+
+        predicates = []
+
+        if hasattr(model, "player_id"):
+            predicates.append(model.player_id == int(player_id))
+
+        if hasattr(model, "mlb_player_id"):
+            predicates.append(model.mlb_player_id == int(player_id))
+
+        if hasattr(model, "id"):
+            predicates.append(model.id == int(player_id))
+
+        if not predicates:
+            raise HTTPException(
+                status_code=500,
+                detail="UserPlayerSubscription model has no supported player identifier columns.",
+            )
+
+        row = query.filter(or_(*predicates)).first()
+
+        if row is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Player subscription was not found for this account.",
+            )
+
+        row_payload = aisp2_subscription_public_payload(
+            row,
+            AISP2_SUBSCRIPTION_KIND_PLAYER,
+        )
+
+        action = aisp2_subscription_deactivate_or_delete(database_session, row)
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account_id,
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="player_subscription_removed",
+            severity="info",
+            event_summary="Account unfollowed a player.",
+            request=request,
+            event_json={
+                "player_id": int(player_id),
+                "action": action,
+                "subscription": row_payload,
+            },
+        )
+
+    return {
+        "success": True,
+        "status": "unfollowed",
+        "action": action,
+        "subscription_version": AISP2_ACCOUNT_SUBSCRIPTION_VERSION,
+        "account_id": account_id,
+        "player_id": int(player_id),
+    }
+
+
+@app.post("/api/account/follow/team")
+def api_account_follow_team(
+    request: Request,
+    payload: AccountTeamFollowRequest,
+) -> dict[str, Any]:
+    account, session = aisp2_auth_require_account(request)
+    aisp2_account_subscription_require_models()
+
+    account_id = aisp2_account_subscription_account_id(account)
+
+    with managed_database_session() as database_session:
+        snapshot = aisp2_subscription_resolve_team_snapshot(
+            database_session,
+            payload,
+        )
+
+        aisp2_subscription_validate_team_payload(snapshot)
+
+        existing = aisp2_team_subscription_find_existing(
+            database_session,
+            account_id,
+            snapshot,
+        )
+
+        kwargs = aisp2_team_subscription_build_kwargs(
+            account_id=account_id,
+            snapshot=snapshot,
+            payload=payload,
+            request=request,
+        )
+
+        if "account_id" not in kwargs:
+            raise HTTPException(
+                status_code=500,
+                detail="UserTeamSubscription model does not expose account_id.",
+            )
+
+        if existing is None:
+            row = AuthUserTeamSubscriptionModel(**kwargs)
+            database_session.add(row)
+            action = "created"
+        else:
+            row = aisp2_subscription_upsert_row(existing, kwargs)
+            database_session.add(row)
+            action = "reactivated_or_updated"
+
+        database_session.flush()
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account_id,
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="team_subscription_saved",
+            severity="info",
+            event_summary="Account followed a team.",
+            request=request,
+            event_json={
+                "subscription_id": getattr(row, "id", None),
+                "action": action,
+                "team": dict(snapshot),
+            },
+        )
+
+        row_payload = aisp2_subscription_public_payload(
+            row,
+            AISP2_SUBSCRIPTION_KIND_TEAM,
+        )
+
+    return {
+        "success": True,
+        "status": "followed",
+        "action": action,
+        "subscription_version": AISP2_ACCOUNT_SUBSCRIPTION_VERSION,
+        "account_id": account_id,
+        "subscription": row_payload,
+    }
+
+
+@app.delete("/api/account/follow/team/{team_id}")
+def api_account_unfollow_team(
+    request: Request,
+    team_id: int,
+) -> dict[str, Any]:
+    account, session = aisp2_auth_require_account(request)
+    aisp2_account_subscription_require_models()
+
+    account_id = aisp2_account_subscription_account_id(account)
+    model = AuthUserTeamSubscriptionModel
+
+    with managed_database_session() as database_session:
+        query = aisp2_subscription_query_account_rows(
+            database_session,
+            model,
+            account_id,
+        )
+
+        from sqlalchemy import or_
+
+        predicates = []
+
+        if hasattr(model, "team_id"):
+            predicates.append(model.team_id == int(team_id))
+
+        if hasattr(model, "mlb_team_id"):
+            predicates.append(model.mlb_team_id == int(team_id))
+
+        if hasattr(model, "id"):
+            predicates.append(model.id == int(team_id))
+
+        if not predicates:
+            raise HTTPException(
+                status_code=500,
+                detail="UserTeamSubscription model has no supported team identifier columns.",
+            )
+
+        row = query.filter(or_(*predicates)).first()
+
+        if row is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Team subscription was not found for this account.",
+            )
+
+        row_payload = aisp2_subscription_public_payload(
+            row,
+            AISP2_SUBSCRIPTION_KIND_TEAM,
+        )
+
+        action = aisp2_subscription_deactivate_or_delete(database_session, row)
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account_id,
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="team_subscription_removed",
+            severity="info",
+            event_summary="Account unfollowed a team.",
+            request=request,
+            event_json={
+                "team_id": int(team_id),
+                "action": action,
+                "subscription": row_payload,
+            },
+        )
+
+    return {
+        "success": True,
+        "status": "unfollowed",
+        "action": action,
+        "subscription_version": AISP2_ACCOUNT_SUBSCRIPTION_VERSION,
+        "account_id": account_id,
+        "team_id": int(team_id),
+    }
+
+
+@app.get("/api/account/subscriptions")
+def api_account_subscriptions(
+    request: Request,
+    kind: str | None = Query(default=None, pattern="^(player|team|all)$"),
+    include_inactive: bool = False,
+    limit: int = Query(default=AISP2_ACCOUNT_SUBSCRIPTION_DEFAULT_LIMIT, ge=1, le=AISP2_ACCOUNT_SUBSCRIPTION_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    account, _session = aisp2_auth_require_account(request)
+    aisp2_account_subscription_require_models()
+
+    account_id = aisp2_account_subscription_account_id(account)
+
+    selected_kind = kind or "all"
+
+    with managed_database_session() as database_session:
+        player_rows = []
+        team_rows = []
+
+        if selected_kind in {"player", "all"}:
+            player_query = aisp2_subscription_query_account_rows(
+                database_session,
+                AuthUserPlayerSubscriptionModel,
+                account_id,
+            )
+
+            if not include_inactive:
+                player_query = aisp2_subscription_filter_active(
+                    player_query,
+                    AuthUserPlayerSubscriptionModel,
+                )
+
+            player_query = aisp2_subscription_sort_query(
+                player_query,
+                AuthUserPlayerSubscriptionModel,
+            )
+
+            player_rows = (
+                player_query
+                .offset(int(offset))
+                .limit(int(limit))
+                .all()
+            )
+
+        if selected_kind in {"team", "all"}:
+            team_query = aisp2_subscription_query_account_rows(
+                database_session,
+                AuthUserTeamSubscriptionModel,
+                account_id,
+            )
+
+            if not include_inactive:
+                team_query = aisp2_subscription_filter_active(
+                    team_query,
+                    AuthUserTeamSubscriptionModel,
+                )
+
+            team_query = aisp2_subscription_sort_query(
+                team_query,
+                AuthUserTeamSubscriptionModel,
+            )
+
+            team_rows = (
+                team_query
+                .offset(int(offset))
+                .limit(int(limit))
+                .all()
+            )
+
+        player_subscriptions = [
+            aisp2_subscription_public_payload(row, AISP2_SUBSCRIPTION_KIND_PLAYER)
+            for row in player_rows
+        ]
+
+        team_subscriptions = [
+            aisp2_subscription_public_payload(row, AISP2_SUBSCRIPTION_KIND_TEAM)
+            for row in team_rows
+        ]
+
+    return {
+        "success": True,
+        "subscription_version": AISP2_ACCOUNT_SUBSCRIPTION_VERSION,
+        "account_id": account_id,
+        "kind": selected_kind,
+        "include_inactive": include_inactive,
+        "limit": int(limit),
+        "offset": int(offset),
+        "player_count": len(player_subscriptions),
+        "team_count": len(team_subscriptions),
+        "total_count": len(player_subscriptions) + len(team_subscriptions),
+        "players": player_subscriptions,
+        "teams": team_subscriptions,
+        "subscriptions": [
+            *player_subscriptions,
+            *team_subscriptions,
+        ],
+    }
+
+
+# ============================================================
+# SECTION 15.96.08 - SUBSCRIPTION HEALTH AND COMPLETION GATE
+# ============================================================
+
+def validate_account_subscription_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+
+    required_routes = {
+        "/api/account/follow/player",
+        "/api/account/follow/player/{player_id}",
+        "/api/account/follow/team",
+        "/api/account/follow/team/{team_id}",
+        "/api/account/subscriptions",
+        "/api/account/subscriptions/health",
+    }
+
+    player_columns = (
+        sorted(aisp2_subscription_model_columns(AuthUserPlayerSubscriptionModel))
+        if AuthUserPlayerSubscriptionModel is not None
+        else []
+    )
+
+    team_columns = (
+        sorted(aisp2_subscription_model_columns(AuthUserTeamSubscriptionModel))
+        if AuthUserTeamSubscriptionModel is not None
+        else []
+    )
+
+    checks = {
+        "auth_account_required": callable(aisp2_auth_require_account),
+        "database_session_available": callable(managed_database_session),
+        "player_subscription_model_available": AuthUserPlayerSubscriptionModel is not None,
+        "team_subscription_model_available": AuthUserTeamSubscriptionModel is not None,
+        "player_account_id_column_available": "account_id" in player_columns,
+        "team_account_id_column_available": "account_id" in team_columns,
+        "player_identifier_available": any(
+            column in player_columns
+            for column in ["player_id", "mlb_player_id", "player_name", "entity_name"]
+        ),
+        "team_identifier_available": any(
+            column in team_columns
+            for column in ["team_id", "mlb_team_id", "team_name", "team_abbreviation", "entity_name"]
+        ),
+        "follow_player_route_registered": "/api/account/follow/player" in route_paths,
+        "unfollow_player_route_registered": "/api/account/follow/player/{player_id}" in route_paths,
+        "follow_team_route_registered": "/api/account/follow/team" in route_paths,
+        "unfollow_team_route_registered": "/api/account/follow/team/{team_id}" in route_paths,
+        "subscriptions_route_registered": "/api/account/subscriptions" in route_paths,
+        "health_route_registered": "/api/account/subscriptions/health" in route_paths,
+        "player_payload_contract_available": callable(AccountPlayerFollowRequest),
+        "team_payload_contract_available": callable(AccountTeamFollowRequest),
+        "no_client_account_id_player": "account_id" not in AccountPlayerFollowRequest.model_fields,
+        "no_client_account_id_team": "account_id" not in AccountTeamFollowRequest.model_fields,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 2.0",
+        "subscription_version": AISP2_ACCOUNT_SUBSCRIPTION_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name for name, value in checks.items()
+            if not value
+        ],
+        "required_routes": sorted(required_routes),
+        "registered_required_routes": sorted(required_routes.intersection(route_paths)),
+        "missing_required_routes": sorted(required_routes - route_paths),
+        "player_subscription_columns": player_columns,
+        "team_subscription_columns": team_columns,
+        "completion_gate": {
+            "authenticated_user_can_follow_player": checks["follow_player_route_registered"] and checks["auth_account_required"],
+            "authenticated_user_can_unfollow_player": checks["unfollow_player_route_registered"] and checks["auth_account_required"],
+            "authenticated_user_can_follow_team": checks["follow_team_route_registered"] and checks["auth_account_required"],
+            "authenticated_user_can_unfollow_team": checks["unfollow_team_route_registered"] and checks["auth_account_required"],
+            "authenticated_user_can_list_subscriptions": checks["subscriptions_route_registered"] and checks["auth_account_required"],
+            "subscription_schema_detected": checks["player_subscription_model_available"] and checks["team_subscription_model_available"],
+        },
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/account/subscriptions/health")
+def api_account_subscriptions_health() -> dict[str, Any]:
+    return validate_account_subscription_runtime()
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -11214,6 +12376,7 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
 
 
 
