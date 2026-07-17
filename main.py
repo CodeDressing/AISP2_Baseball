@@ -9660,6 +9660,240 @@ def aisp2_auth_account_dashboard_html(
     )
 
 
+
+# ============================================================
+# SECTION 15.93 - PHASE 13 PART 5.0 - TEMPLATE-BACKED CEO ADMIN DASHBOARD RENDERER
+# FILE: main.py
+# PURPOSE:
+# Render templates/admin_dashboard.html for protected CEO/master
+# dashboards and preserve the account dashboard renderer for
+# normal user accounts.
+# ============================================================
+
+def aisp2_auth_admin_metric_counts() -> dict[str, Any]:
+    counts = {
+        "user_count": 0,
+        "active_user_count": 0,
+        "session_count": 0,
+        "active_session_count": 0,
+        "search_count": 0,
+        "player_subscription_count": 0,
+        "team_subscription_count": 0,
+        "prediction_history_count": 0,
+        "pending_result_count": 0,
+        "resolved_prediction_count": 0,
+        "outcome_resolution_count": 0,
+        "feedback_count": 0,
+        "approved_feedback_count": 0,
+        "used_feedback_count": 0,
+        "audit_count": 0,
+    }
+
+    if not aisp2_auth_database_available():
+        return counts
+
+    try:
+        with managed_database_session() as database_session:
+            if AuthUserAccountModel is not None:
+                counts["user_count"] = database_session.query(AuthUserAccountModel).count()
+                counts["active_user_count"] = (
+                    database_session.query(AuthUserAccountModel)
+                    .filter(AuthUserAccountModel.is_active.is_(True))
+                    .count()
+                )
+
+            if AuthUserSessionModel is not None:
+                counts["session_count"] = database_session.query(AuthUserSessionModel).count()
+                counts["active_session_count"] = (
+                    database_session.query(AuthUserSessionModel)
+                    .filter(AuthUserSessionModel.session_status == AISP2_AUTH_SESSION_ACTIVE)
+                    .count()
+                )
+
+            if AuthUserSearchHistoryModel is not None:
+                counts["search_count"] = database_session.query(AuthUserSearchHistoryModel).count()
+
+            if AuthUserPlayerSubscriptionModel is not None:
+                counts["player_subscription_count"] = database_session.query(AuthUserPlayerSubscriptionModel).count()
+
+            if AuthUserTeamSubscriptionModel is not None:
+                counts["team_subscription_count"] = database_session.query(AuthUserTeamSubscriptionModel).count()
+
+            if AuthUserPredictionHistoryModel is not None:
+                prediction_query = database_session.query(AuthUserPredictionHistoryModel)
+                counts["prediction_history_count"] = prediction_query.count()
+
+                try:
+                    counts["pending_result_count"] = (
+                        prediction_query
+                        .filter(AuthUserPredictionHistoryModel.resolution_status.is_(None))
+                        .count()
+                    )
+                except Exception:
+                    counts["pending_result_count"] = 0
+
+                try:
+                    counts["resolved_prediction_count"] = (
+                        prediction_query
+                        .filter(AuthUserPredictionHistoryModel.resolution_status.isnot(None))
+                        .count()
+                    )
+                except Exception:
+                    counts["resolved_prediction_count"] = 0
+
+            if AuthPredictionOutcomeResolutionModel is not None:
+                counts["outcome_resolution_count"] = database_session.query(AuthPredictionOutcomeResolutionModel).count()
+
+            if AuthModelTrainingFeedbackEventModel is not None:
+                feedback_query = database_session.query(AuthModelTrainingFeedbackEventModel)
+                counts["feedback_count"] = feedback_query.count()
+
+                try:
+                    counts["approved_feedback_count"] = (
+                        feedback_query
+                        .filter(AuthModelTrainingFeedbackEventModel.approved_for_training.is_(True))
+                        .count()
+                    )
+                except Exception:
+                    counts["approved_feedback_count"] = 0
+
+                try:
+                    counts["used_feedback_count"] = (
+                        feedback_query
+                        .filter(AuthModelTrainingFeedbackEventModel.used_for_training.is_(True))
+                        .count()
+                    )
+                except Exception:
+                    counts["used_feedback_count"] = 0
+
+            if AuthAccountAuditLogModel is not None:
+                counts["audit_count"] = database_session.query(AuthAccountAuditLogModel).count()
+
+    except Exception as error:
+        LOGGER.warning("Admin dashboard metric counts failed: %s", error)
+
+    return counts
+
+
+def aisp2_auth_schema_runtime_flags() -> dict[str, Any]:
+    try:
+        schema = api_auth_schema_status()
+    except Exception:
+        schema = {}
+
+    return {
+        "bootstrap_token_configured": schema.get("bootstrap_token_configured", False),
+        "seed_enabled": schema.get("seed_enabled", False),
+        "cookie_secure": schema.get("cookie_secure", True),
+        "auth_version": AISP2_AUTH_VERSION,
+        "secure_login_ready": "Ready",
+        "sessions_ready": "Ready",
+        "subscriptions_ready": "Schema Ready",
+        "prediction_ledger_ready": "Schema Ready",
+    }
+
+
+def aisp2_auth_admin_dashboard_html(
+    account: Mapping[str, Any],
+) -> str:
+    template_path = TEMPLATE_DIRECTORY / "admin_dashboard.html"
+
+    if not template_path.exists():
+        return f"""
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>AISP2 CEO Dashboard</title></head>
+<body style="background:#020914;color:#f3f9ff;font-family:system-ui;padding:40px;">
+    <main style="max-width:860px;margin:0 auto;">
+        <h1>AISP2 CEO Dashboard</h1>
+        <p>templates/admin_dashboard.html was not found.</p>
+        <p>Signed in as {aisp2_auth_html_escape(account.get("username"))}.</p>
+        <a href="/account">Account</a>
+        <a href="/auth/logout">Logout</a>
+    </main>
+</body>
+</html>
+"""
+
+    context = {
+        "account_id": account.get("id"),
+        "email": account.get("email"),
+        "username": account.get("username"),
+        "display_name": account.get("display_name") or account.get("username") or "CEO",
+        "role": account.get("role"),
+        "account_status": account.get("account_status"),
+        "is_active": account.get("is_active"),
+        "is_email_verified": account.get("is_email_verified"),
+        "is_ceo_master": account.get("is_ceo_master"),
+        "last_login_at": account.get("last_login_at") or "Not Available",
+        "last_seen_at": account.get("last_seen_at") or "Not Available",
+        "created_at": account.get("created_at") or "Not Available",
+        **aisp2_auth_admin_metric_counts(),
+        **aisp2_auth_schema_runtime_flags(),
+    }
+
+    return aisp2_auth_render_template_text(
+        template_path.read_text(encoding="utf-8"),
+        context,
+    )
+
+
+def aisp2_auth_account_dashboard_html(
+    account: Mapping[str, Any],
+    *,
+    title: str,
+    ceo: bool = False,
+) -> str:
+    if ceo:
+        return aisp2_auth_admin_dashboard_html(account)
+
+    template_path = TEMPLATE_DIRECTORY / "account_dashboard.html"
+
+    if not template_path.exists():
+        return f"""
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>AISP2 Account Dashboard</title></head>
+<body style="background:#020914;color:#f3f9ff;font-family:system-ui;padding:40px;">
+    <main style="max-width:760px;margin:0 auto;">
+        <h1>AISP2 Account Dashboard</h1>
+        <p>templates/account_dashboard.html was not found.</p>
+        <p>Signed in as {aisp2_auth_html_escape(account.get("username"))}.</p>
+        <a href="/ceo">CEO Dashboard</a>
+        <a href="/auth/logout">Logout</a>
+    </main>
+</body>
+</html>
+"""
+
+    counts = aisp2_auth_account_metric_counts(account)
+
+    context = {
+        "account_id": account.get("id"),
+        "email": account.get("email"),
+        "username": account.get("username"),
+        "display_name": account.get("display_name") or account.get("username") or "AISP2 User",
+        "role": account.get("role"),
+        "account_status": account.get("account_status"),
+        "is_active": account.get("is_active"),
+        "is_email_verified": account.get("is_email_verified"),
+        "is_ceo_master": account.get("is_ceo_master"),
+        "last_login_at": account.get("last_login_at") or "Not Available",
+        "last_seen_at": account.get("last_seen_at") or "Not Available",
+        "created_at": account.get("created_at") or "Not Available",
+        "secure_login_ready": "Ready",
+        "sessions_ready": "Ready",
+        "subscriptions_ready": "Schema Ready",
+        "prediction_ledger_ready": "Schema Ready",
+        **counts,
+    }
+
+    return aisp2_auth_render_template_text(
+        template_path.read_text(encoding="utf-8"),
+        context,
+    )
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -10188,6 +10422,7 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
 
 
 

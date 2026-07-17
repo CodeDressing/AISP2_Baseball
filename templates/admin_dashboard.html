@@ -1,0 +1,1194 @@
+﻿<!doctype html>
+<html lang="en" data-aisp2-page="admin-dashboard">
+<head>
+    <!-- ======================================================
+         AISP2 BASEBALL INTELLIGENCE PLATFORM
+         FILE: templates/admin_dashboard.html
+         PHASE: 13 PART 5.0
+         PURPOSE:
+         Protected CEO/master dashboard for system administration,
+         users, sessions, prediction history, account memory,
+         subscriptions, audit logs, and model feedback readiness.
+
+         SECURITY DESIGN:
+         - Served only by protected /ceo route.
+         - Requires CEO/admin account validation in main.py.
+         - Receives public-safe account and aggregate metrics only.
+         - No passwords, raw session tokens, or secrets are rendered.
+         ====================================================== -->
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AISP2 CEO Command Dashboard</title>
+    <meta name="description" content="Protected AISP2 CEO dashboard for account administration, prediction ledger oversight, model feedback readiness, and system health.">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="theme-color" content="#020914">
+
+    <style>
+        /* =====================================================
+           SECTION 01 - DESIGN TOKENS
+           ===================================================== */
+
+        :root {
+            color-scheme: dark;
+
+            --bg-0: #010611;
+            --bg-1: #020914;
+            --bg-2: #031421;
+            --bg-3: #031c1c;
+
+            --panel-0: rgba(6, 20, 35, 0.92);
+            --panel-1: rgba(8, 29, 47, 0.90);
+            --panel-2: rgba(12, 43, 62, 0.76);
+
+            --border-0: rgba(143, 211, 255, 0.13);
+            --border-1: rgba(143, 211, 255, 0.22);
+            --border-good: rgba(137, 245, 189, 0.28);
+            --border-warn: rgba(255, 226, 158, 0.30);
+            --border-danger: rgba(255, 143, 143, 0.26);
+
+            --text-0: #f3f9ff;
+            --text-1: rgba(231, 244, 255, 0.88);
+            --text-2: rgba(215, 234, 248, 0.72);
+            --text-3: rgba(215, 234, 248, 0.54);
+
+            --cyan: #84e8ff;
+            --mint: #8df5bd;
+            --gold: #ffe29e;
+            --red: #ff8f8f;
+
+            --radius-xl: 30px;
+            --radius-lg: 22px;
+            --radius-md: 15px;
+            --radius-pill: 999px;
+
+            --shadow-xl: 0 30px 100px rgba(0, 0, 0, 0.42);
+            --shadow-md: 0 18px 54px rgba(0, 0, 0, 0.26);
+
+            --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        /* =====================================================
+           SECTION 02 - GLOBAL FOUNDATION
+           ===================================================== */
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--bg-0);
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text-0);
+            font-family: var(--font);
+            background:
+                radial-gradient(circle at 10% 0%, rgba(80, 194, 255, 0.16), transparent 30%),
+                radial-gradient(circle at 88% 10%, rgba(124, 255, 191, 0.12), transparent 30%),
+                radial-gradient(circle at 60% 100%, rgba(255, 226, 158, 0.07), transparent 34%),
+                linear-gradient(145deg, var(--bg-0), var(--bg-2) 48%, var(--bg-3));
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(90deg, rgba(255,255,255,0.026) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+            background-size: 54px 54px;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.70), transparent 78%);
+            opacity: 0.56;
+        }
+
+        a {
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 900;
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        /* =====================================================
+           SECTION 03 - TOP NAV
+           ===================================================== */
+
+        .admin-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            min-height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 0 clamp(18px, 4vw, 44px);
+            background: rgba(1, 8, 22, 0.84);
+            border-bottom: 1px solid rgba(143, 211, 255, 0.10);
+            backdrop-filter: blur(18px);
+        }
+
+        .admin-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-0);
+            font-weight: 950;
+            letter-spacing: -0.03em;
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background:
+                radial-gradient(circle at 30% 20%, rgba(255,255,255,0.36), transparent 30%),
+                linear-gradient(135deg, rgba(132,232,255,0.28), rgba(141,245,189,0.16));
+            border: 1px solid rgba(143, 211, 255, 0.16);
+        }
+
+        .admin-nav {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .admin-nav a {
+            color: rgba(232, 244, 255, 0.78);
+            font-size: 0.86rem;
+        }
+
+        .logout-link {
+            padding: 9px 13px;
+            border-radius: var(--radius-pill);
+            background: rgba(255,255,255,0.055);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+        }
+
+        /* =====================================================
+           SECTION 04 - PAGE SHELL
+           ===================================================== */
+
+        .admin-shell {
+            position: relative;
+            z-index: 2;
+            width: min(1620px, calc(100vw - 36px));
+            margin: 26px auto 74px;
+            display: grid;
+            gap: 16px;
+        }
+
+        .panel {
+            border: 1px solid var(--border-0);
+            border-radius: var(--radius-xl);
+            background:
+                radial-gradient(circle at 18% 0%, rgba(101, 204, 255, 0.10), transparent 34%),
+                linear-gradient(145deg, var(--panel-1), rgba(5, 18, 31, 0.90));
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+
+        .panel-inner {
+            padding: clamp(18px, 2.2vw, 28px);
+        }
+
+        .section-title {
+            margin: 0 0 8px;
+            font-size: clamp(1.45rem, 2.1vw, 2.15rem);
+            line-height: 1.05;
+            letter-spacing: -0.045em;
+        }
+
+        .section-copy {
+            margin: 0;
+            color: var(--text-2);
+            line-height: 1.55;
+            font-size: 0.96rem;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            width: fit-content;
+            padding: 7px 11px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.16);
+            background: rgba(255, 255, 255, 0.052);
+            color: var(--cyan);
+            font-size: 0.68rem;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .eyebrow-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--mint);
+            box-shadow: 0 0 18px rgba(141, 245, 189, 0.82);
+        }
+
+        /* =====================================================
+           SECTION 05 - HERO
+           ===================================================== */
+
+        .admin-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.38fr) minmax(380px, 0.62fr);
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .hero-main {
+            min-height: 292px;
+            display: grid;
+            align-content: center;
+        }
+
+        .hero-title {
+            max-width: 980px;
+            margin: 18px 0 12px;
+            font-size: clamp(3.2rem, 7vw, 7.2rem);
+            line-height: 0.84;
+            letter-spacing: -0.085em;
+            color: var(--text-0);
+        }
+
+        .hero-title span {
+            display: block;
+            background: linear-gradient(135deg, #f3f9ff 0%, #aee9ff 48%, #8df5bd 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .hero-actions {
+            margin-top: 22px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .hero-button {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.16);
+            background: rgba(255,255,255,0.055);
+            color: var(--text-0);
+            font-size: 0.84rem;
+            font-weight: 950;
+        }
+
+        .hero-button.primary {
+            color: #02101b;
+            border: 0;
+            background: linear-gradient(135deg, var(--cyan), var(--mint));
+        }
+
+        .hero-side {
+            display: grid;
+            gap: 10px;
+        }
+
+        .identity-card {
+            padding: 18px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-0);
+            background: rgba(255,255,255,0.045);
+        }
+
+        .identity-card span {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--text-3);
+            font-size: 0.66rem;
+            font-weight: 950;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+
+        .identity-card strong {
+            display: block;
+            color: var(--text-0);
+            font-size: 1rem;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+        }
+
+        .identity-card.good strong {
+            color: var(--mint);
+        }
+
+        .identity-card.warn strong {
+            color: var(--gold);
+        }
+
+        .identity-card.danger strong {
+            color: var(--red);
+        }
+
+        /* =====================================================
+           SECTION 06 - EXECUTIVE METRICS
+           ===================================================== */
+
+        .executive-grid {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .executive-card {
+            min-height: 96px;
+            grid-column: span 2;
+            padding: 15px;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background:
+                linear-gradient(145deg, rgba(255,255,255,0.056), rgba(255,255,255,0.026));
+        }
+
+        .executive-card.large {
+            grid-column: span 4;
+        }
+
+        .executive-card span {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-3);
+            font-size: 0.64rem;
+            font-weight: 950;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+
+        .executive-card strong {
+            display: block;
+            color: var(--text-0);
+            font-size: clamp(1.4rem, 2.4vw, 2.5rem);
+            line-height: 0.95;
+            letter-spacing: -0.055em;
+        }
+
+        .executive-card.good strong {
+            color: var(--mint);
+        }
+
+        .executive-card.info strong {
+            color: var(--cyan);
+        }
+
+        .executive-card.warn strong {
+            color: var(--gold);
+        }
+
+        .executive-card.danger strong {
+            color: var(--red);
+        }
+
+        .executive-card p {
+            margin: 8px 0 0;
+            color: var(--text-3);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        /* =====================================================
+           SECTION 07 - ADMIN BODY GRID
+           ===================================================== */
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: minmax(300px, 0.86fr) minmax(520px, 1.48fr) minmax(340px, 0.92fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .column-stack {
+            display: grid;
+            gap: 16px;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .metric-card {
+            min-height: 82px;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background:
+                linear-gradient(145deg, rgba(255,255,255,0.056), rgba(255,255,255,0.026));
+        }
+
+        .metric-card span {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-3);
+            font-size: 0.64rem;
+            font-weight: 950;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+
+        .metric-card strong {
+            color: var(--text-0);
+            font-size: 1.05rem;
+            line-height: 1.28;
+        }
+
+        .metric-card.good strong {
+            color: var(--mint);
+        }
+
+        .metric-card.info strong {
+            color: var(--cyan);
+        }
+
+        .metric-card.warn strong {
+            color: var(--gold);
+        }
+
+        .metric-card.danger strong {
+            color: var(--red);
+        }
+
+        /* =====================================================
+           SECTION 08 - COMMAND / STATUS ROWS
+           ===================================================== */
+
+        .command-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .command-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+            min-height: 60px;
+            padding: 12px 13px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(143, 211, 255, 0.11);
+            background: rgba(255,255,255,0.038);
+        }
+
+        .command-title {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--text-0);
+            font-size: 0.95rem;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .command-meta {
+            display: block;
+            color: var(--text-3);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .status-pill {
+            padding: 7px 9px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.12);
+            background: rgba(255,255,255,0.050);
+            color: var(--cyan);
+            font-size: 0.66rem;
+            font-weight: 950;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-pill.good {
+            color: var(--mint);
+            border-color: rgba(137,245,189,0.20);
+        }
+
+        .status-pill.warn {
+            color: var(--gold);
+            border-color: rgba(255,226,158,0.22);
+        }
+
+        .status-pill.danger {
+            color: var(--red);
+            border-color: rgba(255,143,143,0.22);
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .admin-button {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(143, 211, 255, 0.16);
+            background: rgba(255,255,255,0.055);
+            color: var(--text-0);
+            font-size: 0.80rem;
+            font-weight: 950;
+            text-align: center;
+        }
+
+        .admin-button.primary {
+            color: #02101b;
+            border: 0;
+            background: linear-gradient(135deg, var(--cyan), var(--mint));
+        }
+
+        /* =====================================================
+           SECTION 09 - MODEL PIPELINE
+           ===================================================== */
+
+        .pipeline {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .pipeline-step {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(143, 211, 255, 0.11);
+            background: rgba(255,255,255,0.035);
+        }
+
+        .pipeline-index {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            border: 1px solid rgba(137,245,189,0.20);
+            background: rgba(137,245,189,0.08);
+            color: var(--mint);
+            font-weight: 950;
+        }
+
+        .pipeline-title {
+            display: block;
+            color: var(--text-0);
+            font-weight: 950;
+            margin-bottom: 4px;
+        }
+
+        .pipeline-meta {
+            color: var(--text-3);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        /* =====================================================
+           SECTION 10 - AUDIT / SECURITY
+           ===================================================== */
+
+        .security-panel {
+            border-color: var(--border-warn);
+            background:
+                radial-gradient(circle at 100% 0%, rgba(255, 226, 158, 0.08), transparent 34%),
+                linear-gradient(145deg, rgba(8, 29, 47, 0.90), rgba(5, 18, 31, 0.90));
+        }
+
+        .security-warning {
+            margin-top: 16px;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 226, 158, 0.22);
+            background: rgba(255, 226, 158, 0.08);
+            color: rgba(255, 244, 216, 0.88);
+            line-height: 1.5;
+            font-size: 0.88rem;
+        }
+
+        /* =====================================================
+           SECTION 11 - RESPONSIVE
+           ===================================================== */
+
+        @media (max-width: 1320px) {
+            .admin-hero,
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-side {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .executive-card,
+            .executive-card.large {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .admin-shell {
+                width: min(100%, calc(100vw - 24px));
+                margin-top: 18px;
+            }
+
+            .hero-side,
+            .metric-grid,
+            .button-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .executive-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .executive-card,
+            .executive-card.large {
+                grid-column: span 1;
+            }
+
+            .pipeline-step {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 620px) {
+            .admin-topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                padding-top: 14px;
+                padding-bottom: 14px;
+            }
+
+            .admin-nav {
+                gap: 10px;
+            }
+
+            .hero-side,
+            .metric-grid,
+            .button-grid,
+            .executive-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-title {
+                font-size: clamp(3rem, 17vw, 5rem);
+            }
+
+            .command-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ======================================================
+         SECTION 12 - TOP NAVIGATION
+         ====================================================== -->
+
+    <header class="admin-topbar">
+        <a class="admin-brand" href="/ceo">
+            <span class="brand-icon">♛</span>
+            <span>AISP2 CEO Command</span>
+        </a>
+
+        <nav class="admin-nav" aria-label="CEO navigation">
+            <a href="/account">User View</a>
+            <a href="/tools/prediction">Predictions</a>
+            <a href="/players">Players</a>
+            <a href="/api/auth/admin/overview">Admin API</a>
+            <a href="/api/auth/schema/status">Auth Status</a>
+            <a class="logout-link" href="/auth/logout">Logout</a>
+        </nav>
+    </header>
+
+    <!-- ======================================================
+         SECTION 13 - ADMIN DASHBOARD SHELL
+         ====================================================== -->
+
+    <main class="admin-shell">
+        <!-- ==================================================
+             SECTION 14 - HERO
+             ================================================== -->
+
+        <section class="admin-hero">
+            <article class="panel hero-main">
+                <div class="panel-inner">
+                    <div class="eyebrow">
+                        <span class="eyebrow-dot" aria-hidden="true"></span>
+                        CEO Master Access
+                    </div>
+
+                    <h1 class="hero-title">
+                        Command
+                        <span>Dashboard</span>
+                    </h1>
+
+                    <p class="section-copy">
+                        Master control for secure accounts, user sessions, saved searches,
+                        subscriptions, prediction history, actual-result follow-up, audit
+                        events, and model feedback readiness.
+                    </p>
+
+                    <div class="hero-actions">
+                        <a class="hero-button primary" href="/api/auth/admin/overview">Admin Overview JSON</a>
+                        <a class="hero-button" href="/api/auth/health">Auth Health</a>
+                        <a class="hero-button" href="/api/auth/schema/status">Schema Status</a>
+                        <a class="hero-button" href="/tools/prediction">Prediction Workbench</a>
+                    </div>
+                </div>
+            </article>
+
+            <aside class="hero-side">
+                <article class="identity-card good">
+                    <span>Master User</span>
+                    <strong>{{ username }}</strong>
+                </article>
+
+                <article class="identity-card">
+                    <span>Role</span>
+                    <strong>{{ role }}</strong>
+                </article>
+
+                <article class="identity-card good">
+                    <span>CEO Master</span>
+                    <strong>{{ is_ceo_master }}</strong>
+                </article>
+
+                <article class="identity-card">
+                    <span>Account Status</span>
+                    <strong>{{ account_status }}</strong>
+                </article>
+
+                <article class="identity-card">
+                    <span>Last Login</span>
+                    <strong>{{ last_login_at }}</strong>
+                </article>
+
+                <article class="identity-card warn">
+                    <span>Auth Version</span>
+                    <strong>{{ auth_version }}</strong>
+                </article>
+            </aside>
+        </section>
+
+        <!-- ==================================================
+             SECTION 15 - EXECUTIVE METRICS
+             ================================================== -->
+
+        <section class="panel">
+            <div class="panel-inner">
+                <h2 class="section-title">Executive System Snapshot</h2>
+                <p class="section-copy">
+                    High-level control metrics for the account system and model-feedback foundation.
+                </p>
+
+                <div class="executive-grid">
+                    <article class="executive-card large good">
+                        <span>Total Accounts</span>
+                        <strong>{{ user_count }}</strong>
+                        <p>All secure AISP2 accounts currently stored.</p>
+                    </article>
+
+                    <article class="executive-card good">
+                        <span>Active Users</span>
+                        <strong>{{ active_user_count }}</strong>
+                        <p>Accounts marked active.</p>
+                    </article>
+
+                    <article class="executive-card info">
+                        <span>Active Sessions</span>
+                        <strong>{{ active_session_count }}</strong>
+                        <p>Currently active login sessions.</p>
+                    </article>
+
+                    <article class="executive-card info">
+                        <span>Saved Searches</span>
+                        <strong>{{ search_count }}</strong>
+                        <p>Account memory events captured.</p>
+                    </article>
+
+                    <article class="executive-card warn">
+                        <span>Predictions</span>
+                        <strong>{{ prediction_history_count }}</strong>
+                        <p>User prediction history records.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================================================
+             SECTION 16 - ADMIN BODY
+             ================================================== -->
+
+        <section class="admin-grid">
+            <!-- ==============================================
+                 SECTION 16.01 - LEFT COLUMN
+                 ============================================== -->
+
+            <div class="column-stack">
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Accounts & Sessions</h2>
+                        <p class="section-copy">
+                            Secure account and session totals for CEO visibility.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card good">
+                                <span>Total Users</span>
+                                <strong>{{ user_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Active Users</span>
+                                <strong>{{ active_user_count }}</strong>
+                            </div>
+
+                            <div class="metric-card info">
+                                <span>Total Sessions</span>
+                                <strong>{{ session_count }}</strong>
+                            </div>
+
+                            <div class="metric-card info">
+                                <span>Active Sessions</span>
+                                <strong>{{ active_session_count }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel security-panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Security Controls</h2>
+                        <p class="section-copy">
+                            Bootstrap seeding must remain disabled after CEO and first user setup.
+                        </p>
+
+                        <div class="command-list">
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Bootstrap Token Configured</span>
+                                    <span class="command-meta">Environment token required for seed endpoints.</span>
+                                </div>
+                                <span class="status-pill warn">{{ bootstrap_token_configured }}</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Seed Endpoint Enabled</span>
+                                    <span class="command-meta">Should be false after account setup.</span>
+                                </div>
+                                <span class="status-pill danger">{{ seed_enabled }}</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Cookie Secure</span>
+                                    <span class="command-meta">Production should use secure cookies.</span>
+                                </div>
+                                <span class="status-pill good">{{ cookie_secure }}</span>
+                            </div>
+                        </div>
+
+                        <div class="security-warning">
+                            After seeding accounts, set <strong>AISP2_ALLOW_AUTH_SEED=0</strong>.
+                            Never leave seed endpoints open in production.
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Quick Commands</h2>
+                        <p class="section-copy">
+                            CEO operational shortcuts.
+                        </p>
+
+                        <div class="button-grid">
+                            <a class="admin-button primary" href="/api/auth/admin/overview">Admin JSON</a>
+                            <a class="admin-button" href="/api/auth/health">Auth Health</a>
+                            <a class="admin-button" href="/api/auth/schema/status">Schema Status</a>
+                            <a class="admin-button" href="/api/system/data-readiness">Data Readiness</a>
+                            <a class="admin-button" href="/api/player-explorer/bootstrap">Player Bootstrap</a>
+                            <a class="admin-button" href="/tools/prediction">Workbench</a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <!-- ==============================================
+                 SECTION 16.02 - CENTER COLUMN
+                 ============================================== -->
+
+            <div class="column-stack">
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Prediction Intelligence Oversight</h2>
+                        <p class="section-copy">
+                            The CEO account monitors prediction history, pending outcomes,
+                            resolved predictions, and model-feedback readiness.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card warn">
+                                <span>Total Predictions</span>
+                                <strong>{{ prediction_history_count }}</strong>
+                            </div>
+
+                            <div class="metric-card warn">
+                                <span>Pending Results</span>
+                                <strong>{{ pending_result_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Resolved Predictions</span>
+                                <strong>{{ resolved_prediction_count }}</strong>
+                            </div>
+
+                            <div class="metric-card info">
+                                <span>Outcome Resolutions</span>
+                                <strong>{{ outcome_resolution_count }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="pipeline">
+                            <div class="pipeline-step">
+                                <div class="pipeline-index">1</div>
+                                <div>
+                                    <span class="pipeline-title">Prediction Created</span>
+                                    <span class="pipeline-meta">User runs /predict/player from a logged-in account.</span>
+                                </div>
+                                <span class="status-pill warn">Next</span>
+                            </div>
+
+                            <div class="pipeline-step">
+                                <div class="pipeline-index">2</div>
+                                <div>
+                                    <span class="pipeline-title">Game Result Follow-Up</span>
+                                    <span class="pipeline-meta">AISP2 compares predicted outcome against actual MLB result.</span>
+                                </div>
+                                <span class="status-pill warn">Next</span>
+                            </div>
+
+                            <div class="pipeline-step">
+                                <div class="pipeline-index">3</div>
+                                <div>
+                                    <span class="pipeline-title">Prediction Scored</span>
+                                    <span class="pipeline-meta">Correctness, probability error, and confidence quality are calculated.</span>
+                                </div>
+                                <span class="status-pill good">Schema</span>
+                            </div>
+
+                            <div class="pipeline-step">
+                                <div class="pipeline-index">4</div>
+                                <div>
+                                    <span class="pipeline-title">Model Feedback Event</span>
+                                    <span class="pipeline-meta">Resolved prediction becomes supervised training feedback.</span>
+                                </div>
+                                <span class="status-pill good">Schema</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Model Feedback & Training Readiness</h2>
+                        <p class="section-copy">
+                            Resolved predictions will become future training records with
+                            feature snapshots, predicted probability, actual result, error,
+                            and model version.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card info">
+                                <span>Feedback Events</span>
+                                <strong>{{ feedback_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Approved For Training</span>
+                                <strong>{{ approved_feedback_count }}</strong>
+                            </div>
+
+                            <div class="metric-card warn">
+                                <span>Used For Training</span>
+                                <strong>{{ used_feedback_count }}</strong>
+                            </div>
+
+                            <div class="metric-card">
+                                <span>Audit Events</span>
+                                <strong>{{ audit_count }}</strong>
+                            </div>
+                        </div>
+
+                        <div class="command-list">
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Feature Snapshot Storage</span>
+                                    <span class="command-meta">Prediction feature state can be preserved for later training.</span>
+                                </div>
+                                <span class="status-pill good">Schema Ready</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Training Approval Workflow</span>
+                                    <span class="command-meta">CEO/admin can later approve resolved feedback for training.</span>
+                                </div>
+                                <span class="status-pill good">Schema Ready</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <!-- ==============================================
+                 SECTION 16.03 - RIGHT COLUMN
+                 ============================================== -->
+
+            <div class="column-stack">
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">User Memory</h2>
+                        <p class="section-copy">
+                            Account behavior becomes the personalization layer.
+                        </p>
+
+                        <div class="metric-grid">
+                            <div class="metric-card info">
+                                <span>Searches</span>
+                                <strong>{{ search_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Player Follows</span>
+                                <strong>{{ player_subscription_count }}</strong>
+                            </div>
+
+                            <div class="metric-card good">
+                                <span>Team Follows</span>
+                                <strong>{{ team_subscription_count }}</strong>
+                            </div>
+
+                            <div class="metric-card warn">
+                                <span>Audit Events</span>
+                                <strong>{{ audit_count }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Account System Readiness</h2>
+                        <p class="section-copy">
+                            Phase 13 account foundation status.
+                        </p>
+
+                        <div class="command-list">
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Secure Login</span>
+                                    <span class="command-meta">Password hash and HttpOnly session route exists.</span>
+                                </div>
+                                <span class="status-pill good">{{ secure_login_ready }}</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Session Management</span>
+                                    <span class="command-meta">Session token hashes stored server-side.</span>
+                                </div>
+                                <span class="status-pill good">{{ sessions_ready }}</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Subscriptions</span>
+                                    <span class="command-meta">Player/team follow schemas exist.</span>
+                                </div>
+                                <span class="status-pill good">{{ subscriptions_ready }}</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Prediction Ledger</span>
+                                    <span class="command-meta">User prediction history schema exists.</span>
+                                </div>
+                                <span class="status-pill good">{{ prediction_ledger_ready }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-inner">
+                        <h2 class="section-title">Next CEO Build Steps</h2>
+
+                        <div class="command-list">
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Capture account searches</span>
+                                    <span class="command-meta">Write Workbench, Player Explorer, and chat queries to account memory.</span>
+                                </div>
+                                <span class="status-pill warn">13.6</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Save prediction history</span>
+                                    <span class="command-meta">Store each logged-in prediction and response payload.</span>
+                                </div>
+                                <span class="status-pill warn">13.7</span>
+                            </div>
+
+                            <div class="command-row">
+                                <div>
+                                    <span class="command-title">Resolve predictions</span>
+                                    <span class="command-meta">Compare past predictions with actual MLB results.</span>
+                                </div>
+                                <span class="status-pill warn">13.8</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
