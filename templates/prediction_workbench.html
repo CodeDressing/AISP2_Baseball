@@ -77,31 +77,6 @@
         </section>
 
         <!-- ====================================================
-             SECTION 05 - RUNTIME STATUS STRIP
-             ==================================================== -->
-        <section class="runtime-status-grid">
-            <article class="runtime-status-card">
-                <span class="runtime-status-label">Selector Runtime</span>
-                <strong class="runtime-status-value" data-selector-health>Initializing</strong>
-            </article>
-
-            <article class="runtime-status-card">
-                <span class="runtime-status-label">Prediction API</span>
-                <strong class="runtime-status-value" data-selector-state>Pending Check</strong>
-            </article>
-
-            <article class="runtime-status-card">
-                <span class="runtime-status-label">Data Source</span>
-                <strong class="runtime-status-value" data-selector-source>Pending</strong>
-            </article>
-
-            <article class="runtime-status-card">
-                <span class="runtime-status-label">Warehouse</span>
-                <strong class="runtime-status-value" data-warehouse-status>Pending</strong>
-            </article>
-        </section>
-
-        <!-- ====================================================
              SECTION 06 - CONTROL CENTER
              ==================================================== -->
         <section class="prediction-controls-card panel-glass">
@@ -468,6 +443,33 @@
             </article>
         </section>
 
+        
+
+        <!-- ====================================================
+             SECTION 99 - BOTTOM RUNTIME STATUS STRIP
+             ==================================================== -->
+        <section class="runtime-status-grid runtime-status-bottom" aria-label="Runtime system status">
+            <article class="runtime-status-card">
+                <span class="runtime-status-label">Selector Runtime</span>
+                <strong class="runtime-status-value" data-selector-health>Initializing</strong>
+            </article>
+
+            <article class="runtime-status-card">
+                <span class="runtime-status-label">Prediction API</span>
+                <strong class="runtime-status-value" data-selector-state>Pending Check</strong>
+            </article>
+
+            <article class="runtime-status-card">
+                <span class="runtime-status-label">Data Source</span>
+                <strong class="runtime-status-value" data-selector-source>Pending</strong>
+            </article>
+
+            <article class="runtime-status-card">
+                <span class="runtime-status-label">Warehouse</span>
+                <strong class="runtime-status-value" data-warehouse-status>Pending</strong>
+            </article>
+        </section>
+
         <!-- ====================================================
              SECTION 09 - ERROR PANEL
              ==================================================== -->
@@ -485,3 +487,4 @@
 <script src="/static/js/prediction.js"></script>
 </body>
 </html>
+

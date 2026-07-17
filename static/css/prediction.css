@@ -1229,3 +1229,59 @@ body {
     }
 }
 
+
+/* ============================================================
+   SECTION 1000 - PHASE 12 PART 5.11 BOTTOM RUNTIME STATUS
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Move runtime health/status presentation to the bottom of the
+   Prediction Workbench so the primary workflow appears first.
+   ============================================================ */
+
+.runtime-status-bottom {
+    margin-top: 18px !important;
+    order: 99 !important;
+}
+
+.runtime-status-bottom .runtime-status-card {
+    min-height: 58px !important;
+    padding: 12px 14px !important;
+    border-radius: 15px !important;
+    background:
+        linear-gradient(145deg, rgba(10, 28, 47, 0.78), rgba(5, 18, 30, 0.70)) !important;
+    border: 1px solid rgba(120, 190, 235, 0.12) !important;
+}
+
+.runtime-status-bottom .runtime-status-label {
+    font-size: 0.64rem !important;
+    letter-spacing: 0.13em !important;
+}
+
+.runtime-status-bottom .runtime-status-value {
+    font-size: 0.95rem !important;
+}
+
+.prediction-hero + .runtime-status-grid:not(.runtime-status-bottom),
+.prediction-header + .prediction-stat-grid {
+    display: none !important;
+}
+
+/* Tighten space after hero now that status moved down. */
+.prediction-hero,
+.prediction-header {
+    margin-bottom: 0 !important;
+}
+
+/* Keep bottom status compact on smaller screens. */
+@media (max-width: 980px) {
+    .runtime-status-bottom {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .runtime-status-bottom {
+        grid-template-columns: 1fr !important;
+    }
+}
+
