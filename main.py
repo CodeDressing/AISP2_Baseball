@@ -9334,6 +9334,109 @@ def api_auth_health() -> dict[str, Any]:
     return validate_auth_runtime()
 
 
+
+# ============================================================
+# SECTION 15.91 - PHASE 13 PART 3.0 - TEMPLATE-BACKED LOGIN RENDERER
+# FILE: main.py
+# PURPOSE:
+# Override the Phase 13 Part 2 inline login renderer so /auth/login
+# uses templates/login.html when the template exists.
+#
+# This keeps the auth routes stable while moving the login UI into
+# the templates directory.
+# ============================================================
+
+def aisp2_auth_login_html(
+    *,
+    message: str | None = None,
+    error: str | None = None,
+) -> str:
+    login_template_path = TEMPLATE_DIRECTORY / "login.html"
+
+    if login_template_path.exists():
+        template_text = login_template_path.read_text(
+            encoding="utf-8",
+        )
+
+        rendered = template_text
+
+        rendered = rendered.replace(
+            "{% if message %}",
+            "" if message else "<!--",
+        )
+        rendered = rendered.replace(
+            "{% endif %}",
+            "" if message or error else "-->",
+            1,
+        )
+
+        if message:
+            rendered = rendered.replace(
+                "{{ message }}",
+                str(message),
+            )
+        else:
+            rendered = rendered.replace(
+                "{{ message }}",
+                "",
+            )
+
+        if error:
+            rendered = rendered.replace(
+                "{% if error %}",
+                "",
+            )
+            rendered = rendered.replace(
+                "{{ error }}",
+                str(error),
+            )
+            rendered = rendered.replace(
+                "{% endif %}",
+                "",
+                1,
+            )
+        else:
+            rendered = rendered.replace(
+                "{% if error %}",
+                "<!--",
+            )
+            rendered = rendered.replace(
+                "{{ error }}",
+                "",
+            )
+            rendered = rendered.replace(
+                "{% endif %}",
+                "-->",
+                1,
+            )
+
+        return rendered
+
+    return """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>AISP2 Secure Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="background:#020914;color:#f3f9ff;font-family:system-ui;padding:40px;">
+    <main style="max-width:460px;margin:0 auto;">
+        <h1>AISP2 Secure Login</h1>
+        <p>templates/login.html was not found. Create the template and reload this page.</p>
+        <form method="post" action="/auth/login">
+            <label>Email or username</label><br>
+            <input name="email_or_username" required style="width:100%;min-height:42px;"><br><br>
+            <label>Password</label><br>
+            <input name="password" type="password" required style="width:100%;min-height:42px;"><br><br>
+            <button type="submit">Login</button>
+        </form>
+    </main>
+</body>
+</html>
+"""
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
@@ -9862,4 +9965,5 @@ if __name__ == "__main__":
     print(json.dumps(report, indent=2, default=str))
     if report["status"] != "ok":
         raise SystemExit(1)
+
 
