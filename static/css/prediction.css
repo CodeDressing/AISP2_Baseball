@@ -1441,3 +1441,229 @@ body {
     }
 }
 
+
+/* ============================================================
+   SECTION 1002 - PHASE 12 PART 5.13 CONTROLS LEFT + IMAGE RIGHT
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Convert Prediction Controls into a two-zone command module:
+   - Left: compact controls, actions, diagnostics.
+   - Right: reserved premium image / visual intelligence slot.
+   ============================================================ */
+
+
+/* ============================================================
+   1002.01 - TWO-ZONE CONTROL CARD
+   ============================================================ */
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: minmax(420px, 0.58fr) minmax(380px, 0.42fr) !important;
+    grid-template-areas:
+        "heading visual"
+        "form visual"
+        "actions visual"
+        "diagnostics visual"
+        "warning visual" !important;
+    column-gap: 24px !important;
+    row-gap: 14px !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+}
+
+
+/* ============================================================
+   1002.02 - LEFT SIDE ASSIGNMENTS
+   ============================================================ */
+
+.prediction-controls-card .panel-heading-row,
+.prediction-selector-panel > div:first-child {
+    grid-area: heading !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 150px !important;
+    gap: 14px !important;
+    align-items: start !important;
+}
+
+.prediction-controls-card .prediction-form-grid,
+.prediction-selector-panel .prediction-form-grid {
+    grid-area: form !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    align-items: start !important;
+    margin-top: 0 !important;
+}
+
+.prediction-controls-card .prediction-field,
+.prediction-selector-panel .prediction-field {
+    grid-column: auto !important;
+}
+
+.prediction-controls-card .prediction-action-row,
+.prediction-selector-panel .prediction-action-row {
+    grid-area: actions !important;
+    margin-top: 0 !important;
+    gap: 10px !important;
+}
+
+.prediction-controls-card .diagnostic-mini-grid,
+.prediction-selector-panel [data-selector-diagnostics],
+.prediction-selector-panel .prediction-stat-grid {
+    grid-area: diagnostics !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 0 !important;
+}
+
+.prediction-controls-card .selector-diagnostic-bar,
+.prediction-selector-panel [data-selector-warning] {
+    grid-area: warning !important;
+}
+
+
+/* ============================================================
+   1002.03 - RIGHT SIDE RESERVED VISUAL SLOT
+   ============================================================ */
+
+.prediction-controls-card::after,
+.prediction-selector-panel::after {
+    content: "AISP2 Visual Intelligence Panel";
+    grid-area: visual;
+    min-height: 100%;
+    border-radius: 24px;
+    border: 1px solid rgba(137, 209, 255, 0.16);
+    background:
+        radial-gradient(circle at 50% 24%, rgba(118, 236, 255, 0.16), transparent 32%),
+        radial-gradient(circle at 72% 78%, rgba(104, 255, 184, 0.13), transparent 32%),
+        linear-gradient(145deg, rgba(5, 19, 34, 0.72), rgba(3, 18, 20, 0.88));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 0 80px rgba(55, 164, 255, 0.08),
+        0 20px 52px rgba(0, 0, 0, 0.22);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 22px;
+    color: rgba(219, 239, 255, 0.58);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   1002.04 - MAKE LEFT CONTROLS FEEL INTENTIONAL
+   ============================================================ */
+
+.prediction-controls-card .panel-title,
+.prediction-selector-panel h2 {
+    font-size: clamp(1.45rem, 1.9vw, 1.95rem) !important;
+    margin-bottom: 5px !important;
+}
+
+.prediction-controls-card .panel-copy,
+.prediction-selector-panel .prediction-subtitle {
+    max-width: 520px !important;
+    font-size: 0.92rem !important;
+    line-height: 1.48 !important;
+}
+
+.prediction-controls-card .selector-state-badge,
+.prediction-selector-panel [data-selector-status-card] {
+    min-height: 58px !important;
+    padding: 11px 13px !important;
+}
+
+.prediction-controls-card .prediction-field label,
+.prediction-selector-panel .prediction-field label {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.16em !important;
+}
+
+.prediction-controls-card .prediction-field select,
+.prediction-selector-panel .prediction-field select {
+    min-height: 48px !important;
+    max-width: 100% !important;
+}
+
+.prediction-controls-card .field-note,
+.prediction-selector-panel .prediction-field small {
+    min-height: 16px !important;
+    font-size: 0.78rem !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card,
+.prediction-selector-panel .prediction-stat-chip {
+    min-height: 56px !important;
+}
+
+
+/* ============================================================
+   1002.05 - FUTURE IMAGE HOOK
+   PURPOSE:
+   In the next pass, we will apply:
+   background-image: url("/static/assets/<your-image>");
+   to this visual slot.
+   ============================================================ */
+
+.prediction-controls-card[data-has-visual-image]::after,
+.prediction-selector-panel[data-has-visual-image]::after {
+    content: "";
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+}
+
+
+/* ============================================================
+   1002.06 - LAPTOP RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1180px) {
+    .prediction-controls-card,
+    .prediction-selector-panel {
+        grid-template-columns: 1fr !important;
+        grid-template-areas:
+            "heading"
+            "form"
+            "actions"
+            "diagnostics"
+            "warning"
+            "visual" !important;
+    }
+
+    .prediction-controls-card::after,
+    .prediction-selector-panel::after {
+        min-height: 260px !important;
+    }
+}
+
+
+/* ============================================================
+   1002.07 - MOBILE RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 720px) {
+    .prediction-controls-card .panel-heading-row,
+    .prediction-selector-panel > div:first-child {
+        grid-template-columns: 1fr !important;
+    }
+
+    .prediction-controls-card .diagnostic-mini-grid,
+    .prediction-selector-panel [data-selector-diagnostics],
+    .prediction-selector-panel .prediction-stat-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .prediction-controls-card::after,
+    .prediction-selector-panel::after {
+        min-height: 220px !important;
+        border-radius: 18px !important;
+    }
+}
+
