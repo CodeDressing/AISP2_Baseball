@@ -1140,7 +1140,7 @@ function updateSelectedContextPreview() {
         setText("[data-result-player]", payload.player);
         setText("[data-intelligence-summary]", "Ready to generate prediction intelligence for " + payload.player + ".");
     } else {
-        setText("[data-result-player]", "Select Player");
+        setText("[data-result-player]", "Choose Player");
         setText("[data-intelligence-summary]", "Select a team, player, and outcome to generate AISP2 prediction intelligence.");
     }
 
@@ -1466,10 +1466,10 @@ function resetPredictionDisplay() {
     AISP2_PREDICTION_STATE.lastPrediction = null;
     AISP2_PREDICTION_STATE.lastError = null;
 
-    setText("[data-result-player]", "Select Player");
-    setText("[data-result-team]", "Team Pending");
-    setText("[data-result-outcome]", "Outcome Pending");
-    setText("[data-result-probability]", "Pending");
+    setText("[data-result-player]", "Choose Player");
+    setText("[data-result-team]", "Select Team");
+    setText("[data-result-outcome]", "Select Outcome");
+    setText("[data-result-probability]", "—");
     setText("[data-result-confidence]", "Confidence Pending");
     setText("[data-result-tier]", "Pending");
     setText("[data-result-risk]", "Pending");
@@ -1542,3 +1542,4 @@ window.AISP2PredictionSelectors = {
         return renderPlayersForTeam(resolveTeam(teamValue));
     }
 };
+
