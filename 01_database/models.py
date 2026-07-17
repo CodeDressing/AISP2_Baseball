@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # AISP2 BASEBALL
 # PHASE 11 PART 2
 # ENTERPRISE DATABASE MODELS
@@ -19,17 +19,17 @@
 #
 # Supported Systems
 # -----------------
-# • MLB Teams
-# • Players
-# • Rosters
-# • Games
-# • Chat Memory
-# • Continuous Learning
-# • Prediction Engine
-# • NLP
-# • AI Chatbot
-# • Future ML Pipelines
-# • Data Warehouse
+# â€¢ MLB Teams
+# â€¢ Players
+# â€¢ Rosters
+# â€¢ Games
+# â€¢ Chat Memory
+# â€¢ Continuous Learning
+# â€¢ Prediction Engine
+# â€¢ NLP
+# â€¢ AI Chatbot
+# â€¢ Future ML Pipelines
+# â€¢ Data Warehouse
 # ============================================================
 
 from __future__ import annotations
@@ -4357,6 +4357,1756 @@ def validate_player_explorer_schema() -> dict[str, object]:
 
 
 
+
+# ============================================================
+# SECTION 22.11 - PHASE 13 PART 1.0 - SECURE ACCOUNT AND PREDICTION TRACKING MODELS
+# FILE: 01_database/models.py
+# PURPOSE:
+# Add the secure account foundation for AISP2.
+#
+# This section supports:
+#   - CEO / master admin account
+#   - first user account
+#   - role-based access
+#   - secure sessions
+#   - user search memory
+#   - player subscriptions
+#   - team subscriptions
+#   - prediction history
+#   - prediction outcome resolution
+#   - model training feedback events
+#   - account audit logging
+#
+# Security Note:
+# This schema stores password hashes only. It must never store
+# plaintext passwords.
+# ============================================================
+
+
+# ============================================================
+# SECTION 22.11.01 - ACCOUNT ROLE CONSTANTS
+# ============================================================
+
+ACCOUNT_ROLE_CEO = "ceo_master"
+ACCOUNT_ROLE_ADMIN = "admin"
+ACCOUNT_ROLE_ANALYST = "analyst"
+ACCOUNT_ROLE_USER = "user"
+
+ACCOUNT_STATUS_ACTIVE = "active"
+ACCOUNT_STATUS_LOCKED = "locked"
+ACCOUNT_STATUS_DISABLED = "disabled"
+ACCOUNT_STATUS_PENDING = "pending"
+
+SESSION_STATUS_ACTIVE = "active"
+SESSION_STATUS_REVOKED = "revoked"
+SESSION_STATUS_EXPIRED = "expired"
+
+SUBSCRIPTION_STATUS_ACTIVE = "active"
+SUBSCRIPTION_STATUS_PAUSED = "paused"
+SUBSCRIPTION_STATUS_REMOVED = "removed"
+
+PREDICTION_LIFECYCLE_CREATED = "created"
+PREDICTION_LIFECYCLE_PENDING_RESULT = "pending_result"
+PREDICTION_LIFECYCLE_RESOLVED = "resolved"
+PREDICTION_LIFECYCLE_SCORED = "scored"
+PREDICTION_LIFECYCLE_TRAINING_READY = "training_ready"
+
+MODEL_FEEDBACK_STATUS_PENDING = "pending"
+MODEL_FEEDBACK_STATUS_APPROVED = "approved"
+MODEL_FEEDBACK_STATUS_REJECTED = "rejected"
+MODEL_FEEDBACK_STATUS_USED_FOR_TRAINING = "used_for_training"
+
+
+# ============================================================
+# SECTION 22.11.02 - USER ACCOUNT MODEL
+# ============================================================
+
+class UserAccount(Base):
+    """
+    Stores one secure AISP2 account.
+
+    This table is the foundation for:
+        - CEO master access
+        - normal user access
+        - account-specific memory
+        - prediction history
+        - saved searches
+        - followed players
+        - followed teams
+        - training feedback ownership
+    """
+
+    __tablename__ = "user_accounts"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "email",
+            name="uq_user_accounts_email",
+        ),
+        UniqueConstraint(
+            "username",
+            name="uq_user_accounts_username",
+        ),
+        Index(
+            "idx_user_accounts_role_status",
+            "role",
+            "account_status",
+        ),
+        Index(
+            "idx_user_accounts_last_login",
+            "last_login_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    email: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    username: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
+
+    display_name: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    password_hash: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    password_algorithm: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        default="bcrypt",
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(80),
+        nullable=False,
+        default=ACCOUNT_ROLE_USER,
+        index=True,
+    )
+
+    account_status: Mapped[str] = mapped_column(
+        String(80),
+        nullable=False,
+        default=ACCOUNT_STATUS_ACTIVE,
+        index=True,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        index=True,
+    )
+
+    is_email_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    is_ceo_master: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    failed_login_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    account_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    preference_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="UserSession.created_at",
+    )
+
+    search_history: Mapped[list["UserSearchHistory"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="UserSearchHistory.created_at",
+    )
+
+    player_subscriptions: Mapped[list["UserPlayerSubscription"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="UserPlayerSubscription.created_at",
+    )
+
+    team_subscriptions: Mapped[list["UserTeamSubscription"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="UserTeamSubscription.created_at",
+    )
+
+    prediction_history: Mapped[list["UserPredictionHistory"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="UserPredictionHistory.created_at",
+    )
+
+    training_feedback_events: Mapped[list["ModelTrainingFeedbackEvent"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="ModelTrainingFeedbackEvent.created_at",
+    )
+
+    audit_events: Mapped[list["AccountAuditLog"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        order_by="AccountAuditLog.created_at",
+    )
+
+
+# ============================================================
+# SECTION 22.11.03 - USER SESSION MODEL
+# ============================================================
+
+class UserSession(Base):
+    """
+    Stores a secure login session.
+
+    The raw session token should never be stored. Store only a
+    secure token hash and keep enough metadata for audit and
+    revocation.
+    """
+
+    __tablename__ = "user_sessions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "session_token_hash",
+            name="uq_user_sessions_token_hash",
+        ),
+        Index(
+            "idx_user_sessions_account_status",
+            "account_id",
+            "session_status",
+        ),
+        Index(
+            "idx_user_sessions_expires",
+            "expires_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    session_token_hash: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    session_status: Mapped[str] = mapped_column(
+        String(80),
+        default=SESSION_STATUS_ACTIVE,
+        nullable=False,
+        index=True,
+    )
+
+    ip_address_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    user_agent_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    user_agent_preview: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    revoke_reason: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+    )
+
+    account: Mapped[UserAccount] = relationship(
+        back_populates="sessions",
+    )
+
+
+# ============================================================
+# SECTION 22.11.04 - USER SEARCH HISTORY MODEL
+# ============================================================
+
+class UserSearchHistory(Base):
+    """
+    Stores what a user searched for so the account can remember
+    players, teams, outcomes, and intent over time.
+    """
+
+    __tablename__ = "user_search_history"
+
+    __table_args__ = (
+        Index(
+            "idx_user_search_history_account_created",
+            "account_id",
+            "created_at",
+        ),
+        Index(
+            "idx_user_search_history_entity",
+            "entity_type",
+            "entity_value",
+        ),
+        Index(
+            "idx_user_search_history_player_team",
+            "player_id",
+            "team_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    query_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    normalized_query: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    search_type: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    entity_type: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    entity_value: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    outcome_key: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    source_page: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    result_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    clicked_result_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    raw_context_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    account: Mapped[UserAccount] = relationship(
+        back_populates="search_history",
+    )
+
+    player: Mapped[Player | None] = relationship(
+        foreign_keys=[player_id],
+    )
+
+    team: Mapped[Team | None] = relationship(
+        foreign_keys=[team_id],
+    )
+
+
+# ============================================================
+# SECTION 22.11.05 - USER PLAYER SUBSCRIPTION MODEL
+# ============================================================
+
+class UserPlayerSubscription(Base):
+    """
+    Stores a user's followed players.
+
+    This supports dashboards, alerts, player stat tracking,
+    prediction tracking, and personalized account memory.
+    """
+
+    __tablename__ = "user_player_subscriptions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "player_id",
+            name="uq_user_player_subscription_identity",
+        ),
+        Index(
+            "idx_user_player_subscriptions_account_status",
+            "account_id",
+            "subscription_status",
+        ),
+        Index(
+            "idx_user_player_subscriptions_player_status",
+            "player_id",
+            "subscription_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=False,
+        index=True,
+    )
+
+    subscription_status: Mapped[str] = mapped_column(
+        String(80),
+        default=SUBSCRIPTION_STATUS_ACTIVE,
+        nullable=False,
+        index=True,
+    )
+
+    alert_level: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    track_home_runs: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_hits: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_rbi: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_strikeouts: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_prediction_changes: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    last_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    subscription_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    account: Mapped[UserAccount] = relationship(
+        back_populates="player_subscriptions",
+    )
+
+    player: Mapped[Player] = relationship(
+        foreign_keys=[player_id],
+    )
+
+
+# ============================================================
+# SECTION 22.11.06 - USER TEAM SUBSCRIPTION MODEL
+# ============================================================
+
+class UserTeamSubscription(Base):
+    """
+    Stores a user's followed teams.
+
+    This supports dashboards, alerts, schedule tracking, team
+    stat tracking, and personalized model context.
+    """
+
+    __tablename__ = "user_team_subscriptions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "team_id",
+            name="uq_user_team_subscription_identity",
+        ),
+        Index(
+            "idx_user_team_subscriptions_account_status",
+            "account_id",
+            "subscription_status",
+        ),
+        Index(
+            "idx_user_team_subscriptions_team_status",
+            "team_id",
+            "subscription_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=False,
+        index=True,
+    )
+
+    subscription_status: Mapped[str] = mapped_column(
+        String(80),
+        default=SUBSCRIPTION_STATUS_ACTIVE,
+        nullable=False,
+        index=True,
+    )
+
+    alert_level: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    track_schedule: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_roster_changes: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_team_stats: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    track_predictions: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    last_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    subscription_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    account: Mapped[UserAccount] = relationship(
+        back_populates="team_subscriptions",
+    )
+
+    team: Mapped[Team] = relationship(
+        foreign_keys=[team_id],
+    )
+
+
+# ============================================================
+# SECTION 22.11.07 - USER PREDICTION HISTORY MODEL
+# ============================================================
+
+class UserPredictionHistory(Base):
+    """
+    Stores every prediction a logged-in user runs.
+
+    This table is critical because it turns the website from a
+    one-off calculator into an auditable prediction platform.
+    """
+
+    __tablename__ = "user_prediction_history"
+
+    __table_args__ = (
+        Index(
+            "idx_user_prediction_history_account_created",
+            "account_id",
+            "created_at",
+        ),
+        Index(
+            "idx_user_prediction_history_player_outcome",
+            "player_id",
+            "outcome_key",
+        ),
+        Index(
+            "idx_user_prediction_history_lifecycle",
+            "prediction_lifecycle",
+            "created_at",
+        ),
+        Index(
+            "idx_user_prediction_history_result",
+            "resolution_status",
+            "was_correct",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+
+    prediction_result_id: Mapped[int | None] = mapped_column(
+        ForeignKey("prediction_results.id"),
+        nullable=True,
+        index=True,
+    )
+
+    player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=True,
+        index=True,
+    )
+
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )
+
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
+
+    player_name_snapshot: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    team_name_snapshot: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    season: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    outcome_key: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
+
+    outcome_label: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+    )
+
+    predicted_probability: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    confidence: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    prediction_tier: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    risk_profile: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    model_name: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    model_version: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    prediction_source: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    data_coverage: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    prediction_lifecycle: Mapped[str] = mapped_column(
+        String(80),
+        default=PREDICTION_LIFECYCLE_CREATED,
+        nullable=False,
+        index=True,
+    )
+
+    resolution_status: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    actual_result: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    actual_result_value: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    was_correct: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        index=True,
+    )
+
+    probability_error: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    scoring_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    request_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    response_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    feature_snapshot_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    account: Mapped[UserAccount] = relationship(
+        back_populates="prediction_history",
+    )
+
+    prediction_result: Mapped[PredictionResult | None] = relationship(
+        foreign_keys=[prediction_result_id],
+    )
+
+    player: Mapped[Player | None] = relationship(
+        foreign_keys=[player_id],
+    )
+
+    team: Mapped[Team | None] = relationship(
+        foreign_keys=[team_id],
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
+    )
+
+    outcome_resolution: Mapped["PredictionOutcomeResolution | None"] = relationship(
+        back_populates="user_prediction",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    training_feedback_events: Mapped[list["ModelTrainingFeedbackEvent"]] = relationship(
+        back_populates="user_prediction",
+        cascade="all, delete-orphan",
+        order_by="ModelTrainingFeedbackEvent.created_at",
+    )
+
+
+# ============================================================
+# SECTION 22.11.08 - PREDICTION OUTCOME RESOLUTION MODEL
+# ============================================================
+
+class PredictionOutcomeResolution(Base):
+    """
+    Stores the actual result for a user prediction after the game
+    or player outcome is known.
+    """
+
+    __tablename__ = "prediction_outcome_resolutions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_prediction_id",
+            name="uq_prediction_outcome_resolution_prediction",
+        ),
+        Index(
+            "idx_prediction_outcome_resolutions_status",
+            "resolution_status",
+            "resolved_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    user_prediction_id: Mapped[int] = mapped_column(
+        ForeignKey("user_prediction_history.id"),
+        nullable=False,
+        index=True,
+    )
+
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id"),
+        nullable=True,
+        index=True,
+    )
+
+    game_pk: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    outcome_key: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
+
+    resolution_status: Mapped[str] = mapped_column(
+        String(80),
+        nullable=False,
+        default="pending",
+        index=True,
+    )
+
+    actual_result: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    actual_result_value: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    threshold_value: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    was_correct: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        index=True,
+    )
+
+    scoring_method: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    source_name: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    raw_resolution_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    user_prediction: Mapped[UserPredictionHistory] = relationship(
+        back_populates="outcome_resolution",
+    )
+
+    game: Mapped[Game | None] = relationship(
+        foreign_keys=[game_id],
+    )
+
+
+# ============================================================
+# SECTION 22.11.09 - MODEL TRAINING FEEDBACK EVENT MODEL
+# ============================================================
+
+class ModelTrainingFeedbackEvent(Base):
+    """
+    Stores training feedback events derived from user predictions
+    and resolved outcomes.
+
+    This table allows AISP2 to build a future training set from:
+        - prediction probability
+        - actual outcome
+        - error
+        - model version
+        - feature snapshot
+        - user/account context
+    """
+
+    __tablename__ = "model_training_feedback_events"
+
+    __table_args__ = (
+        Index(
+            "idx_model_training_feedback_account_status",
+            "account_id",
+            "feedback_status",
+        ),
+        Index(
+            "idx_model_training_feedback_model",
+            "model_name",
+            "model_version",
+        ),
+        Index(
+            "idx_model_training_feedback_prediction",
+            "user_prediction_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=True,
+        index=True,
+    )
+
+    user_prediction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_prediction_history.id"),
+        nullable=True,
+        index=True,
+    )
+
+    prediction_result_id: Mapped[int | None] = mapped_column(
+        ForeignKey("prediction_results.id"),
+        nullable=True,
+        index=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
+
+    feedback_status: Mapped[str] = mapped_column(
+        String(80),
+        default=MODEL_FEEDBACK_STATUS_PENDING,
+        nullable=False,
+        index=True,
+    )
+
+    model_name: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    model_version: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    outcome_key: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    predicted_probability: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    actual_value: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    was_correct: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        index=True,
+    )
+
+    probability_error: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        index=True,
+    )
+
+    feature_snapshot_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    label_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    training_weight: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        default=1.0,
+    )
+
+    approved_for_training: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    used_for_training: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    review_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    account: Mapped[UserAccount | None] = relationship(
+        back_populates="training_feedback_events",
+    )
+
+    user_prediction: Mapped[UserPredictionHistory | None] = relationship(
+        back_populates="training_feedback_events",
+    )
+
+    prediction_result: Mapped[PredictionResult | None] = relationship(
+        foreign_keys=[prediction_result_id],
+    )
+
+
+# ============================================================
+# SECTION 22.11.10 - ACCOUNT AUDIT LOG MODEL
+# ============================================================
+
+class AccountAuditLog(Base):
+    """
+    Stores security and account-level events.
+
+    CEO/admin views can use this table to inspect:
+        - logins
+        - logout
+        - failed login
+        - account lock
+        - subscription changes
+        - prediction events
+        - admin actions
+    """
+
+    __tablename__ = "account_audit_logs"
+
+    __table_args__ = (
+        Index(
+            "idx_account_audit_logs_account_created",
+            "account_id",
+            "created_at",
+        ),
+        Index(
+            "idx_account_audit_logs_event_severity",
+            "event_type",
+            "severity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_accounts.id"),
+        nullable=True,
+        index=True,
+    )
+
+    session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_sessions.id"),
+        nullable=True,
+        index=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        index=True,
+    )
+
+    severity: Mapped[str] = mapped_column(
+        String(60),
+        default="info",
+        nullable=False,
+        index=True,
+    )
+
+    source_page: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        index=True,
+    )
+
+    ip_address_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    user_agent_preview: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    event_summary: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    event_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    account: Mapped[UserAccount | None] = relationship(
+        back_populates="audit_events",
+    )
+
+    session: Mapped[UserSession | None] = relationship(
+        foreign_keys=[session_id],
+    )
+
+
+# ============================================================
+# SECTION 22.12 - ACCOUNT SYSTEM SCHEMA VERIFICATION
+# ============================================================
+
+EXPECTED_ACCOUNT_MODEL_NAMES = [
+    "UserAccount",
+    "UserSession",
+    "UserSearchHistory",
+    "UserPlayerSubscription",
+    "UserTeamSubscription",
+    "UserPredictionHistory",
+    "PredictionOutcomeResolution",
+    "ModelTrainingFeedbackEvent",
+    "AccountAuditLog",
+]
+
+EXPECTED_ACCOUNT_TABLES = [
+    "user_accounts",
+    "user_sessions",
+    "user_search_history",
+    "user_player_subscriptions",
+    "user_team_subscriptions",
+    "user_prediction_history",
+    "prediction_outcome_resolutions",
+    "model_training_feedback_events",
+    "account_audit_logs",
+]
+
+CRITICAL_ACCOUNT_MODEL_COLUMNS = {
+    "UserAccount": [
+        "id",
+        "email",
+        "username",
+        "password_hash",
+        "role",
+        "account_status",
+        "is_active",
+        "is_ceo_master",
+        "last_login_at",
+        "created_at",
+    ],
+    "UserSession": [
+        "id",
+        "account_id",
+        "session_token_hash",
+        "session_status",
+        "expires_at",
+        "created_at",
+    ],
+    "UserSearchHistory": [
+        "id",
+        "account_id",
+        "query_text",
+        "search_type",
+        "entity_type",
+        "player_id",
+        "team_id",
+        "outcome_key",
+        "created_at",
+    ],
+    "UserPlayerSubscription": [
+        "id",
+        "account_id",
+        "player_id",
+        "subscription_status",
+        "track_home_runs",
+        "track_hits",
+        "track_rbi",
+        "track_strikeouts",
+        "created_at",
+    ],
+    "UserTeamSubscription": [
+        "id",
+        "account_id",
+        "team_id",
+        "subscription_status",
+        "track_schedule",
+        "track_roster_changes",
+        "track_team_stats",
+        "track_predictions",
+        "created_at",
+    ],
+    "UserPredictionHistory": [
+        "id",
+        "account_id",
+        "prediction_result_id",
+        "player_id",
+        "team_id",
+        "game_id",
+        "outcome_key",
+        "predicted_probability",
+        "confidence",
+        "prediction_lifecycle",
+        "actual_result",
+        "was_correct",
+        "probability_error",
+        "created_at",
+        "resolved_at",
+    ],
+    "PredictionOutcomeResolution": [
+        "id",
+        "user_prediction_id",
+        "game_id",
+        "outcome_key",
+        "resolution_status",
+        "actual_result",
+        "actual_result_value",
+        "was_correct",
+        "resolved_at",
+    ],
+    "ModelTrainingFeedbackEvent": [
+        "id",
+        "account_id",
+        "user_prediction_id",
+        "prediction_result_id",
+        "event_type",
+        "feedback_status",
+        "model_name",
+        "model_version",
+        "predicted_probability",
+        "actual_value",
+        "probability_error",
+        "approved_for_training",
+        "used_for_training",
+        "created_at",
+    ],
+    "AccountAuditLog": [
+        "id",
+        "account_id",
+        "session_id",
+        "event_type",
+        "severity",
+        "event_summary",
+        "event_json",
+        "created_at",
+    ],
+}
+
+
+def get_account_model_class_by_name(
+    model_name: str,
+):
+    return globals().get(model_name)
+
+
+def get_available_account_model_names() -> list[str]:
+    return [
+        model_name
+        for model_name in EXPECTED_ACCOUNT_MODEL_NAMES
+        if get_account_model_class_by_name(model_name) is not None
+    ]
+
+
+def get_missing_account_model_names() -> list[str]:
+    return [
+        model_name
+        for model_name in EXPECTED_ACCOUNT_MODEL_NAMES
+        if get_account_model_class_by_name(model_name) is None
+    ]
+
+
+def get_present_account_tables() -> list[str]:
+    metadata_tables = set(
+        Base.metadata.tables.keys(),
+    )
+
+    return [
+        table_name
+        for table_name in EXPECTED_ACCOUNT_TABLES
+        if table_name in metadata_tables
+    ]
+
+
+def get_missing_account_tables() -> list[str]:
+    metadata_tables = set(
+        Base.metadata.tables.keys(),
+    )
+
+    return [
+        table_name
+        for table_name in EXPECTED_ACCOUNT_TABLES
+        if table_name not in metadata_tables
+    ]
+
+
+def inspect_account_model_columns(
+    model_name: str,
+) -> dict[str, object]:
+    model_class = get_account_model_class_by_name(
+        model_name,
+    )
+
+    required_columns = CRITICAL_ACCOUNT_MODEL_COLUMNS.get(
+        model_name,
+        [],
+    )
+
+    if model_class is None:
+        return {
+            "model": model_name,
+            "exists": False,
+            "columns": [],
+            "required_columns": required_columns,
+            "missing_columns": required_columns,
+            "valid": False,
+            "error": "model_missing",
+        }
+
+    try:
+        columns = sorted(
+            model_class.__mapper__.columns.keys(),
+        )
+
+        missing_columns = [
+            column_name
+            for column_name in required_columns
+            if column_name not in columns
+        ]
+
+        return {
+            "model": model_name,
+            "exists": True,
+            "columns": columns,
+            "required_columns": required_columns,
+            "missing_columns": missing_columns,
+            "valid": not missing_columns,
+            "error": None,
+        }
+
+    except Exception as error:
+        return {
+            "model": model_name,
+            "exists": True,
+            "columns": [],
+            "required_columns": required_columns,
+            "missing_columns": required_columns,
+            "valid": False,
+            "error": str(error),
+        }
+
+
+def verify_account_system_schema() -> dict[str, object]:
+    mapper_report = verify_sqlalchemy_mapper_configuration()
+
+    available_models = get_available_account_model_names()
+    missing_models = get_missing_account_model_names()
+
+    present_tables = get_present_account_tables()
+    missing_tables = get_missing_account_tables()
+
+    column_reports = {
+        model_name: inspect_account_model_columns(
+            model_name,
+        )
+        for model_name in EXPECTED_ACCOUNT_MODEL_NAMES
+    }
+
+    failed_column_models = [
+        model_name
+        for model_name, report in column_reports.items()
+        if not report.get("valid")
+    ]
+
+    valid = (
+        bool(mapper_report.get("valid"))
+        and not missing_models
+        and not missing_tables
+        and not failed_column_models
+    )
+
+    return {
+        "status": "ok" if valid else "failed",
+        "valid": valid,
+        "checked_at": utc_now().isoformat(),
+        "phase": "Phase 13 Part 1.0",
+        "purpose": "secure_account_user_memory_prediction_tracking_models",
+        "mapper": mapper_report,
+        "expected_model_count": len(EXPECTED_ACCOUNT_MODEL_NAMES),
+        "available_model_count": len(available_models),
+        "missing_model_count": len(missing_models),
+        "available_models": available_models,
+        "missing_models": missing_models,
+        "expected_table_count": len(EXPECTED_ACCOUNT_TABLES),
+        "present_table_count": len(present_tables),
+        "missing_table_count": len(missing_tables),
+        "present_tables": present_tables,
+        "missing_tables": missing_tables,
+        "failed_column_models": failed_column_models,
+        "column_reports": column_reports,
+        "readiness": {
+            "ceo_account_ready": "UserAccount" in available_models,
+            "secure_session_ready": "UserSession" in available_models,
+            "search_memory_ready": "UserSearchHistory" in available_models,
+            "player_subscription_ready": "UserPlayerSubscription" in available_models,
+            "team_subscription_ready": "UserTeamSubscription" in available_models,
+            "prediction_history_ready": "UserPredictionHistory" in available_models,
+            "outcome_resolution_ready": "PredictionOutcomeResolution" in available_models,
+            "model_feedback_ready": "ModelTrainingFeedbackEvent" in available_models,
+            "audit_log_ready": "AccountAuditLog" in available_models,
+        },
+        "next_required_action": (
+            "Account schema is ready. Create tables/migration, then build secure auth routes."
+            if valid
+            else "Fix account model schema before building auth routes."
+        ),
+    }
+
+
 # ============================================================
 # SECTION 23 - LOCAL MODEL VERIFICATION ENTRYPOINT
 # FILE: 01_database/models.py
@@ -4371,3 +6121,4 @@ def validate_player_explorer_schema() -> dict[str, object]:
 
 if __name__ == "__main__":
     print_orm_verification_report()
+
