@@ -1299,3 +1299,190 @@ function showPredictionBuilderCard() {
     });
 
 }
+/* ============================================================
+   AISP2 BASEBALL
+   FILE: static/js/chat.js
+   PHASE 14 PART 3.1 - CHAT AUTH MEMBERSHIP FLOW
+   PURPOSE:
+   Detect auth-flow metadata returned by /api/chat and provide
+   visible Login / Create Account actions for chatbot users.
+
+   This enhancement is intentionally defensive:
+   - It does not store credentials.
+   - It does not read cookies.
+   - It only responds to backend-provided auth_flow metadata.
+   ============================================================ */
+
+(function initializeAISP2ChatAuthMembershipFlow() {
+    "use strict";
+
+    const RUNTIME_VERSION = "phase_14_part_3_1_chat_auth_membership_flow";
+
+    function createPanel() {
+        let panel = document.querySelector("[data-aisp2-chat-auth-panel]");
+
+        if (panel) {
+            return panel;
+        }
+
+        panel = document.createElement("aside");
+        panel.setAttribute("data-aisp2-chat-auth-panel", "true");
+        panel.style.position = "fixed";
+        panel.style.right = "18px";
+        panel.style.bottom = "18px";
+        panel.style.zIndex = "99999";
+        panel.style.width = "min(360px, calc(100vw - 36px))";
+        panel.style.padding = "16px";
+        panel.style.borderRadius = "22px";
+        panel.style.border = "1px solid rgba(77, 216, 255, 0.28)";
+        panel.style.background = "linear-gradient(145deg, rgba(3,16,38,.96), rgba(1,6,17,.96))";
+        panel.style.color = "#f3f9ff";
+        panel.style.boxShadow = "0 24px 80px rgba(0,0,0,.42), 0 0 32px rgba(77,216,255,.18)";
+        panel.style.fontFamily = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        panel.style.display = "none";
+
+        document.body.appendChild(panel);
+        return panel;
+    }
+
+    function hidePanel() {
+        const panel = document.querySelector("[data-aisp2-chat-auth-panel]");
+        if (panel) {
+            panel.style.display = "none";
+        }
+    }
+
+    function button(label, url, primary) {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.textContent = label;
+        anchor.style.minHeight = "40px";
+        anchor.style.display = "inline-flex";
+        anchor.style.alignItems = "center";
+        anchor.style.justifyContent = "center";
+        anchor.style.padding = "0 14px";
+        anchor.style.borderRadius = "999px";
+        anchor.style.fontWeight = "950";
+        anchor.style.textDecoration = "none";
+        anchor.style.border = primary ? "0" : "1px solid rgba(77,216,255,.22)";
+        anchor.style.color = primary ? "#00101d" : "#f3f9ff";
+        anchor.style.background = primary
+            ? "linear-gradient(135deg, #73e8ff, #38bdf8, #8df5bd)"
+            : "rgba(255,255,255,.065)";
+        return anchor;
+    }
+
+    function showMembershipPrompt(authFlow) {
+        const panel = createPanel();
+        const loginUrl = authFlow.login_url || "/auth/login";
+        const createAccountUrl = authFlow.create_account_url || "/auth/create-account";
+
+        panel.innerHTML = "";
+
+        const title = document.createElement("strong");
+        title.textContent = authFlow.prompt || "Are you a member?";
+        title.style.display = "block";
+        title.style.fontSize = "1.05rem";
+        title.style.marginBottom = "8px";
+
+        const copy = document.createElement("p");
+        copy.textContent = "Choose where you want to go next.";
+        copy.style.margin = "0 0 14px";
+        copy.style.color = "rgba(225,242,255,.72)";
+        copy.style.lineHeight = "1.45";
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.flexWrap = "wrap";
+        actions.style.gap = "10px";
+
+        actions.appendChild(button("Yes - Login", loginUrl, true));
+        actions.appendChild(button("No - Create Account", createAccountUrl, false));
+
+        const close = document.createElement("button");
+        close.type = "button";
+        close.textContent = "Close";
+        close.style.marginTop = "12px";
+        close.style.border = "0";
+        close.style.background = "transparent";
+        close.style.color = "rgba(225,242,255,.62)";
+        close.style.cursor = "pointer";
+        close.style.fontWeight = "800";
+        close.addEventListener("click", hidePanel);
+
+        panel.appendChild(title);
+        panel.appendChild(copy);
+        panel.appendChild(actions);
+        panel.appendChild(close);
+        panel.style.display = "block";
+    }
+
+    function handleAuthPayload(payload) {
+        if (!payload || typeof payload !== "object") {
+            return;
+        }
+
+        const data = payload.data || {};
+        const authFlow = data.auth_flow || payload.auth_flow;
+
+        if (!authFlow) {
+            return;
+        }
+
+        if (authFlow.type === "membership_gate") {
+            showMembershipPrompt(authFlow);
+            return;
+        }
+
+        if (authFlow.type === "redirect" && authFlow.redirect_url) {
+            window.setTimeout(function redirectFromChatAuthFlow() {
+                window.location.href = authFlow.redirect_url;
+            }, 350);
+        }
+    }
+
+    const originalFetch = window.fetch;
+
+    if (typeof originalFetch === "function" && !window.__AISP2_CHAT_AUTH_FETCH_PATCHED__) {
+        window.__AISP2_CHAT_AUTH_FETCH_PATCHED__ = true;
+
+        window.fetch = function patchedAISP2ChatFetch(resource, options) {
+            const responsePromise = originalFetch.apply(this, arguments);
+
+            try {
+                const url = String(
+                    typeof resource === "string"
+                        ? resource
+                        : resource && resource.url
+                            ? resource.url
+                            : ""
+                );
+
+                if (url.indexOf("/api/chat") >= 0) {
+                    responsePromise.then(function inspectChatResponse(response) {
+                        try {
+                            response.clone().json().then(handleAuthPayload).catch(function noop() {});
+                        } catch (error) {
+                            return null;
+                        }
+                        return null;
+                    }).catch(function noop() {});
+                }
+            } catch (error) {
+                return responsePromise;
+            }
+
+            return responsePromise;
+        };
+    }
+
+    window.AISP2ChatAuthMembershipFlow = {
+        version: RUNTIME_VERSION,
+        showMembershipPrompt: showMembershipPrompt,
+        handleAuthPayload: handleAuthPayload,
+        hidePanel: hidePanel
+    };
+}());
+
+window.AISP2_CHAT_AUTH_MEMBERSHIP_FLOW_PHASE_14_PART_3_1 = true;
+

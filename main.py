@@ -11848,6 +11848,557 @@ def api_account_subscriptions_health() -> dict[str, Any]:
     return validate_account_subscription_runtime()
 
 
+
+
+# ============================================================
+# SECTION 15.975 - PHASE 14 PART 3.1 - CHATBOT AUTH MEMBERSHIP ROUTING
+# FILE: main.py
+# PURPOSE:
+# Teach the chatbot to recognize login/account/member-access
+# language and route the user through a membership prompt:
+#
+#   User: login
+#   Bot: Are you a member?
+#   Yes -> /auth/login
+#   No  -> /auth/create-account
+#
+# Design:
+#   - Does not weaken authentication.
+#   - Does not create accounts directly from chat.
+#   - Uses explicit links and frontend auth-flow metadata.
+#   - Leaves baseball/NLU routing untouched for non-auth messages.
+# ============================================================
+
+
+# ============================================================
+# SECTION 15.975.01 - AUTH CHAT CONSTANTS
+# ============================================================
+
+AISP2_CHAT_AUTH_ROUTING_VERSION: Final[str] = "phase_14_part_3_1_chatbot_auth_membership_routing"
+
+AISP2_CHAT_AUTH_LOGIN_URL: Final[str] = "/auth/login"
+AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL: Final[str] = "/auth/create-account"
+
+AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY: Final[str] = "pending_auth_membership_prompt"
+
+
+# ============================================================
+# SECTION 15.975.02 - AUTH CHAT INTENT DETECTION
+# ============================================================
+
+def aisp2_chat_auth_compact_text(value: str | None) -> str:
+    normalized = normalize_text(value)
+    return normalized.replace(" ", "")
+
+
+def aisp2_chat_auth_is_yes(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    compact = aisp2_chat_auth_compact_text(value)
+
+    yes_values = {
+        "yes",
+        "yeah",
+        "yep",
+        "yup",
+        "yea",
+        "sure",
+        "i am",
+        "iam",
+        "i am a member",
+        "im a member",
+        "i'm a member",
+        "member",
+        "already a member",
+        "i have an account",
+        "have an account",
+        "existing user",
+        "existing member",
+        "log me in",
+        "take me to login",
+        "bring me to login",
+    }
+
+    return normalized in yes_values or compact in {item.replace(" ", "") for item in yes_values}
+
+
+def aisp2_chat_auth_is_no(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    compact = aisp2_chat_auth_compact_text(value)
+
+    no_values = {
+        "no",
+        "nope",
+        "nah",
+        "not yet",
+        "not a member",
+        "i am not",
+        "im not",
+        "i'm not",
+        "i am not a member",
+        "im not a member",
+        "i don't have an account",
+        "i dont have an account",
+        "do not have an account",
+        "new user",
+        "new member",
+        "create account",
+        "make account",
+        "sign up",
+        "signup",
+        "register",
+        "registration",
+    }
+
+    return normalized in no_values or compact in {item.replace(" ", "") for item in no_values}
+
+
+def aisp2_chat_auth_is_login_entry_intent(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    compact = aisp2_chat_auth_compact_text(value)
+
+    if not normalized:
+        return False
+
+    exact_intents = {
+        "login",
+        "log in",
+        "signin",
+        "sign in",
+        "member login",
+        "members login",
+        "account login",
+        "user login",
+        "ceo login",
+        "admin login",
+        "dashboard login",
+        "account",
+        "my account",
+        "open account",
+        "go to account",
+        "access account",
+        "access my account",
+        "get into my account",
+        "i want to login",
+        "i want to log in",
+        "i need to login",
+        "i need to log in",
+        "take me to login",
+        "bring me to login",
+        "where do i login",
+        "how do i login",
+        "how do i sign in",
+        "let me sign in",
+        "let me login",
+    }
+
+    compact_intents = {item.replace(" ", "") for item in exact_intents}
+
+    if normalized in exact_intents or compact in compact_intents:
+        return True
+
+    phrase_triggers = (
+        "login",
+        "log in",
+        "sign in",
+        "signin",
+        "member login",
+        "account access",
+        "my account",
+        "open my account",
+        "access my account",
+        "user account",
+        "ceo account",
+        "admin account",
+        "dashboard access",
+    )
+
+    return any(phrase in normalized for phrase in phrase_triggers)
+
+
+def aisp2_chat_auth_context_is_pending(
+    conversation_context: Mapping[str, Any] | None,
+) -> bool:
+    if not isinstance(conversation_context, Mapping):
+        return False
+
+    return bool(
+        conversation_context.get(AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY)
+        or conversation_context.get("auth_membership_prompt")
+        or conversation_context.get("pending_auth_flow")
+    )
+
+
+# ============================================================
+# SECTION 15.975.03 - AUTH CHAT RESPONSE BUILDERS
+# ============================================================
+
+def aisp2_chat_auth_membership_prompt_response(
+    message: str,
+    conversation_context: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    context = dict(conversation_context or {})
+    context[AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY] = True
+    context["auth_flow_type"] = "membership_gate"
+    context["auth_routing_version"] = AISP2_CHAT_AUTH_ROUTING_VERSION
+
+    return {
+        "reply": (
+            "Are you a member?\n\n"
+            "Yes - I will take you to the secure login page.\n"
+            "No - I will take you to the create account page."
+        ),
+        "intent": "auth_membership_prompt",
+        "routing_target": "auth_membership_gate",
+        "status": "auth_prompt",
+        "data": {
+            "auth_flow": {
+                "type": "membership_gate",
+                "prompt": "Are you a member?",
+                "question": "Are you a member?",
+                "login_url": AISP2_CHAT_AUTH_LOGIN_URL,
+                "create_account_url": AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL,
+                "options": [
+                    {
+                        "label": "Yes, I am a member",
+                        "value": "yes",
+                        "url": AISP2_CHAT_AUTH_LOGIN_URL,
+                    },
+                    {
+                        "label": "No, create an account",
+                        "value": "no",
+                        "url": AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL,
+                    },
+                ],
+            }
+        },
+        "context": context,
+        "diagnostics": {
+            "auth_routing_version": AISP2_CHAT_AUTH_ROUTING_VERSION,
+            "matched_message": message,
+        },
+    }
+
+
+def aisp2_chat_auth_redirect_response(
+    *,
+    member: bool,
+    message: str,
+    conversation_context: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    target_url = AISP2_CHAT_AUTH_LOGIN_URL if member else AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL
+    target_label = "secure login page" if member else "create account page"
+
+    context = dict(conversation_context or {})
+    context[AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY] = False
+    context["auth_flow_type"] = "resolved"
+    context["auth_routing_version"] = AISP2_CHAT_AUTH_ROUTING_VERSION
+
+    return {
+        "reply": (
+            f"Understood. I am taking you to the {target_label} now.\n\n"
+            f"{target_url}"
+        ),
+        "intent": "auth_redirect_login" if member else "auth_redirect_create_account",
+        "routing_target": "auth_redirect",
+        "status": "redirect",
+        "redirect_url": target_url,
+        "data": {
+            "auth_flow": {
+                "type": "redirect",
+                "member": member,
+                "redirect_url": target_url,
+                "target_label": target_label,
+                "auto_redirect": True,
+            }
+        },
+        "context": context,
+        "diagnostics": {
+            "auth_routing_version": AISP2_CHAT_AUTH_ROUTING_VERSION,
+            "matched_message": message,
+        },
+    }
+
+
+# Preserve the original baseball chat router and wrap it with auth routing.
+AISP2_ORIGINAL_BASEBALL_BUILD_CHAT_REPLY = build_chat_reply
+
+
+def build_chat_reply(
+    message: str,
+    conversation_context: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    cleaned_message = str(message or "").strip()
+
+    if aisp2_chat_auth_context_is_pending(conversation_context):
+        if aisp2_chat_auth_is_yes(cleaned_message):
+            return aisp2_chat_auth_redirect_response(
+                member=True,
+                message=cleaned_message,
+                conversation_context=conversation_context,
+            )
+
+        if aisp2_chat_auth_is_no(cleaned_message):
+            return aisp2_chat_auth_redirect_response(
+                member=False,
+                message=cleaned_message,
+                conversation_context=conversation_context,
+            )
+
+        if aisp2_chat_auth_is_login_entry_intent(cleaned_message):
+            return aisp2_chat_auth_membership_prompt_response(
+                cleaned_message,
+                conversation_context=conversation_context,
+            )
+
+        return {
+            "reply": (
+                "Please answer Yes or No.\n\n"
+                "Are you a member?\n\n"
+                "Yes - secure login page.\n"
+                "No - create account page."
+            ),
+            "intent": "auth_membership_prompt_clarification",
+            "routing_target": "auth_membership_gate",
+            "status": "clarification_required",
+            "data": {
+                "auth_flow": {
+                    "type": "membership_gate",
+                    "prompt": "Are you a member?",
+                    "login_url": AISP2_CHAT_AUTH_LOGIN_URL,
+                    "create_account_url": AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL,
+                }
+            },
+            "context": {
+                **dict(conversation_context or {}),
+                AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY: True,
+                "auth_flow_type": "membership_gate",
+            },
+            "diagnostics": {
+                "auth_routing_version": AISP2_CHAT_AUTH_ROUTING_VERSION,
+                "matched_message": cleaned_message,
+            },
+        }
+
+    if aisp2_chat_auth_is_login_entry_intent(cleaned_message):
+        return aisp2_chat_auth_membership_prompt_response(
+            cleaned_message,
+            conversation_context=conversation_context,
+        )
+
+    return AISP2_ORIGINAL_BASEBALL_BUILD_CHAT_REPLY(
+        cleaned_message,
+        conversation_context,
+    )
+
+
+# ============================================================
+# SECTION 15.975.04 - CREATE ACCOUNT PAGE
+# ============================================================
+
+def aisp2_auth_create_account_html(
+    message: str | None = None,
+) -> str:
+    safe_message = aisp2_auth_html_escape(message or "Create account access for AISP2 Baseball.")
+
+    return f"""
+<!doctype html>
+<html lang="en" data-aisp2-page="create-account">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Create AISP2 Account</title>
+    <link rel="stylesheet" href="/static/css/auth.css">
+    <style>
+        body {{
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(77,216,255,0.18), transparent 32%),
+                linear-gradient(145deg, #00040d, #031026);
+            color: #f3f9ff;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+        .create-account-card {{
+            width: min(760px, 100%);
+            border: 1px solid rgba(77,216,255,0.22);
+            border-radius: 30px;
+            padding: clamp(24px, 5vw, 46px);
+            background:
+                radial-gradient(circle at 0% 0%, rgba(77,216,255,0.16), transparent 42%),
+                rgba(4, 18, 38, 0.92);
+            box-shadow: 0 30px 100px rgba(0,0,0,0.42);
+        }}
+        .eyebrow {{
+            display: inline-flex;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(77,216,255,0.22);
+            color: #73e8ff;
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            background: rgba(77,216,255,0.075);
+        }}
+        h1 {{
+            margin: 18px 0 12px;
+            font-size: clamp(2.4rem, 8vw, 5rem);
+            line-height: .9;
+            letter-spacing: -.07em;
+        }}
+        p {{
+            color: rgba(225,242,255,.76);
+            line-height: 1.6;
+            font-size: 1rem;
+        }}
+        .actions {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 24px;
+        }}
+        .button {{
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 18px;
+            border-radius: 999px;
+            font-weight: 950;
+            text-decoration: none;
+            border: 1px solid rgba(77,216,255,0.22);
+            color: #f3f9ff;
+            background: rgba(255,255,255,0.055);
+        }}
+        .button.primary {{
+            border: 0;
+            color: #00101d;
+            background: linear-gradient(135deg, #73e8ff, #38bdf8, #8df5bd);
+        }}
+        .note {{
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,226,158,.24);
+            background: rgba(255,226,158,.08);
+            color: rgba(255,244,216,.9);
+        }}
+    </style>
+</head>
+<body>
+    <main class="create-account-card">
+        <span class="eyebrow">AISP2 Account Access</span>
+        <h1>Create Account</h1>
+        <p>{safe_message}</p>
+        <p>
+            Public self-registration is intentionally separated from the secure login flow.
+            This page is now the destination for new users who tell the chatbot they are not yet members.
+        </p>
+        <div class="note">
+            Next build step: connect this page to a controlled account request / approval workflow,
+            instead of open unrestricted signup.
+        </div>
+        <div class="actions">
+            <a class="button primary" href="/auth/login">I already have an account</a>
+            <a class="button" href="/">Return Home</a>
+            <a class="button" href="/tools/prediction">Prediction Workbench</a>
+        </div>
+    </main>
+</body>
+</html>
+"""
+
+
+@app.get("/auth/create-account", response_class=HTMLResponse)
+def auth_create_account_page(
+    request: Request,
+    message: str | None = None,
+):
+    return HTMLResponse(
+        aisp2_auth_create_account_html(message=message),
+    )
+
+
+@app.get("/auth/register", response_class=HTMLResponse)
+def auth_register_alias_page(
+    request: Request,
+):
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(
+        url=AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL,
+        status_code=303,
+    )
+
+
+# ============================================================
+# SECTION 15.975.05 - AUTH CHAT ROUTING HEALTH
+# ============================================================
+
+def validate_chat_auth_routing_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+
+    checks = {
+        "original_chat_router_preserved": callable(AISP2_ORIGINAL_BASEBALL_BUILD_CHAT_REPLY),
+        "build_chat_reply_overridden": callable(build_chat_reply),
+        "login_intent_detects_login": aisp2_chat_auth_is_login_entry_intent("login"),
+        "login_intent_detects_log_in": aisp2_chat_auth_is_login_entry_intent("I want to log in"),
+        "login_intent_detects_account_access": aisp2_chat_auth_is_login_entry_intent("access my account"),
+        "yes_detected": aisp2_chat_auth_is_yes("yes"),
+        "no_detected": aisp2_chat_auth_is_no("no"),
+        "create_account_route_registered": "/auth/create-account" in route_paths,
+        "register_alias_route_registered": "/auth/register" in route_paths,
+        "chat_auth_health_route_registered": "/api/chat/auth-routing/health" in route_paths,
+    }
+
+    login_prompt = build_chat_reply("login")
+    yes_redirect = build_chat_reply(
+        "yes",
+        {AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY: True},
+    )
+    no_redirect = build_chat_reply(
+        "no",
+        {AISP2_CHAT_AUTH_MEMBERSHIP_CONTEXT_KEY: True},
+    )
+
+    checks["login_prompt_returns_membership_prompt"] = login_prompt.get("intent") == "auth_membership_prompt"
+    checks["yes_routes_to_login"] = yes_redirect.get("redirect_url") == AISP2_CHAT_AUTH_LOGIN_URL
+    checks["no_routes_to_create_account"] = no_redirect.get("redirect_url") == AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 3.1",
+        "auth_routing_version": AISP2_CHAT_AUTH_ROUTING_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name for name, value in checks.items()
+            if not value
+        ],
+        "routes": {
+            "login": AISP2_CHAT_AUTH_LOGIN_URL,
+            "create_account": AISP2_CHAT_AUTH_CREATE_ACCOUNT_URL,
+            "health": "/api/chat/auth-routing/health",
+        },
+        "sample_login_prompt": login_prompt,
+        "sample_yes_redirect": yes_redirect,
+        "sample_no_redirect": no_redirect,
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/chat/auth-routing/health")
+def api_chat_auth_routing_health() -> dict[str, Any]:
+    return validate_chat_auth_routing_runtime()
+
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================
