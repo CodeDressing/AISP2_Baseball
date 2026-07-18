@@ -12399,6 +12399,1009 @@ def api_chat_auth_routing_health() -> dict[str, Any]:
 
 
 
+
+
+# ============================================================
+# SECTION 15.985 - PHASE 14 PART 6.0 - MODEL FEEDBACK AND TRAINING QUEUE
+# FILE: main.py
+# PURPOSE:
+# Convert resolved prediction history rows into durable model
+# feedback events for CEO review, training approval, and future
+# calibration/backtesting.
+#
+# Routes:
+#   GET  /api/admin/model-feedback
+#   POST /api/admin/model-feedback/build
+#   POST /api/admin/model-feedback/{feedback_id}/approve
+#   POST /api/admin/model-feedback/{feedback_id}/used
+#   GET  /api/admin/model-feedback/health
+#
+# Security:
+#   - CEO/admin access required.
+#   - No public training mutation routes.
+#   - All training approvals are audit logged when audit model exists.
+# ============================================================
+
+
+# ============================================================
+# SECTION 15.985.01 - TRAINING QUEUE CONSTANTS
+# ============================================================
+
+AISP2_MODEL_FEEDBACK_QUEUE_VERSION: Final[str] = "phase_14_part_6_0_model_feedback_training_queue"
+AISP2_MODEL_FEEDBACK_DEFAULT_LIMIT: Final[int] = 50
+AISP2_MODEL_FEEDBACK_MAX_LIMIT: Final[int] = 250
+
+AISP2_FEEDBACK_EVENT_PENDING: Final[str] = "pending_review"
+AISP2_FEEDBACK_EVENT_APPROVED: Final[str] = "approved_for_training"
+AISP2_FEEDBACK_EVENT_USED: Final[str] = "used_for_training"
+AISP2_FEEDBACK_EVENT_REJECTED: Final[str] = "rejected"
+
+
+# ============================================================
+# SECTION 15.985.02 - TRAINING QUEUE REQUEST CONTRACTS
+# ============================================================
+
+class ModelFeedbackBuildRequest(BaseModel):
+    limit: int = Field(default=100, ge=1, le=500)
+    model_name: str | None = Field(default=None, max_length=255)
+    model_version: str | None = Field(default=None, max_length=255)
+    outcome_key: str | None = Field(default=None, max_length=120)
+    only_unqueued: bool = True
+    approve_immediately: bool = False
+
+
+class ModelFeedbackApprovalRequest(BaseModel):
+    approved: bool = True
+    reviewer_note: str | None = Field(default=None, max_length=2000)
+
+
+class ModelFeedbackUsedRequest(BaseModel):
+    used: bool = True
+    training_run_id: str | None = Field(default=None, max_length=255)
+    reviewer_note: str | None = Field(default=None, max_length=2000)
+
+
+# ============================================================
+# SECTION 15.985.03 - SECURITY AND MODEL HELPERS
+# ============================================================
+
+def aisp2_model_feedback_require_ceo_or_admin(
+    request: Request,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    result = aisp2_auth_require_ceo_or_admin(request)
+
+    if isinstance(result, tuple) and len(result) >= 2:
+        return dict(result[0]), dict(result[1])
+
+    if isinstance(result, Mapping):
+        return dict(result), {}
+
+    raise HTTPException(
+        status_code=403,
+        detail="CEO/admin access is required.",
+    )
+
+
+def aisp2_model_feedback_models_available() -> bool:
+    return (
+        callable(managed_database_session)
+        and AuthUserPredictionHistoryModel is not None
+        and AuthModelTrainingFeedbackEventModel is not None
+    )
+
+
+def aisp2_model_feedback_require_models() -> None:
+    if not callable(managed_database_session):
+        raise HTTPException(
+            status_code=503,
+            detail="managed_database_session is unavailable.",
+        )
+
+    missing = []
+
+    if AuthUserPredictionHistoryModel is None:
+        missing.append("UserPredictionHistory")
+
+    if AuthModelTrainingFeedbackEventModel is None:
+        missing.append("ModelTrainingFeedbackEvent")
+
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail="Missing required ORM models: " + ", ".join(missing),
+        )
+
+
+def aisp2_model_feedback_columns(model: Any) -> set[str]:
+    try:
+        return {
+            column.name
+            for column in model.__table__.columns
+        }
+    except Exception:
+        return set()
+
+
+def aisp2_model_feedback_clean_text(
+    value: Any,
+    *,
+    fallback: str | None = None,
+    maximum: int = 500,
+) -> str | None:
+    if value is None:
+        return fallback
+
+    text = str(value).strip()
+
+    if not text:
+        return fallback
+
+    return text[:maximum]
+
+
+def aisp2_model_feedback_json(value: Any) -> str | None:
+    if value is None:
+        return None
+
+    try:
+        return json.dumps(value, default=str, sort_keys=True)
+    except Exception:
+        return json.dumps({"unserializable": str(value)}, default=str)
+
+
+def aisp2_model_feedback_parse_json(value: Any) -> Any:
+    if value is None:
+        return None
+
+    if isinstance(value, (dict, list)):
+        return value
+
+    try:
+        return json.loads(str(value))
+    except Exception:
+        return value
+
+
+def aisp2_model_feedback_row_value(row: Any, *names: str, default: Any = None) -> Any:
+    for name in names:
+        if hasattr(row, name):
+            value = getattr(row, name, None)
+
+            if value not in (None, ""):
+                return value
+
+    return default
+
+
+def aisp2_model_feedback_iso(value: Any) -> str | None:
+    return iso_timestamp(value)
+
+
+def aisp2_model_feedback_set_if_present(
+    row: Any,
+    field_name: str,
+    value: Any,
+) -> None:
+    if value is None:
+        return
+
+    if hasattr(row, field_name):
+        try:
+            setattr(row, field_name, value)
+        except Exception:
+            return
+
+
+def aisp2_model_feedback_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        numeric = float(value)
+    except Exception:
+        return None
+
+    if not math.isfinite(numeric):
+        return None
+
+    return numeric
+
+
+def aisp2_model_feedback_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return value
+
+    text = str(value).strip().lower()
+
+    if text in {"true", "1", "yes", "y", "correct", "hit", "success"}:
+        return True
+
+    if text in {"false", "0", "no", "n", "incorrect", "miss", "failure"}:
+        return False
+
+    return None
+
+
+# ============================================================
+# SECTION 15.985.04 - PREDICTION HISTORY EXTRACTION
+# ============================================================
+
+def aisp2_model_feedback_prediction_payload(prediction_row: Any) -> dict[str, Any]:
+    response_json = aisp2_model_feedback_parse_json(
+        aisp2_model_feedback_row_value(prediction_row, "response_json")
+    ) or {}
+
+    request_json = aisp2_model_feedback_parse_json(
+        aisp2_model_feedback_row_value(prediction_row, "request_json")
+    ) or {}
+
+    feature_snapshot = aisp2_model_feedback_parse_json(
+        aisp2_model_feedback_row_value(
+            prediction_row,
+            "feature_snapshot_json",
+            "features_json",
+        )
+    ) or {}
+
+    predicted_probability = aisp2_model_feedback_float(
+        aisp2_model_feedback_row_value(
+            prediction_row,
+            "predicted_probability",
+            "estimated_probability",
+            "probability",
+        )
+    )
+
+    response_prediction = response_json.get("prediction") if isinstance(response_json, Mapping) else {}
+
+    if predicted_probability is None and isinstance(response_prediction, Mapping):
+        predicted_probability = aisp2_model_feedback_float(
+            response_prediction.get("estimated_probability")
+            or response_prediction.get("probability")
+        )
+
+    actual_value = aisp2_model_feedback_row_value(
+        prediction_row,
+        "actual_value",
+        "actual_result",
+        "actual_outcome",
+    )
+
+    actual_numeric = aisp2_model_feedback_float(actual_value)
+
+    was_correct = aisp2_model_feedback_bool(
+        aisp2_model_feedback_row_value(prediction_row, "was_correct", "is_correct")
+    )
+
+    probability_error = aisp2_model_feedback_float(
+        aisp2_model_feedback_row_value(
+            prediction_row,
+            "probability_error",
+            "absolute_error",
+            "brier_error",
+        )
+    )
+
+    if probability_error is None and predicted_probability is not None:
+        if actual_numeric is not None:
+            probability_error = round(abs((predicted_probability / 100.0) - actual_numeric), 6)
+        elif was_correct is not None:
+            probability_error = round(0.0 if was_correct else 1.0, 6)
+
+    outcome_key = aisp2_model_feedback_row_value(prediction_row, "outcome_key")
+    outcome_label = aisp2_model_feedback_row_value(prediction_row, "outcome_label")
+
+    if not outcome_key and isinstance(response_json, Mapping):
+        outcome_payload = response_json.get("outcome") or {}
+        if isinstance(outcome_payload, Mapping):
+            outcome_key = outcome_payload.get("key")
+            outcome_label = outcome_label or outcome_payload.get("label")
+
+    model_name = aisp2_model_feedback_row_value(prediction_row, "model_name", "model")
+    model_version = aisp2_model_feedback_row_value(prediction_row, "model_version")
+
+    if isinstance(response_prediction, Mapping):
+        model_name = model_name or response_prediction.get("model")
+        model_version = model_version or response_prediction.get("model_version")
+
+    return {
+        "prediction_history_id": aisp2_model_feedback_row_value(prediction_row, "id"),
+        "account_id": aisp2_model_feedback_row_value(prediction_row, "account_id"),
+        "player_id": aisp2_model_feedback_row_value(prediction_row, "player_id", "mlb_player_id"),
+        "team_id": aisp2_model_feedback_row_value(prediction_row, "team_id", "mlb_team_id"),
+        "player_name": aisp2_model_feedback_row_value(
+            prediction_row,
+            "player_name_snapshot",
+            "player_name",
+        ),
+        "team_name": aisp2_model_feedback_row_value(
+            prediction_row,
+            "team_name_snapshot",
+            "team_name",
+        ),
+        "outcome_key": outcome_key,
+        "outcome_label": outcome_label,
+        "predicted_probability": predicted_probability,
+        "actual_value": actual_value,
+        "actual_numeric": actual_numeric,
+        "was_correct": was_correct,
+        "probability_error": probability_error,
+        "model_name": model_name,
+        "model_version": model_version,
+        "feature_snapshot": feature_snapshot,
+        "request": request_json,
+        "response": response_json,
+        "prediction_lifecycle": aisp2_model_feedback_row_value(
+            prediction_row,
+            "prediction_lifecycle",
+            "lifecycle_status",
+        ),
+        "resolution_status": aisp2_model_feedback_row_value(prediction_row, "resolution_status"),
+        "resolved_at": aisp2_model_feedback_iso(
+            aisp2_model_feedback_row_value(prediction_row, "resolved_at")
+        ),
+    }
+
+
+def aisp2_model_feedback_prediction_is_resolved(prediction_row: Any) -> bool:
+    payload = aisp2_model_feedback_prediction_payload(prediction_row)
+
+    if payload.get("was_correct") is not None:
+        return True
+
+    if payload.get("actual_value") not in (None, ""):
+        return True
+
+    if payload.get("probability_error") is not None:
+        return True
+
+    status = str(payload.get("resolution_status") or payload.get("prediction_lifecycle") or "").lower()
+
+    return status in {
+        "resolved",
+        "scored",
+        "training_ready",
+        "final",
+        "complete",
+        "completed",
+    }
+
+
+def aisp2_model_feedback_training_weight(payload: Mapping[str, Any]) -> float:
+    probability_error = aisp2_model_feedback_float(payload.get("probability_error"))
+
+    if probability_error is None:
+        return 1.0
+
+    error = max(0.0, min(1.0, probability_error))
+
+    if error >= 0.75:
+        return 1.75
+
+    if error >= 0.50:
+        return 1.35
+
+    if error <= 0.10:
+        return 0.75
+
+    return 1.0
+
+
+def aisp2_model_feedback_label_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "label_type": "resolved_prediction_outcome",
+        "prediction_history_id": payload.get("prediction_history_id"),
+        "outcome_key": payload.get("outcome_key"),
+        "predicted_probability": payload.get("predicted_probability"),
+        "actual_value": payload.get("actual_value"),
+        "actual_numeric": payload.get("actual_numeric"),
+        "was_correct": payload.get("was_correct"),
+        "probability_error": payload.get("probability_error"),
+        "training_weight": aisp2_model_feedback_training_weight(payload),
+        "source": "Phase 14 Part 6.0 training queue",
+    }
+
+
+# ============================================================
+# SECTION 15.985.05 - FEEDBACK EVENT ROWS
+# ============================================================
+
+def aisp2_model_feedback_find_existing(
+    database_session,
+    prediction_history_id: int | None,
+):
+    if prediction_history_id is None:
+        return None
+
+    model = AuthModelTrainingFeedbackEventModel
+
+    if not hasattr(model, "prediction_history_id"):
+        return None
+
+    return (
+        database_session.query(model)
+        .filter(model.prediction_history_id == int(prediction_history_id))
+        .first()
+    )
+
+
+def aisp2_model_feedback_build_kwargs(
+    payload: Mapping[str, Any],
+    *,
+    approved_for_training: bool = False,
+) -> dict[str, Any]:
+    columns = aisp2_model_feedback_columns(AuthModelTrainingFeedbackEventModel)
+    label_payload = aisp2_model_feedback_label_payload(payload)
+    training_weight = aisp2_model_feedback_training_weight(payload)
+
+    candidate_values: dict[str, Any] = {
+        "account_id": payload.get("account_id"),
+        "prediction_history_id": payload.get("prediction_history_id"),
+
+        "model_name": aisp2_model_feedback_clean_text(payload.get("model_name"), maximum=255),
+        "model": aisp2_model_feedback_clean_text(payload.get("model_name"), maximum=255),
+        "model_version": aisp2_model_feedback_clean_text(payload.get("model_version"), maximum=255),
+
+        "outcome_key": aisp2_model_feedback_clean_text(payload.get("outcome_key"), maximum=120),
+        "outcome_label": aisp2_model_feedback_clean_text(payload.get("outcome_label"), maximum=160),
+
+        "player_id": payload.get("player_id"),
+        "team_id": payload.get("team_id"),
+        "player_name": aisp2_model_feedback_clean_text(payload.get("player_name"), maximum=255),
+        "team_name": aisp2_model_feedback_clean_text(payload.get("team_name"), maximum=255),
+
+        "predicted_probability": payload.get("predicted_probability"),
+        "actual_value": payload.get("actual_value"),
+        "actual_numeric": payload.get("actual_numeric"),
+        "was_correct": payload.get("was_correct"),
+        "probability_error": payload.get("probability_error"),
+
+        "feature_snapshot_json": aisp2_model_feedback_json(payload.get("feature_snapshot")),
+        "features_json": aisp2_model_feedback_json(payload.get("feature_snapshot")),
+        "label_json": aisp2_model_feedback_json(label_payload),
+        "training_label_json": aisp2_model_feedback_json(label_payload),
+        "request_json": aisp2_model_feedback_json(payload.get("request")),
+        "response_json": aisp2_model_feedback_json(payload.get("response")),
+
+        "training_weight": training_weight,
+        "feedback_status": AISP2_FEEDBACK_EVENT_APPROVED if approved_for_training else AISP2_FEEDBACK_EVENT_PENDING,
+        "status": AISP2_FEEDBACK_EVENT_APPROVED if approved_for_training else AISP2_FEEDBACK_EVENT_PENDING,
+        "approved_for_training": approved_for_training,
+        "used_for_training": False,
+
+        "created_at": utc_now(),
+        "updated_at": utc_now(),
+        "approved_at": utc_now() if approved_for_training else None,
+    }
+
+    return {
+        key: value
+        for key, value in candidate_values.items()
+        if key in columns and value is not None
+    }
+
+
+def aisp2_model_feedback_create_or_update_event(
+    database_session,
+    payload: Mapping[str, Any],
+    *,
+    approved_for_training: bool = False,
+):
+    existing = aisp2_model_feedback_find_existing(
+        database_session,
+        payload.get("prediction_history_id"),
+    )
+
+    kwargs = aisp2_model_feedback_build_kwargs(
+        payload,
+        approved_for_training=approved_for_training,
+    )
+
+    if "prediction_history_id" not in kwargs and "prediction_history_id" in aisp2_model_feedback_columns(AuthModelTrainingFeedbackEventModel):
+        raise HTTPException(
+            status_code=500,
+            detail="ModelTrainingFeedbackEvent requires prediction_history_id, but payload did not provide it.",
+        )
+
+    if existing is None:
+        row = AuthModelTrainingFeedbackEventModel(**kwargs)
+        action = "created"
+    else:
+        row = existing
+        action = "updated"
+        for key, value in kwargs.items():
+            if key == "created_at":
+                continue
+            aisp2_model_feedback_set_if_present(row, key, value)
+
+    database_session.add(row)
+    database_session.flush()
+
+    return row, action
+
+
+def aisp2_model_feedback_public_payload(row: Any) -> dict[str, Any]:
+    return {
+        "id": aisp2_model_feedback_row_value(row, "id"),
+        "account_id": aisp2_model_feedback_row_value(row, "account_id"),
+        "prediction_history_id": aisp2_model_feedback_row_value(row, "prediction_history_id"),
+
+        "model_name": aisp2_model_feedback_row_value(row, "model_name", "model"),
+        "model_version": aisp2_model_feedback_row_value(row, "model_version"),
+
+        "outcome_key": aisp2_model_feedback_row_value(row, "outcome_key"),
+        "outcome_label": aisp2_model_feedback_row_value(row, "outcome_label"),
+
+        "player_id": aisp2_model_feedback_row_value(row, "player_id"),
+        "team_id": aisp2_model_feedback_row_value(row, "team_id"),
+        "player_name": aisp2_model_feedback_row_value(row, "player_name"),
+        "team_name": aisp2_model_feedback_row_value(row, "team_name"),
+
+        "predicted_probability": aisp2_model_feedback_row_value(row, "predicted_probability"),
+        "actual_value": aisp2_model_feedback_row_value(row, "actual_value"),
+        "actual_numeric": aisp2_model_feedback_row_value(row, "actual_numeric"),
+        "was_correct": aisp2_model_feedback_row_value(row, "was_correct"),
+        "probability_error": aisp2_model_feedback_row_value(row, "probability_error"),
+
+        "training_weight": aisp2_model_feedback_row_value(row, "training_weight", default=1.0),
+        "approved_for_training": aisp2_model_feedback_row_value(row, "approved_for_training", default=False),
+        "used_for_training": aisp2_model_feedback_row_value(row, "used_for_training", default=False),
+        "feedback_status": aisp2_model_feedback_row_value(row, "feedback_status", "status", default=AISP2_FEEDBACK_EVENT_PENDING),
+
+        "feature_snapshot": aisp2_model_feedback_parse_json(
+            aisp2_model_feedback_row_value(row, "feature_snapshot_json", "features_json")
+        ),
+        "label": aisp2_model_feedback_parse_json(
+            aisp2_model_feedback_row_value(row, "label_json", "training_label_json")
+        ),
+
+        "created_at": aisp2_model_feedback_iso(
+            aisp2_model_feedback_row_value(row, "created_at")
+        ),
+        "updated_at": aisp2_model_feedback_iso(
+            aisp2_model_feedback_row_value(row, "updated_at")
+        ),
+        "approved_at": aisp2_model_feedback_iso(
+            aisp2_model_feedback_row_value(row, "approved_at")
+        ),
+        "used_at": aisp2_model_feedback_iso(
+            aisp2_model_feedback_row_value(row, "used_at")
+        ),
+    }
+
+
+# ============================================================
+# SECTION 15.985.06 - TRAINING QUEUE OPERATIONS
+# ============================================================
+
+def aisp2_model_feedback_query_resolved_predictions(
+    database_session,
+    *,
+    build_request: ModelFeedbackBuildRequest,
+):
+    query = database_session.query(AuthUserPredictionHistoryModel)
+
+    if build_request.model_name:
+        for field_name in ["model_name", "model"]:
+            if hasattr(AuthUserPredictionHistoryModel, field_name):
+                query = query.filter(getattr(AuthUserPredictionHistoryModel, field_name) == build_request.model_name)
+                break
+
+    if build_request.model_version and hasattr(AuthUserPredictionHistoryModel, "model_version"):
+        query = query.filter(AuthUserPredictionHistoryModel.model_version == build_request.model_version)
+
+    if build_request.outcome_key and hasattr(AuthUserPredictionHistoryModel, "outcome_key"):
+        query = query.filter(AuthUserPredictionHistoryModel.outcome_key == build_request.outcome_key)
+
+    if hasattr(AuthUserPredictionHistoryModel, "resolved_at"):
+        query = query.order_by(AuthUserPredictionHistoryModel.resolved_at.desc())
+    elif hasattr(AuthUserPredictionHistoryModel, "created_at"):
+        query = query.order_by(AuthUserPredictionHistoryModel.created_at.desc())
+    elif hasattr(AuthUserPredictionHistoryModel, "id"):
+        query = query.order_by(AuthUserPredictionHistoryModel.id.desc())
+
+    rows = query.limit(int(build_request.limit)).all()
+
+    return [
+        row for row in rows
+        if aisp2_model_feedback_prediction_is_resolved(row)
+    ]
+
+
+def aisp2_model_feedback_set_review_state(
+    database_session,
+    *,
+    feedback_id: int,
+    approved: bool | None = None,
+    used: bool | None = None,
+    training_run_id: str | None = None,
+):
+    model = AuthModelTrainingFeedbackEventModel
+
+    if not hasattr(model, "id"):
+        raise HTTPException(
+            status_code=500,
+            detail="ModelTrainingFeedbackEvent model does not expose id.",
+        )
+
+    row = database_session.query(model).filter(model.id == int(feedback_id)).first()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Feedback event was not found.",
+        )
+
+    if approved is not None:
+        aisp2_model_feedback_set_if_present(row, "approved_for_training", bool(approved))
+        aisp2_model_feedback_set_if_present(row, "approved_at", utc_now() if approved else None)
+        aisp2_model_feedback_set_if_present(row, "feedback_status", AISP2_FEEDBACK_EVENT_APPROVED if approved else AISP2_FEEDBACK_EVENT_PENDING)
+        aisp2_model_feedback_set_if_present(row, "status", AISP2_FEEDBACK_EVENT_APPROVED if approved else AISP2_FEEDBACK_EVENT_PENDING)
+
+    if used is not None:
+        aisp2_model_feedback_set_if_present(row, "used_for_training", bool(used))
+        aisp2_model_feedback_set_if_present(row, "used_at", utc_now() if used else None)
+        aisp2_model_feedback_set_if_present(row, "training_run_id", training_run_id)
+        if used:
+            aisp2_model_feedback_set_if_present(row, "feedback_status", AISP2_FEEDBACK_EVENT_USED)
+            aisp2_model_feedback_set_if_present(row, "status", AISP2_FEEDBACK_EVENT_USED)
+
+    aisp2_model_feedback_set_if_present(row, "updated_at", utc_now())
+
+    database_session.add(row)
+    database_session.flush()
+
+    return row
+
+
+# ============================================================
+# SECTION 15.985.07 - MODEL FEEDBACK CEO API ROUTES
+# ============================================================
+
+@app.get("/api/admin/model-feedback")
+def api_admin_model_feedback(
+    request: Request,
+    limit: int = Query(default=AISP2_MODEL_FEEDBACK_DEFAULT_LIMIT, ge=1, le=AISP2_MODEL_FEEDBACK_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    model_version: str | None = None,
+    player: str | None = None,
+    outcome_key: str | None = None,
+    was_correct: bool | None = None,
+    approved_for_training: bool | None = None,
+    used_for_training: bool | None = None,
+) -> dict[str, Any]:
+    account, _session = aisp2_model_feedback_require_ceo_or_admin(request)
+    aisp2_model_feedback_require_models()
+
+    with managed_database_session() as database_session:
+        query = database_session.query(AuthModelTrainingFeedbackEventModel)
+
+        if model_version and hasattr(AuthModelTrainingFeedbackEventModel, "model_version"):
+            query = query.filter(AuthModelTrainingFeedbackEventModel.model_version == model_version)
+
+        if outcome_key and hasattr(AuthModelTrainingFeedbackEventModel, "outcome_key"):
+            query = query.filter(AuthModelTrainingFeedbackEventModel.outcome_key == outcome_key)
+
+        if was_correct is not None and hasattr(AuthModelTrainingFeedbackEventModel, "was_correct"):
+            query = query.filter(AuthModelTrainingFeedbackEventModel.was_correct.is_(bool(was_correct)))
+
+        if approved_for_training is not None and hasattr(AuthModelTrainingFeedbackEventModel, "approved_for_training"):
+            query = query.filter(AuthModelTrainingFeedbackEventModel.approved_for_training.is_(bool(approved_for_training)))
+
+        if used_for_training is not None and hasattr(AuthModelTrainingFeedbackEventModel, "used_for_training"):
+            query = query.filter(AuthModelTrainingFeedbackEventModel.used_for_training.is_(bool(used_for_training)))
+
+        if player:
+            from sqlalchemy import or_
+
+            predicates = []
+
+            if hasattr(AuthModelTrainingFeedbackEventModel, "player_name"):
+                predicates.append(AuthModelTrainingFeedbackEventModel.player_name.ilike(f"%{player}%"))
+
+            if hasattr(AuthModelTrainingFeedbackEventModel, "player_id"):
+                maybe_id = safe_int(player, fallback=0)
+                if maybe_id:
+                    predicates.append(AuthModelTrainingFeedbackEventModel.player_id == maybe_id)
+
+            if predicates:
+                query = query.filter(or_(*predicates))
+
+        total_count = query.count()
+
+        if hasattr(AuthModelTrainingFeedbackEventModel, "created_at"):
+            query = query.order_by(AuthModelTrainingFeedbackEventModel.created_at.desc())
+        elif hasattr(AuthModelTrainingFeedbackEventModel, "id"):
+            query = query.order_by(AuthModelTrainingFeedbackEventModel.id.desc())
+
+        rows = query.offset(int(offset)).limit(int(limit)).all()
+
+        events = [
+            aisp2_model_feedback_public_payload(row)
+            for row in rows
+        ]
+
+    return {
+        "success": True,
+        "feedback_queue_version": AISP2_MODEL_FEEDBACK_QUEUE_VERSION,
+        "viewer": {
+            "account_id": account.get("id"),
+            "role": account.get("role"),
+            "is_ceo_master": account.get("is_ceo_master"),
+        },
+        "count": len(events),
+        "total_count": total_count,
+        "limit": int(limit),
+        "offset": int(offset),
+        "filters": {
+            "model_version": model_version,
+            "player": player,
+            "outcome_key": outcome_key,
+            "was_correct": was_correct,
+            "approved_for_training": approved_for_training,
+            "used_for_training": used_for_training,
+        },
+        "events": events,
+    }
+
+
+@app.post("/api/admin/model-feedback/build")
+def api_admin_model_feedback_build(
+    request: Request,
+    payload: ModelFeedbackBuildRequest,
+) -> dict[str, Any]:
+    account, session = aisp2_model_feedback_require_ceo_or_admin(request)
+    aisp2_model_feedback_require_models()
+
+    created = 0
+    updated = 0
+    skipped_existing = 0
+    skipped_unresolved = 0
+    event_payloads: list[dict[str, Any]] = []
+
+    with managed_database_session() as database_session:
+        prediction_rows = aisp2_model_feedback_query_resolved_predictions(
+            database_session,
+            build_request=payload,
+        )
+
+        for prediction_row in prediction_rows:
+            prediction_payload = aisp2_model_feedback_prediction_payload(prediction_row)
+
+            if not aisp2_model_feedback_prediction_is_resolved(prediction_row):
+                skipped_unresolved += 1
+                continue
+
+            existing = aisp2_model_feedback_find_existing(
+                database_session,
+                prediction_payload.get("prediction_history_id"),
+            )
+
+            if existing is not None and payload.only_unqueued:
+                skipped_existing += 1
+                continue
+
+            row, action = aisp2_model_feedback_create_or_update_event(
+                database_session,
+                prediction_payload,
+                approved_for_training=payload.approve_immediately,
+            )
+
+            if action == "created":
+                created += 1
+            else:
+                updated += 1
+
+            event_payloads.append(
+                aisp2_model_feedback_public_payload(row)
+            )
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account.get("id"),
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="model_feedback_queue_built",
+            severity="info",
+            event_summary="CEO/admin built model-feedback queue from resolved predictions.",
+            request=request,
+            event_json={
+                "created": created,
+                "updated": updated,
+                "skipped_existing": skipped_existing,
+                "skipped_unresolved": skipped_unresolved,
+                "request": payload.model_dump() if hasattr(payload, "model_dump") else payload.dict(),
+            },
+        )
+
+    return {
+        "success": True,
+        "status": "built",
+        "feedback_queue_version": AISP2_MODEL_FEEDBACK_QUEUE_VERSION,
+        "created": created,
+        "updated": updated,
+        "skipped_existing": skipped_existing,
+        "skipped_unresolved": skipped_unresolved,
+        "source_prediction_count": len(prediction_rows),
+        "events": event_payloads,
+    }
+
+
+@app.post("/api/admin/model-feedback/{feedback_id}/approve")
+def api_admin_model_feedback_approve(
+    request: Request,
+    feedback_id: int,
+    payload: ModelFeedbackApprovalRequest,
+) -> dict[str, Any]:
+    account, session = aisp2_model_feedback_require_ceo_or_admin(request)
+    aisp2_model_feedback_require_models()
+
+    with managed_database_session() as database_session:
+        row = aisp2_model_feedback_set_review_state(
+            database_session,
+            feedback_id=feedback_id,
+            approved=payload.approved,
+        )
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account.get("id"),
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="model_feedback_approval_changed",
+            severity="info",
+            event_summary="CEO/admin changed model feedback training approval.",
+            request=request,
+            event_json={
+                "feedback_id": feedback_id,
+                "approved": payload.approved,
+                "reviewer_note": payload.reviewer_note,
+            },
+        )
+
+        event = aisp2_model_feedback_public_payload(row)
+
+    return {
+        "success": True,
+        "status": "approved" if payload.approved else "approval_removed",
+        "feedback_queue_version": AISP2_MODEL_FEEDBACK_QUEUE_VERSION,
+        "event": event,
+    }
+
+
+@app.post("/api/admin/model-feedback/{feedback_id}/used")
+def api_admin_model_feedback_used(
+    request: Request,
+    feedback_id: int,
+    payload: ModelFeedbackUsedRequest,
+) -> dict[str, Any]:
+    account, session = aisp2_model_feedback_require_ceo_or_admin(request)
+    aisp2_model_feedback_require_models()
+
+    with managed_database_session() as database_session:
+        row = aisp2_model_feedback_set_review_state(
+            database_session,
+            feedback_id=feedback_id,
+            used=payload.used,
+            training_run_id=payload.training_run_id,
+        )
+
+        aisp2_auth_write_audit_event(
+            database_session,
+            account_id=account.get("id"),
+            session_id=session.get("id") if isinstance(session, Mapping) else None,
+            event_type="model_feedback_used_changed",
+            severity="info",
+            event_summary="CEO/admin marked model feedback used for training.",
+            request=request,
+            event_json={
+                "feedback_id": feedback_id,
+                "used": payload.used,
+                "training_run_id": payload.training_run_id,
+                "reviewer_note": payload.reviewer_note,
+            },
+        )
+
+        event = aisp2_model_feedback_public_payload(row)
+
+    return {
+        "success": True,
+        "status": "used_for_training" if payload.used else "used_flag_removed",
+        "feedback_queue_version": AISP2_MODEL_FEEDBACK_QUEUE_VERSION,
+        "event": event,
+    }
+
+
+# ============================================================
+# SECTION 15.985.08 - TRAINING QUEUE VALIDATION
+# ============================================================
+
+def validate_model_feedback_training_queue_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+
+    required_routes = {
+        "/api/admin/model-feedback",
+        "/api/admin/model-feedback/build",
+        "/api/admin/model-feedback/{feedback_id}/approve",
+        "/api/admin/model-feedback/{feedback_id}/used",
+        "/api/admin/model-feedback/health",
+    }
+
+    feedback_columns = (
+        sorted(aisp2_model_feedback_columns(AuthModelTrainingFeedbackEventModel))
+        if AuthModelTrainingFeedbackEventModel is not None
+        else []
+    )
+
+    prediction_columns = (
+        sorted(aisp2_model_feedback_columns(AuthUserPredictionHistoryModel))
+        if AuthUserPredictionHistoryModel is not None
+        else []
+    )
+
+    checks = {
+        "ceo_admin_guard_available": callable(aisp2_auth_require_ceo_or_admin),
+        "database_session_available": callable(managed_database_session),
+        "prediction_history_model_available": AuthUserPredictionHistoryModel is not None,
+        "feedback_event_model_available": AuthModelTrainingFeedbackEventModel is not None,
+        "feedback_model_has_label_or_training_label": any(
+            column in feedback_columns
+            for column in ["label_json", "training_label_json"]
+        ),
+        "feedback_model_has_feature_snapshot": any(
+            column in feedback_columns
+            for column in ["feature_snapshot_json", "features_json"]
+        ),
+        "feedback_model_has_training_weight": "training_weight" in feedback_columns,
+        "feedback_model_has_approval_flag": "approved_for_training" in feedback_columns,
+        "feedback_model_has_used_flag": "used_for_training" in feedback_columns,
+        "prediction_model_has_probability": any(
+            column in prediction_columns
+            for column in ["predicted_probability", "estimated_probability", "probability"]
+        ),
+        "list_route_registered": "/api/admin/model-feedback" in route_paths,
+        "build_route_registered": "/api/admin/model-feedback/build" in route_paths,
+        "approve_route_registered": "/api/admin/model-feedback/{feedback_id}/approve" in route_paths,
+        "used_route_registered": "/api/admin/model-feedback/{feedback_id}/used" in route_paths,
+        "health_route_registered": "/api/admin/model-feedback/health" in route_paths,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 6.0",
+        "feedback_queue_version": AISP2_MODEL_FEEDBACK_QUEUE_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            name for name, value in checks.items()
+            if not value
+        ],
+        "required_routes": sorted(required_routes),
+        "registered_required_routes": sorted(required_routes.intersection(route_paths)),
+        "missing_required_routes": sorted(required_routes - route_paths),
+        "feedback_event_columns": feedback_columns,
+        "prediction_history_columns": prediction_columns,
+        "completion_gate": {
+            "ceo_can_view_feedback_queue": checks["list_route_registered"],
+            "ceo_can_build_feedback_from_resolved_predictions": checks["build_route_registered"],
+            "ceo_can_approve_feedback": checks["approve_route_registered"],
+            "ceo_can_mark_feedback_used": checks["used_route_registered"],
+            "feedback_schema_detected": checks["feedback_event_model_available"],
+        },
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+@app.get("/api/admin/model-feedback/health")
+def api_admin_model_feedback_health() -> dict[str, Any]:
+    return validate_model_feedback_training_queue_runtime()
+
+
+
 # ============================================================
 # SECTION 16 - TEMPLATE ROUTES
 # ============================================================

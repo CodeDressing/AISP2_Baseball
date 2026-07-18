@@ -516,3 +516,130 @@ def learn_from_chat_interaction(
 11.09 Add RAG memory retrieval before chat response.
 11.10 Add supervised fine-tuning export after enough clean examples.
 """
+# ============================================================
+# SECTION 12 - PHASE 14 PART 6.0 - MODEL FEEDBACK TRAINING HELPERS
+# FILE: 04_ai/core/learning_engine.py
+# PURPOSE:
+# Convert database model-feedback rows into exportable training
+# examples for calibration, review, and future supervised model
+# updates.
+# ============================================================
+
+MODEL_FEEDBACK_TRAINING_HELPER_VERSION = "phase_14_part_6_0_model_feedback_training_helpers"
+
+
+def build_model_feedback_training_example(
+    feedback_event: dict,
+) -> dict:
+    feedback_event = dict(feedback_event or {})
+
+    label = feedback_event.get("label") or {}
+    feature_snapshot = feedback_event.get("feature_snapshot") or {}
+
+    return {
+        "type": "model_feedback_training_example",
+        "training_helper_version": MODEL_FEEDBACK_TRAINING_HELPER_VERSION,
+        "input": {
+            "model_name": feedback_event.get("model_name"),
+            "model_version": feedback_event.get("model_version"),
+            "player_id": feedback_event.get("player_id"),
+            "team_id": feedback_event.get("team_id"),
+            "player_name": feedback_event.get("player_name"),
+            "team_name": feedback_event.get("team_name"),
+            "outcome_key": feedback_event.get("outcome_key"),
+            "feature_snapshot": feature_snapshot,
+        },
+        "target": {
+            "predicted_probability": feedback_event.get("predicted_probability"),
+            "actual_value": feedback_event.get("actual_value"),
+            "actual_numeric": feedback_event.get("actual_numeric"),
+            "was_correct": feedback_event.get("was_correct"),
+            "probability_error": feedback_event.get("probability_error"),
+            "label": label,
+        },
+        "quality": {
+            "training_weight": feedback_event.get("training_weight", 1.0),
+            "approved_for_training": bool(feedback_event.get("approved_for_training")),
+            "used_for_training": bool(feedback_event.get("used_for_training")),
+        },
+        "source": "ModelTrainingFeedbackEvent",
+    }
+
+
+def score_model_feedback_training_weight(
+    probability_error: float | int | None,
+    *,
+    was_correct: bool | None = None,
+) -> float:
+    if probability_error is None:
+        return 0.75 if was_correct is True else 1.0
+
+    try:
+        error = abs(float(probability_error))
+    except Exception:
+        return 1.0
+
+    if error >= 0.75:
+        return 1.75
+
+    if error >= 0.50:
+        return 1.35
+
+    if error <= 0.10:
+        return 0.75
+
+    return 1.0
+
+
+def summarize_model_feedback_events(
+    feedback_events: list[dict],
+) -> dict:
+    events = list(feedback_events or [])
+    approved = [
+        event for event in events
+        if event.get("approved_for_training")
+    ]
+    used = [
+        event for event in events
+        if event.get("used_for_training")
+    ]
+
+    by_model_version: dict[str, int] = {}
+    by_outcome: dict[str, int] = {}
+
+    for event in events:
+        version = str(event.get("model_version") or "unknown")
+        outcome = str(event.get("outcome_key") or "unknown")
+        by_model_version[version] = by_model_version.get(version, 0) + 1
+        by_outcome[outcome] = by_outcome.get(outcome, 0) + 1
+
+    return {
+        "status": "ready",
+        "training_helper_version": MODEL_FEEDBACK_TRAINING_HELPER_VERSION,
+        "event_count": len(events),
+        "approved_count": len(approved),
+        "used_count": len(used),
+        "by_model_version": dict(sorted(by_model_version.items())),
+        "by_outcome": dict(sorted(by_outcome.items())),
+    }
+
+
+def validate_model_feedback_training_helpers() -> dict:
+    checks = {
+        "training_example_builder_available": callable(build_model_feedback_training_example),
+        "training_weight_scorer_available": callable(score_model_feedback_training_weight),
+        "feedback_summarizer_available": callable(summarize_model_feedback_events),
+        "version_present": bool(MODEL_FEEDBACK_TRAINING_HELPER_VERSION),
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 6.0",
+        "training_helper_version": MODEL_FEEDBACK_TRAINING_HELPER_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+    }
+

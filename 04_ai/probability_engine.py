@@ -2371,3 +2371,124 @@ if __name__ == "__main__":
     print(json.dumps(validation, indent=2, sort_keys=True))
     if validation["status"] != "ok":
         raise SystemExit(1)
+
+# ============================================================
+# SECTION 90 - PHASE 14 PART 6.0 - MODEL FEEDBACK CALIBRATION HELPERS
+# FILE: 04_ai/probability_engine.py
+# PURPOSE:
+# Convert feedback events into calibration rows and probability
+# error summaries for future model correction.
+# ============================================================
+
+MODEL_FEEDBACK_CALIBRATION_VERSION = "phase_14_part_6_0_model_feedback_calibration_helpers"
+
+
+def calculate_feedback_probability_error(
+    predicted_probability,
+    actual_value,
+):
+    try:
+        predicted = float(predicted_probability)
+    except Exception:
+        return None
+
+    if predicted > 1.0:
+        predicted = predicted / 100.0
+
+    try:
+        actual = float(actual_value)
+    except Exception:
+        if isinstance(actual_value, bool):
+            actual = 1.0 if actual_value else 0.0
+        else:
+            return None
+
+    actual = max(0.0, min(1.0, actual))
+    predicted = max(0.0, min(1.0, predicted))
+
+    return round(abs(predicted - actual), 6)
+
+
+def feedback_event_to_calibration_row(
+    feedback_event: dict,
+) -> dict:
+    feedback_event = dict(feedback_event or {})
+
+    error = feedback_event.get("probability_error")
+
+    if error is None:
+        error = calculate_feedback_probability_error(
+            feedback_event.get("predicted_probability"),
+            feedback_event.get("actual_numeric")
+            if feedback_event.get("actual_numeric") is not None
+            else feedback_event.get("actual_value"),
+        )
+
+    return {
+        "calibration_version": MODEL_FEEDBACK_CALIBRATION_VERSION,
+        "feedback_event_id": feedback_event.get("id"),
+        "prediction_history_id": feedback_event.get("prediction_history_id"),
+        "model_name": feedback_event.get("model_name"),
+        "model_version": feedback_event.get("model_version"),
+        "outcome_key": feedback_event.get("outcome_key"),
+        "predicted_probability": feedback_event.get("predicted_probability"),
+        "actual_value": feedback_event.get("actual_value"),
+        "actual_numeric": feedback_event.get("actual_numeric"),
+        "was_correct": feedback_event.get("was_correct"),
+        "probability_error": error,
+        "training_weight": feedback_event.get("training_weight", 1.0),
+        "approved_for_training": bool(feedback_event.get("approved_for_training")),
+        "used_for_training": bool(feedback_event.get("used_for_training")),
+    }
+
+
+def build_probability_model_feedback_summary(
+    feedback_events: list[dict],
+) -> dict:
+    events = list(feedback_events or [])
+    rows = [
+        feedback_event_to_calibration_row(event)
+        for event in events
+    ]
+
+    error_values = [
+        row["probability_error"]
+        for row in rows
+        if row.get("probability_error") is not None
+    ]
+
+    average_error = (
+        round(sum(error_values) / len(error_values), 6)
+        if error_values
+        else None
+    )
+
+    return {
+        "status": "ready",
+        "calibration_version": MODEL_FEEDBACK_CALIBRATION_VERSION,
+        "event_count": len(events),
+        "scored_event_count": len(error_values),
+        "average_probability_error": average_error,
+        "rows": rows,
+    }
+
+
+def validate_model_feedback_calibration_helpers() -> dict:
+    checks = {
+        "error_calculator_available": callable(calculate_feedback_probability_error),
+        "calibration_row_builder_available": callable(feedback_event_to_calibration_row),
+        "summary_builder_available": callable(build_probability_model_feedback_summary),
+        "error_math_valid": calculate_feedback_probability_error(75, 1) == 0.25,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 6.0",
+        "calibration_version": MODEL_FEEDBACK_CALIBRATION_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+    }
+
