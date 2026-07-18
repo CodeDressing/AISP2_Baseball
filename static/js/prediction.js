@@ -2133,3 +2133,157 @@ window.AISP2PredictionSelectors = {
 
 window.AISP2_PREDICTION_PAGE_SCROLL_RESET_PHASE_14_PART_7_2 = true;
 
+
+/* ============================================================
+   PHASE 14 PART 7.3 - PREDICTION COCKPIT LAYOUT CONTROLLER
+   FILE: static/js/prediction.js
+   PURPOSE:
+   Dynamically calculate the correct viewport height and break the
+   Prediction Workbench out of narrow parent containers.
+   ============================================================ */
+
+(function initializeAISP2PredictionCockpitLayoutController() {
+    "use strict";
+
+    const VERSION = "phase_14_part_7_3_prediction_cockpit_layout_controller";
+
+    function isPredictionPage() {
+        const path = String(window.location.pathname || "").toLowerCase();
+        return path.includes("/tools/prediction") || path.includes("prediction");
+    }
+
+    function findWorkbench() {
+        return (
+            document.querySelector(".prediction-workbench") ||
+            document.querySelector("[data-prediction-workbench]") ||
+            document.querySelector(".prediction-page") ||
+            document.querySelector(".prediction-shell")
+        );
+    }
+
+    function findHeaderHeight() {
+        const candidates = [
+            document.querySelector("header"),
+            document.querySelector("nav"),
+            document.querySelector(".topbar"),
+            document.querySelector(".aisp2-topbar"),
+            document.querySelector(".site-header")
+        ].filter(Boolean);
+
+        let height = 0;
+
+        candidates.forEach(function measure(node) {
+            const rect = node.getBoundingClientRect();
+            if (rect.height > height && rect.height < 180) {
+                height = rect.height;
+            }
+        });
+
+        return height || 68;
+    }
+
+    function markParents(workbench) {
+        let node = workbench ? workbench.parentElement : null;
+        let depth = 0;
+
+        while (node && node !== document.body && depth < 6) {
+            node.classList.add("aisp2-prediction-fit-parent");
+            node = node.parentElement;
+            depth += 1;
+        }
+    }
+
+    function setLayoutVariables() {
+        if (!isPredictionPage()) {
+            return;
+        }
+
+        const workbench = findWorkbench();
+
+        if (!workbench) {
+            return;
+        }
+
+        document.body.classList.add("aisp2-prediction-cockpit-repair");
+        markParents(workbench);
+
+        const headerHeight = findHeaderHeight();
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 900;
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1440;
+
+        const verticalPadding = viewportHeight <= 760 ? 10 : 22;
+        const availableHeight = Math.max(560, viewportHeight - headerHeight - verticalPadding);
+
+        let heroHeight = 116;
+
+        if (viewportHeight <= 850) {
+            heroHeight = 96;
+        }
+
+        if (viewportHeight <= 760) {
+            heroHeight = 0;
+        }
+
+        document.documentElement.style.setProperty(
+            "--aisp2-prediction-available-height",
+            availableHeight + "px"
+        );
+
+        document.documentElement.style.setProperty(
+            "--aisp2-prediction-hero-height",
+            heroHeight + "px"
+        );
+
+        document.documentElement.style.setProperty(
+            "--aisp2-prediction-viewport-width",
+            viewportWidth + "px"
+        );
+
+        try {
+            if ("scrollRestoration" in window.history) {
+                window.history.scrollRestoration = "manual";
+            }
+
+            window.scrollTo(0, 0);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function boot() {
+        if (!isPredictionPage()) {
+            return;
+        }
+
+        setLayoutVariables();
+
+        window.requestAnimationFrame(function frameOne() {
+            setLayoutVariables();
+
+            window.requestAnimationFrame(function frameTwo() {
+                setLayoutVariables();
+            });
+        });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+    } else {
+        boot();
+    }
+
+    window.addEventListener("load", boot);
+    window.addEventListener("resize", function handleResize() {
+        window.clearTimeout(window.__aisp2PredictionCockpitResizeTimer);
+        window.__aisp2PredictionCockpitResizeTimer = window.setTimeout(boot, 80);
+    });
+
+    window.AISP2PredictionCockpitLayoutController = {
+        version: VERSION,
+        refresh: boot,
+        setLayoutVariables: setLayoutVariables
+    };
+}());
+
+window.AISP2_PREDICTION_COCKPIT_LAYOUT_CONTROLLER_PHASE_14_PART_7_3 = true;
+

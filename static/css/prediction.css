@@ -2786,3 +2786,402 @@ button[data-run-prediction] {
     background: rgba(115, 216, 255, 0.32);
 }
 
+
+/* ============================================================
+   PHASE 14 PART 7.3 - TRUE FULL SCREEN PREDICTION REPAIR
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Repair the failed single-screen fit attempt by forcing the
+   Prediction Workbench to use the real browser width and a
+   dynamically calculated viewport height.
+   ============================================================ */
+
+body.aisp2-prediction-cockpit-repair {
+    overflow-x: hidden !important;
+    background: #020914 !important;
+}
+
+/* The JS marks parent wrappers so we can break out of max-width containers safely. */
+body.aisp2-prediction-cockpit-repair .aisp2-prediction-fit-parent {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    overflow: visible !important;
+}
+
+/* Main prediction route should use the full viewport width, not a narrow centered shell. */
+body.aisp2-prediction-cockpit-repair main,
+body.aisp2-prediction-cockpit-repair .prediction-page,
+body.aisp2-prediction-cockpit-repair .prediction-shell,
+body.aisp2-prediction-cockpit-repair .prediction-workbench-page {
+    width: 100vw !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 14px 18px 12px !important;
+    overflow: hidden !important;
+}
+
+/* True cockpit grid. */
+body.aisp2-prediction-cockpit-repair .prediction-workbench {
+    width: calc(100vw - 36px) !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+
+    height: var(--aisp2-prediction-available-height, calc(100vh - 88px)) !important;
+    max-height: var(--aisp2-prediction-available-height, calc(100vh - 88px)) !important;
+
+    display: grid !important;
+    grid-template-columns:
+        minmax(255px, 0.74fr)
+        minmax(560px, 1.82fr)
+        minmax(300px, 0.86fr) !important;
+    grid-template-rows:
+        var(--aisp2-prediction-hero-height, 116px)
+        minmax(0, 1fr) !important;
+    grid-template-areas:
+        "hero hero hero"
+        "controls result ai" !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+}
+
+/* Hero becomes a header strip, not a giant marketing section. */
+body.aisp2-prediction-cockpit-repair .prediction-hero,
+body.aisp2-prediction-cockpit-repair .prediction-workbench-hero,
+body.aisp2-prediction-cockpit-repair .prediction-dashboard-hero {
+    grid-area: hero !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: var(--aisp2-prediction-hero-height, 116px) !important;
+    max-height: var(--aisp2-prediction-hero-height, 116px) !important;
+    padding: 18px 28px !important;
+    border-radius: 20px !important;
+    overflow: hidden !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-hero h1,
+body.aisp2-prediction-cockpit-repair .prediction-workbench-hero h1,
+body.aisp2-prediction-cockpit-repair .prediction-dashboard-hero h1 {
+    font-size: clamp(2.2rem, 4.4vw, 4.2rem) !important;
+    line-height: 0.9 !important;
+    letter-spacing: -0.08em !important;
+    margin: 7px 0 5px !important;
+    white-space: nowrap !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-hero p,
+body.aisp2-prediction-cockpit-repair .prediction-workbench-hero p,
+body.aisp2-prediction-cockpit-repair .prediction-dashboard-hero p {
+    max-width: 980px !important;
+    margin: 0 !important;
+    font-size: 0.86rem !important;
+    line-height: 1.32 !important;
+}
+
+/* Three main columns. */
+body.aisp2-prediction-cockpit-repair .prediction-controls-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel {
+    grid-area: controls !important;
+}
+
+body.aisp2-prediction-cockpit-repair .main-probability-card {
+    grid-area: result !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel {
+    grid-area: ai !important;
+}
+
+/* Shared panel sizing. */
+body.aisp2-prediction-cockpit-repair .prediction-controls-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel,
+body.aisp2-prediction-cockpit-repair .main-probability-card,
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    border-radius: 18px !important;
+}
+
+/* Left and right can scroll internally only if absolutely necessary. */
+body.aisp2-prediction-cockpit-repair .prediction-controls-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel,
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-width: thin;
+}
+
+/* Center should not create its own ugly scrollbar. */
+body.aisp2-prediction-cockpit-repair .main-probability-card {
+    overflow: hidden !important;
+    padding: 18px 20px !important;
+}
+
+/* Compact controls. */
+body.aisp2-prediction-cockpit-repair .prediction-controls-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel {
+    padding: 13px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-controls-card h2,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel h2 {
+    font-size: 1.05rem !important;
+    line-height: 1.05 !important;
+    margin: 0 0 5px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-controls-card p,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel p {
+    font-size: 0.74rem !important;
+    line-height: 1.24 !important;
+    margin: 2px 0 7px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-controls-card label,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel label,
+body.aisp2-prediction-cockpit-repair .prediction-label {
+    margin: 7px 0 3px !important;
+    font-size: 0.6rem !important;
+    line-height: 1 !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-controls-card select,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel select,
+body.aisp2-prediction-cockpit-repair .prediction-controls-card input,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel input {
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 0 10px !important;
+    border-radius: 9px !important;
+    font-size: 0.8rem !important;
+}
+
+/* Buttons must not wrap ugly or get clipped. */
+body.aisp2-prediction-cockpit-repair .prediction-controls-card button,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel button,
+body.aisp2-prediction-cockpit-repair .prediction-primary-button,
+body.aisp2-prediction-cockpit-repair .prediction-secondary-button,
+body.aisp2-prediction-cockpit-repair .prediction-run-button,
+body.aisp2-prediction-cockpit-repair button[data-run-prediction] {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 0.72rem !important;
+    border-radius: 999px !important;
+}
+
+/* Runtime status cards in left panel. */
+body.aisp2-prediction-cockpit-repair .prediction-controls-card .prediction-detail-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel .prediction-detail-card,
+body.aisp2-prediction-cockpit-repair .prediction-controls-card .prediction-status-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel .prediction-status-card,
+body.aisp2-prediction-cockpit-repair .prediction-controls-card .prediction-runtime-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel .prediction-runtime-card {
+    min-height: 38px !important;
+    padding: 8px 9px !important;
+    border-radius: 11px !important;
+    margin-top: 6px !important;
+}
+
+/* Center player card. */
+body.aisp2-prediction-cockpit-repair .main-probability-card h1,
+body.aisp2-prediction-cockpit-repair .main-probability-card .prediction-player-name,
+body.aisp2-prediction-cockpit-repair .main-probability-card [data-result-player],
+body.aisp2-prediction-cockpit-repair .main-probability-card [data-prediction-player] {
+    font-size: clamp(2.6rem, 4.6vw, 4.4rem) !important;
+    line-height: 0.86 !important;
+    letter-spacing: -0.085em !important;
+    margin: 10px 0 6px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .main-probability-card .prediction-subtitle,
+body.aisp2-prediction-cockpit-repair .main-probability-card [data-result-subtitle],
+body.aisp2-prediction-cockpit-repair .main-probability-card [data-prediction-subtitle] {
+    font-size: 0.82rem !important;
+    margin-bottom: 10px !important;
+}
+
+/* Center metric grid. */
+body.aisp2-prediction-cockpit-repair .prediction-result-grid,
+body.aisp2-prediction-cockpit-repair .prediction-metric-grid,
+body.aisp2-prediction-cockpit-repair .prediction-detail-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    margin-top: 8px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-metric-card,
+body.aisp2-prediction-cockpit-repair .prediction-detail-card,
+body.aisp2-prediction-cockpit-repair .prediction-result-card,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-card {
+    min-height: 43px !important;
+    padding: 8px 9px !important;
+    border-radius: 11px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-metric-card span,
+body.aisp2-prediction-cockpit-repair .prediction-detail-card span,
+body.aisp2-prediction-cockpit-repair .prediction-result-card span,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-card span {
+    font-size: 0.56rem !important;
+    line-height: 1 !important;
+    letter-spacing: 0.08em !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-metric-card strong,
+body.aisp2-prediction-cockpit-repair .prediction-detail-card strong,
+body.aisp2-prediction-cockpit-repair .prediction-result-card strong,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-card strong {
+    margin-top: 4px !important;
+    font-size: 0.76rem !important;
+    line-height: 1.1 !important;
+}
+
+/* Summary compacting. */
+body.aisp2-prediction-cockpit-repair .prediction-summary,
+body.aisp2-prediction-cockpit-repair .prediction-summary-card,
+body.aisp2-prediction-cockpit-repair .prediction-model-summary {
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-summary h3,
+body.aisp2-prediction-cockpit-repair .prediction-summary-card h3,
+body.aisp2-prediction-cockpit-repair .prediction-model-summary h3 {
+    font-size: 0.86rem !important;
+    margin: 0 0 4px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-summary p,
+body.aisp2-prediction-cockpit-repair .prediction-summary-card p,
+body.aisp2-prediction-cockpit-repair .prediction-model-summary p {
+    font-size: 0.76rem !important;
+    line-height: 1.3 !important;
+}
+
+/* Right panel compacting. */
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel {
+    padding: 13px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel h2,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel h2,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel h2 {
+    font-size: clamp(1.55rem, 2.3vw, 2.1rem) !important;
+    line-height: 0.98 !important;
+    margin: 0 0 6px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel p,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel p,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel p {
+    font-size: 0.74rem !important;
+    line-height: 1.25 !important;
+    margin: 0 0 8px !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel .prediction-detail-card,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel .prediction-detail-card,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel .prediction-detail-card,
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel .prediction-intelligence-card,
+body.aisp2-prediction-cockpit-repair .prediction-ai-panel .prediction-intelligence-card,
+body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel .prediction-intelligence-card {
+    min-height: 40px !important;
+    padding: 8px 9px !important;
+    margin-bottom: 6px !important;
+}
+
+/* Hide nonessential add-on bars that break one-screen fit. */
+body.aisp2-prediction-cockpit-repair .prediction-account-action-bar,
+body.aisp2-prediction-cockpit-repair .prediction-runtime-status,
+body.aisp2-prediction-cockpit-repair .prediction-support-card,
+body.aisp2-prediction-cockpit-repair .prediction-footer,
+body.aisp2-prediction-cockpit-repair .prediction-disclaimer {
+    display: none !important;
+}
+
+/* Short screen: hide hero entirely and use pure cockpit. */
+@media (max-height: 760px) and (min-width: 1100px) {
+    body.aisp2-prediction-cockpit-repair .prediction-workbench {
+        grid-template-rows: minmax(0, 1fr) !important;
+        grid-template-areas: "controls result ai" !important;
+        height: var(--aisp2-prediction-available-height, calc(100vh - 76px)) !important;
+        max-height: var(--aisp2-prediction-available-height, calc(100vh - 76px)) !important;
+    }
+
+    body.aisp2-prediction-cockpit-repair .prediction-hero,
+    body.aisp2-prediction-cockpit-repair .prediction-workbench-hero,
+    body.aisp2-prediction-cockpit-repair .prediction-dashboard-hero {
+        display: none !important;
+    }
+}
+
+/* Smaller desktop width fallback. */
+@media (max-width: 1250px) and (min-width: 981px) {
+    body.aisp2-prediction-cockpit-repair {
+        overflow-y: auto !important;
+    }
+
+    body.aisp2-prediction-cockpit-repair .prediction-workbench {
+        height: auto !important;
+        max-height: none !important;
+        grid-template-columns: 300px minmax(0, 1fr) !important;
+        grid-template-areas:
+            "hero hero"
+            "controls result"
+            "ai ai" !important;
+    }
+
+    body.aisp2-prediction-cockpit-repair .prediction-controls-card,
+    body.aisp2-prediction-cockpit-repair .prediction-selector-panel,
+    body.aisp2-prediction-cockpit-repair .main-probability-card,
+    body.aisp2-prediction-cockpit-repair .prediction-explanation-panel,
+    body.aisp2-prediction-cockpit-repair .prediction-ai-panel,
+    body.aisp2-prediction-cockpit-repair .prediction-intelligence-panel {
+        height: auto !important;
+        max-height: none !important;
+    }
+}
+
+/* Mobile remains normal scroll. */
+@media (max-width: 980px) {
+    body.aisp2-prediction-cockpit-repair {
+        overflow-y: auto !important;
+    }
+
+    body.aisp2-prediction-cockpit-repair main,
+    body.aisp2-prediction-cockpit-repair .prediction-page,
+    body.aisp2-prediction-cockpit-repair .prediction-shell,
+    body.aisp2-prediction-cockpit-repair .prediction-workbench-page {
+        width: 100% !important;
+        padding: 12px !important;
+        overflow: visible !important;
+    }
+
+    body.aisp2-prediction-cockpit-repair .prediction-workbench {
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        grid-template-columns: 1fr !important;
+        grid-template-areas:
+            "hero"
+            "controls"
+            "result"
+            "ai" !important;
+        overflow: visible !important;
+    }
+}
+
