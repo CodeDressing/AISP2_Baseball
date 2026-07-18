@@ -2080,3 +2080,56 @@ window.AISP2PredictionSelectors = {
     window.AISP2_PREDICTION_ACCOUNT_INTEGRATION_PHASE_14_PART_4 = true;
 }());
 
+
+/* ============================================================
+   PHASE 14 PART 7.2 - PREDICTION PAGE SCROLL RESET
+   FILE: static/js/prediction.js
+   PURPOSE:
+   Prevent /tools/prediction from reopening halfway down the page.
+   ============================================================ */
+
+(function initializeAISP2PredictionPageScrollReset() {
+    "use strict";
+
+    try {
+        if ("scrollRestoration" in window.history) {
+            window.history.scrollRestoration = "manual";
+        }
+
+        function isPredictionPage() {
+            const path = String(window.location.pathname || "").toLowerCase();
+
+            return (
+                path.includes("/tools/prediction") ||
+                path.includes("prediction")
+            );
+        }
+
+        function resetScroll() {
+            if (!isPredictionPage()) {
+                return;
+            }
+
+            window.requestAnimationFrame(function frameOne() {
+                window.scrollTo(0, 0);
+
+                window.requestAnimationFrame(function frameTwo() {
+                    window.scrollTo(0, 0);
+                });
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", resetScroll);
+        } else {
+            resetScroll();
+        }
+
+        window.addEventListener("load", resetScroll);
+    } catch (error) {
+        return null;
+    }
+}());
+
+window.AISP2_PREDICTION_PAGE_SCROLL_RESET_PHASE_14_PART_7_2 = true;
+
