@@ -1,490 +1,1864 @@
 ﻿<!-- ============================================================
-     AISP2 BASEBALL
+     AISP2 BASEBALL INTELLIGENCE PLATFORM
      FILE: templates/prediction_workbench.html
-     PHASE: PHASE 12 PART 5.8
+     PHASE: PHASE 14 PART 7.8
      PURPOSE:
-     Dense enterprise prediction workbench template.
-     - Maximizes usable layout space.
-     - Reduces negative space inside every section.
-     - Preserves all prediction runtime data hooks.
-     - Presents live selector health, prediction output,
-       model reasoning, data coverage, and outcome library.
+     Enterprise Prediction Workbench Restoration + Upgrade.
+
+     PRIMARY OBJECTIVE:
+     Restore the original beauty of the Prediction Workbench while
+     making it stronger, cleaner, more professional, and more stable.
+
+     CRITICAL DESIGN RULES:
+     - Single-file replacement only.
+     - Preserve all existing JavaScript runtime hooks.
+     - Preserve /predict/player integration.
+     - Preserve bootstrap integration.
+     - Preserve selector diagnostics.
+     - Preserve AI intelligence panels.
+     - Preserve production truth messaging.
+     - Avoid broken previous layout-controller classes.
+     - Avoid childish oversized UI.
+     - Avoid fake results.
+     - Avoid visual dependence on damaged appended CSS.
+     - Use this page as the authoritative cockpit shell.
+
+     RUNTIME CONTRACTS PRESERVED:
+     - data-bootstrap-endpoint="/api/player-explorer/bootstrap"
+     - data-v2-bootstrap-endpoint="/api/v2/player-explorer/bootstrap"
+     - data-prediction-endpoint="/predict/player"
+     - data-profile-endpoint="/api/player-explorer/profile"
+     - data-health-endpoint="/api/prediction/intelligence/health"
+
+     REQUIRED JS HOOKS PRESERVED:
+     - data-prediction-team
+     - data-prediction-player
+     - data-prediction-outcome
+     - data-prediction-submit
+     - data-prediction-reset
+     - data-selector-refresh
+     - data-result-player
+     - data-result-team
+     - data-result-outcome
+     - data-result-probability
+     - data-result-confidence
+     - data-result-tier
+     - data-result-risk
+     - data-result-profile
+     - data-result-supporting-metric
+     - data-result-style
+     - data-result-form
+     - data-result-metric
+     - data-result-model
+     - data-result-model-secondary
+     - data-result-data-coverage
+     - data-result-sample-size
+     - data-result-source
+     - data-result-warehouse-status
+     - data-result-ai-explanation
+     - data-intelligence-summary
+     - data-intelligence-tier
+     - data-intelligence-risk
+     - data-intelligence-profile
+     - data-intelligence-primary-metric
+     - data-intelligence-data-source
+     - data-intelligence-coverage
+     - data-intelligence-warehouse
+     - data-intelligence-guidance
+     - data-intelligence-reasoning
+     - data-intelligence-warnings
+     - data-intelligence-next-data
+
+     COMPLETION GATE:
+     The page opens as a premium three-column prediction cockpit:
+     controls left, main prediction center, AI intelligence right,
+     with supporting panels below when screen height allows.
      ============================================================ -->
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-aisp2-page="prediction-workbench-enterprise-restored">
+
 <head>
     <!-- ========================================================
-         SECTION 01 - DOCUMENT HEAD
+         SECTION 01 - DOCUMENT METADATA
+         FILE: templates/prediction_workbench.html
          ======================================================== -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AISP2 Baseball Prediction Workbench for live player prop predictions, probability analysis, model reasoning, and selector diagnostics.">
-    <title>AISP2 Baseball | Prediction Workbench</title>
 
-    <link rel="stylesheet" href="/static/css/aisp2.css">
-    <link rel="stylesheet" href="/static/css/prediction.css">
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="AISP2 Baseball Prediction Workbench for player outcome predictions, probability transparency, model reasoning, selector diagnostics, warehouse readiness, and AI intelligence."
+    >
+
+    <meta
+        name="aisp2-template"
+        content="prediction_workbench"
+    >
+
+    <meta
+        name="aisp2-phase"
+        content="phase_14_part_7_8_enterprise_prediction_workbench_restore"
+    >
+
+    <title>
+        AISP2 Baseball | Prediction Workbench
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/aisp2.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/css/prediction.css"
+    >
+
+
+    <!-- ========================================================
+         SECTION 02 - AUTHORITATIVE PAGE-LOCAL STYLE SYSTEM
+         FILE: templates/prediction_workbench.html
+
+         NOTE:
+         This inline layer intentionally gives this template its own
+         stable cockpit layout so previous failed appended CSS does
+         not continue to distort the page.
+         ======================================================== -->
+
+    <style>
+        /* ========================================================
+           SECTION 02.01 - TOKENS
+           ======================================================== */
+
+        :root {
+            --pwb-bg-0: #020714;
+            --pwb-bg-1: #050d1b;
+            --pwb-bg-2: #08172b;
+
+            --pwb-panel: rgba(7, 21, 40, 0.88);
+            --pwb-panel-strong: rgba(10, 31, 55, 0.92);
+            --pwb-panel-soft: rgba(255, 255, 255, 0.045);
+
+            --pwb-border: rgba(112, 217, 255, 0.18);
+            --pwb-border-strong: rgba(112, 217, 255, 0.34);
+            --pwb-border-soft: rgba(255, 255, 255, 0.075);
+
+            --pwb-text: rgba(247, 252, 255, 0.98);
+            --pwb-muted: rgba(218, 234, 248, 0.70);
+            --pwb-soft: rgba(218, 234, 248, 0.48);
+
+            --pwb-blue: #71d9ff;
+            --pwb-mint: #8ff5bd;
+            --pwb-gold: #ffe29e;
+            --pwb-red: #ff9f9f;
+
+            --pwb-shadow: 0 24px 80px rgba(0, 0, 0, 0.30);
+            --pwb-shadow-soft: 0 16px 44px rgba(0, 0, 0, 0.22);
+
+            --pwb-radius-xl: 28px;
+            --pwb-radius-lg: 22px;
+            --pwb-radius-md: 16px;
+            --pwb-radius-sm: 12px;
+
+            --pwb-nav-h: 64px;
+            --pwb-max: 1760px;
+        }
+
+
+        /* ========================================================
+           SECTION 02.02 - HARD PAGE RESET
+           ======================================================== */
+
+        html {
+            min-height: 100%;
+            background: var(--pwb-bg-0);
+            scroll-behavior: auto !important;
+        }
+
+        body.pwb-enterprise-body {
+            min-height: 100%;
+            margin: 0;
+            color: var(--pwb-text);
+            background: var(--pwb-bg-0);
+            font-family:
+                Inter,
+                ui-sans-serif,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+            overflow-x: hidden;
+        }
+
+        body.pwb-enterprise-body * {
+            box-sizing: border-box;
+        }
+
+        body.pwb-enterprise-body a {
+            color: inherit;
+        }
+
+        body.pwb-enterprise-body button,
+        body.pwb-enterprise-body select,
+        body.pwb-enterprise-body input {
+            font: inherit;
+        }
+
+        body.pwb-enterprise-body .pwb-hidden-runtime-targets {
+            display: none !important;
+        }
+
+
+        /* ========================================================
+           SECTION 02.03 - APP SHELL
+           ======================================================== */
+
+        .pwb-shell {
+            min-height: 100svh;
+            background:
+                radial-gradient(circle at 12% 12%, rgba(113, 217, 255, 0.14), transparent 30%),
+                radial-gradient(circle at 86% 0%, rgba(143, 245, 189, 0.10), transparent 32%),
+                linear-gradient(180deg, var(--pwb-bg-0) 0%, var(--pwb-bg-1) 48%, #030812 100%);
+        }
+
+        .pwb-topbar {
+            min-height: var(--pwb-nav-h);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            padding: 0 clamp(18px, 3vw, 42px);
+            background: rgba(2, 8, 20, 0.86);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(18px);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .pwb-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 11px;
+            color: var(--pwb-text);
+            text-decoration: none;
+            font-weight: 950;
+            letter-spacing: -0.02em;
+        }
+
+        .pwb-brand-icon {
+            width: 32px;
+            height: 32px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background:
+                radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.20), transparent 40%),
+                rgba(113, 217, 255, 0.12);
+            border: 1px solid rgba(113, 217, 255, 0.22);
+            box-shadow: 0 0 30px rgba(113, 217, 255, 0.10);
+        }
+
+        .pwb-nav {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: clamp(12px, 2vw, 28px);
+            flex-wrap: wrap;
+        }
+
+        .pwb-nav a {
+            color: rgba(226, 238, 249, 0.74);
+            font-size: 0.82rem;
+            font-weight: 850;
+            text-decoration: none;
+            transition:
+                color 160ms ease,
+                opacity 160ms ease;
+        }
+
+        .pwb-nav a:hover,
+        .pwb-nav a[aria-current="page"] {
+            color: var(--pwb-blue);
+        }
+
+        .pwb-nav a.pwb-nav-login {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(113, 217, 255, 0.20);
+            background: rgba(113, 217, 255, 0.07);
+            color: var(--pwb-text);
+        }
+
+
+        /* ========================================================
+           SECTION 02.04 - MAIN WORKBENCH
+           ======================================================== */
+
+        .pwb-main {
+            width: min(var(--pwb-max), calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 16px 0 28px;
+        }
+
+        .pwb-hero {
+            min-height: 138px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(340px, 0.42fr);
+            align-items: center;
+            gap: 22px;
+            padding: clamp(20px, 2.4vw, 34px);
+            border: 1px solid var(--pwb-border);
+            border-radius: var(--pwb-radius-xl);
+            background:
+                linear-gradient(135deg, rgba(13, 35, 62, 0.88), rgba(3, 12, 28, 0.94)),
+                rgba(255, 255, 255, 0.02);
+            box-shadow: var(--pwb-shadow-soft);
+            overflow: hidden;
+        }
+
+        .pwb-kicker {
+            min-height: 26px;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            width: fit-content;
+            padding: 0 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(113, 217, 255, 0.22);
+            background: rgba(113, 217, 255, 0.08);
+            color: var(--pwb-blue);
+            font-size: 0.70rem;
+            font-weight: 950;
+            letter-spacing: 0.115em;
+            text-transform: uppercase;
+        }
+
+        .pwb-kicker-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--pwb-mint);
+            box-shadow: 0 0 20px rgba(143, 245, 189, 0.70);
+        }
+
+        .pwb-title {
+            margin: 10px 0 8px;
+            color: var(--pwb-text);
+            font-size: clamp(3.2rem, 6vw, 6.2rem);
+            line-height: 0.86;
+            letter-spacing: -0.09em;
+            font-weight: 950;
+            text-wrap: balance;
+        }
+
+        .pwb-subtitle {
+            max-width: 1000px;
+            margin: 0;
+            color: var(--pwb-muted);
+            font-size: 0.98rem;
+            line-height: 1.5;
+        }
+
+        .pwb-hero-status {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 9px;
+        }
+
+        .pwb-status-card {
+            min-height: 56px;
+            padding: 10px 12px;
+            border-radius: var(--pwb-radius-md);
+            border: 1px solid rgba(113, 217, 255, 0.13);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .pwb-status-card span,
+        .pwb-status-card strong {
+            display: block;
+        }
+
+        .pwb-status-card span {
+            color: var(--pwb-soft);
+            font-size: 0.60rem;
+            font-weight: 950;
+            letter-spacing: 0.095em;
+            text-transform: uppercase;
+        }
+
+        .pwb-status-card strong {
+            margin-top: 6px;
+            color: var(--pwb-text);
+            font-size: 0.84rem;
+            line-height: 1.15;
+        }
+
+
+        /* ========================================================
+           SECTION 02.05 - PRIMARY THREE COLUMN COCKPIT
+           ======================================================== */
+
+        .pwb-cockpit-grid {
+            display: grid;
+            grid-template-columns:
+                minmax(292px, 0.76fr)
+                minmax(620px, 1.74fr)
+                minmax(340px, 0.92fr);
+            gap: 14px;
+            margin-top: 14px;
+            align-items: stretch;
+        }
+
+        .pwb-panel {
+            border: 1px solid var(--pwb-border);
+            border-radius: var(--pwb-radius-lg);
+            background:
+                linear-gradient(180deg, var(--pwb-panel-strong), var(--pwb-panel));
+            box-shadow: var(--pwb-shadow-soft);
+            overflow: hidden;
+        }
+
+        .pwb-controls,
+        .pwb-intelligence {
+            padding: 16px;
+        }
+
+        .pwb-result {
+            padding: 22px;
+        }
+
+        .pwb-panel-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .pwb-panel-title {
+            margin: 0;
+            color: var(--pwb-text);
+            font-size: 1.26rem;
+            line-height: 1.05;
+            letter-spacing: -0.045em;
+            font-weight: 900;
+        }
+
+        .pwb-panel-copy {
+            margin: 6px 0 0;
+            color: var(--pwb-muted);
+            font-size: 0.80rem;
+            line-height: 1.42;
+        }
+
+        .pwb-pill {
+            flex: 0 0 auto;
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(143, 245, 189, 0.22);
+            background: rgba(143, 245, 189, 0.08);
+            color: var(--pwb-mint);
+            font-size: 0.76rem;
+            font-weight: 950;
+        }
+
+
+        /* ========================================================
+           SECTION 02.06 - CONTROLS
+           ======================================================== */
+
+        .pwb-form-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .pwb-field label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--pwb-soft);
+            font-size: 0.64rem;
+            font-weight: 950;
+            letter-spacing: 0.105em;
+            text-transform: uppercase;
+        }
+
+        .pwb-field select,
+        .pwb-field input {
+            width: 100%;
+            min-height: 42px;
+            padding: 0 13px;
+            border-radius: 13px;
+            border: 1px solid rgba(113, 217, 255, 0.17);
+            background: rgba(1, 8, 19, 0.76);
+            color: var(--pwb-text);
+            outline: none;
+            font-size: 0.90rem;
+            font-weight: 780;
+        }
+
+        .pwb-field select:focus,
+        .pwb-field input:focus {
+            border-color: var(--pwb-border-strong);
+            box-shadow: 0 0 0 3px rgba(113, 217, 255, 0.08);
+        }
+
+        .pwb-field-note,
+        .field-note {
+            margin-top: 6px;
+            color: var(--pwb-soft);
+            font-size: 0.72rem;
+            line-height: 1.35;
+        }
+
+        .pwb-action-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 9px;
+            margin-top: 14px;
+        }
+
+        .pwb-button,
+        .prediction-primary-button,
+        .prediction-secondary-button {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 0 14px;
+            font-size: 0.78rem;
+            font-weight: 950;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .pwb-button-primary,
+        .prediction-primary-button {
+            border: 0;
+            background: linear-gradient(135deg, var(--pwb-blue), var(--pwb-mint));
+            color: #00111d;
+        }
+
+        .pwb-button-secondary,
+        .prediction-secondary-button {
+            border: 1px solid rgba(113, 217, 255, 0.19);
+            background: rgba(255, 255, 255, 0.045);
+            color: var(--pwb-text);
+        }
+
+        .pwb-button-secondary:hover,
+        .prediction-secondary-button:hover {
+            border-color: rgba(113, 217, 255, 0.34);
+            color: var(--pwb-blue);
+        }
+
+        .pwb-diagnostic-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .pwb-mini-card {
+            min-height: 44px;
+            padding: 9px 11px;
+            border: 1px solid rgba(113, 217, 255, 0.13);
+            border-radius: 14px;
+            background: var(--pwb-panel-soft);
+        }
+
+        .pwb-mini-card span,
+        .pwb-mini-card strong {
+            display: block;
+        }
+
+        .pwb-mini-card span {
+            color: var(--pwb-soft);
+            font-size: 0.59rem;
+            font-weight: 950;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+        }
+
+        .pwb-mini-card strong {
+            margin-top: 5px;
+            color: var(--pwb-text);
+            font-size: 0.80rem;
+            line-height: 1.15;
+        }
+
+        .pwb-selector-warning {
+            margin-top: 12px;
+            padding: 10px 11px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 226, 158, 0.18);
+            background: rgba(255, 226, 158, 0.055);
+            color: rgba(255, 241, 208, 0.82);
+            font-size: 0.74rem;
+            line-height: 1.42;
+        }
+
+
+        /* ========================================================
+           SECTION 02.07 - RESULT PANEL
+           ======================================================== */
+
+        .pwb-result-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .pwb-result-kicker {
+            color: var(--pwb-blue);
+            font-size: 0.70rem;
+            font-weight: 950;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+        }
+
+        .pwb-player-name,
+        .prediction-player-name {
+            margin: 10px 0 6px;
+            color: var(--pwb-text);
+            font-size: clamp(3.2rem, 5.8vw, 6rem);
+            line-height: 0.84;
+            letter-spacing: -0.095em;
+            font-weight: 950;
+        }
+
+        .pwb-team-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            color: var(--pwb-muted);
+            font-size: 0.95rem;
+            line-height: 1.25;
+        }
+
+        .pwb-source-pill {
+            max-width: 180px;
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(113, 217, 255, 0.20);
+            background: rgba(113, 217, 255, 0.075);
+            color: var(--pwb-blue);
+            font-size: 0.74rem;
+            font-weight: 950;
+            text-align: center;
+        }
+
+        .pwb-probability-row {
+            display: grid;
+            grid-template-columns: minmax(210px, 0.82fr) minmax(0, 1.18fr);
+            gap: 14px;
+            margin-top: 22px;
+            align-items: stretch;
+        }
+
+        .pwb-probability-card {
+            min-height: 188px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 18px;
+            border-radius: var(--pwb-radius-lg);
+            border: 1px solid rgba(113, 217, 255, 0.14);
+            background:
+                radial-gradient(circle at 22% 0%, rgba(113, 217, 255, 0.12), transparent 42%),
+                rgba(255, 255, 255, 0.035);
+        }
+
+        .pwb-big-number,
+        .prediction-big-number {
+            color: var(--pwb-text);
+            font-size: clamp(2.3rem, 4vw, 4.25rem);
+            line-height: 0.88;
+            letter-spacing: -0.075em;
+            font-weight: 950;
+        }
+
+        .pwb-confidence-row {
+            margin-top: 12px;
+            display: grid;
+            gap: 5px;
+        }
+
+        .pwb-inline-label,
+        .result-inline-label {
+            color: var(--pwb-soft);
+            font-size: 0.62rem;
+            font-weight: 950;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+        }
+
+        .pwb-confidence-row strong {
+            color: var(--pwb-mint);
+            font-size: 0.92rem;
+        }
+
+        .pwb-highlight-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 9px;
+        }
+
+        .pwb-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 9px;
+            margin-top: 14px;
+        }
+
+        .pwb-stat-chip,
+        .prediction-stat-chip {
+            min-height: 64px;
+            padding: 11px 12px;
+            border-radius: 15px;
+            border: 1px solid rgba(113, 217, 255, 0.13);
+            background: var(--pwb-panel-soft);
+        }
+
+        .pwb-stat-chip.compact,
+        .compact-chip {
+            min-height: 88px;
+        }
+
+        .pwb-stat-chip span,
+        .pwb-stat-chip strong,
+        .prediction-stat-chip span,
+        .prediction-stat-chip strong {
+            display: block;
+        }
+
+        .pwb-stat-chip span,
+        .prediction-stat-chip span {
+            color: var(--pwb-soft);
+            font-size: 0.58rem;
+            font-weight: 950;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+        }
+
+        .pwb-stat-chip strong,
+        .prediction-stat-chip strong {
+            margin-top: 6px;
+            color: var(--pwb-text);
+            font-size: 0.82rem;
+            line-height: 1.15;
+        }
+
+        .pwb-reasoning-panel,
+        .reasoning-panel,
+        .stacked-subpanel {
+            margin-top: 16px;
+            padding: 14px;
+            border-radius: var(--pwb-radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.075);
+            background: rgba(0, 0, 0, 0.14);
+        }
+
+        .pwb-subpanel-title,
+        .subpanel-title {
+            margin: 0 0 8px;
+            color: var(--pwb-text);
+            font-size: 0.98rem;
+            letter-spacing: -0.02em;
+            font-weight: 900;
+        }
+
+        .pwb-explanation-text,
+        .prediction-explanation-text {
+            margin: 0;
+            color: var(--pwb-muted);
+            font-size: 0.85rem;
+            line-height: 1.48;
+        }
+
+
+        /* ========================================================
+           SECTION 02.08 - AI INTELLIGENCE
+           ======================================================== */
+
+        .pwb-intelligence .pwb-panel-title {
+            font-size: clamp(1.6rem, 2.1vw, 2.25rem);
+            line-height: 0.98;
+            letter-spacing: -0.06em;
+        }
+
+        .pwb-intelligence-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 9px;
+            margin-top: 16px;
+        }
+
+        .pwb-list,
+        .prediction-list {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--pwb-muted);
+            font-size: 0.82rem;
+            line-height: 1.42;
+        }
+
+        .pwb-list li,
+        .prediction-list li {
+            margin-bottom: 5px;
+        }
+
+
+        /* ========================================================
+           SECTION 02.09 - SUPPORTING ANALYSIS
+           ======================================================== */
+
+        .pwb-support-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 14px;
+        }
+
+        .pwb-analysis-panel {
+            padding: 16px;
+            border: 1px solid var(--pwb-border);
+            border-radius: var(--pwb-radius-lg);
+            background:
+                linear-gradient(180deg, rgba(10, 31, 55, 0.84), rgba(7, 21, 40, 0.88));
+            box-shadow: var(--pwb-shadow-soft);
+        }
+
+        .pwb-analysis-title {
+            margin: 0 0 8px;
+            color: var(--pwb-text);
+            font-size: 1.08rem;
+            line-height: 1.06;
+            letter-spacing: -0.035em;
+            font-weight: 900;
+        }
+
+        .pwb-analysis-copy {
+            margin: 0;
+            color: var(--pwb-muted);
+            font-size: 0.78rem;
+            line-height: 1.42;
+        }
+
+        .pwb-bullet-grid,
+        .bullet-metric-grid,
+        .prop-grid {
+            display: grid;
+            gap: 8px;
+            margin-top: 13px;
+        }
+
+        .pwb-bullet,
+        .bullet-metric,
+        .prop-card {
+            padding: 9px 10px;
+            border-radius: 13px;
+            border: 1px solid rgba(113, 217, 255, 0.12);
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .pwb-bullet span,
+        .pwb-bullet strong,
+        .bullet-metric span,
+        .bullet-metric strong {
+            display: block;
+        }
+
+        .pwb-bullet span,
+        .bullet-metric span,
+        .prop-title {
+            color: var(--pwb-soft);
+            font-size: 0.58rem;
+            font-weight: 950;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+        }
+
+        .pwb-bullet strong,
+        .bullet-metric strong,
+        .prop-probability {
+            margin-top: 5px;
+            color: var(--pwb-text);
+            font-size: 0.78rem;
+            font-weight: 900;
+            line-height: 1.15;
+        }
+
+        .pwb-runtime-status {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+            padding: 12px;
+            border: 1px solid var(--pwb-border);
+            border-radius: var(--pwb-radius-lg);
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .pwb-error-panel {
+            margin-top: 14px;
+            padding: 16px;
+            border: 1px solid rgba(255, 159, 159, 0.22);
+            border-radius: var(--pwb-radius-lg);
+            background: rgba(255, 159, 159, 0.055);
+        }
+
+        .pwb-error-panel.is-hidden,
+        .is-hidden {
+            display: none !important;
+        }
+
+
+        /* ========================================================
+           SECTION 02.10 - ACCOUNT ACTIONS
+           ======================================================== */
+
+        .pwb-account-action-bar {
+            display: none;
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: var(--pwb-radius-lg);
+            border: 1px solid rgba(113, 217, 255, 0.16);
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+
+        /* ========================================================
+           SECTION 02.11 - OLD PATCH NEUTRALIZATION
+           ======================================================== */
+
+        body.pwb-enterprise-body.aisp2-prediction-cockpit-repair,
+        body.pwb-enterprise-body.aisp2-disable-scroll-restore,
+        body.pwb-enterprise-body.prediction-final-body {
+            overflow-x: hidden !important;
+        }
+
+        body.pwb-enterprise-body .prediction-final-shell,
+        body.pwb-enterprise-body .prediction-final-cockpit,
+        body.pwb-enterprise-body .prediction-final-grid,
+        body.pwb-enterprise-body .prediction-final-panel,
+        body.pwb-enterprise-body .prediction-workbench {
+            width: auto !important;
+            max-width: none;
+        }
+
+        .pwb-shell .prediction-workbench,
+        .pwb-shell .prediction-page,
+        .pwb-shell .prediction-shell,
+        .pwb-shell .prediction-workbench-page {
+            all: unset;
+        }
+
+        .pwb-shell .prediction-workbench {
+            display: block;
+        }
+
+
+        /* ========================================================
+           SECTION 02.12 - RESPONSIVE DESIGN
+           ======================================================== */
+
+        @media (max-width: 1440px) {
+            .pwb-cockpit-grid {
+                grid-template-columns:
+                    minmax(280px, 0.78fr)
+                    minmax(520px, 1.58fr)
+                    minmax(320px, 0.92fr);
+            }
+
+            .pwb-metric-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .pwb-support-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 1180px) {
+            body.pwb-enterprise-body {
+                overflow: auto;
+            }
+
+            .pwb-hero {
+                grid-template-columns: 1fr;
+            }
+
+            .pwb-hero-status {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .pwb-cockpit-grid {
+                grid-template-columns: minmax(300px, 0.86fr) minmax(0, 1.14fr);
+                grid-template-areas:
+                    "controls result"
+                    "ai ai";
+            }
+
+            .pwb-controls {
+                grid-area: controls;
+            }
+
+            .pwb-result {
+                grid-area: result;
+            }
+
+            .pwb-intelligence {
+                grid-area: ai;
+            }
+
+            .pwb-intelligence-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 900px) {
+            .pwb-topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                padding: 14px 18px;
+            }
+
+            .pwb-nav {
+                justify-content: flex-start;
+            }
+
+            .pwb-main {
+                width: min(100%, calc(100vw - 24px));
+                padding-top: 12px;
+            }
+
+            .pwb-title {
+                font-size: clamp(2.6rem, 14vw, 4.5rem);
+            }
+
+            .pwb-hero-status,
+            .pwb-cockpit-grid,
+            .pwb-support-grid,
+            .pwb-runtime-status {
+                grid-template-columns: 1fr;
+                grid-template-areas: none;
+            }
+
+            .pwb-probability-row,
+            .pwb-highlight-grid,
+            .pwb-metric-grid,
+            .pwb-intelligence-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pwb-player-name,
+            .prediction-player-name {
+                font-size: clamp(2.8rem, 16vw, 4.5rem);
+            }
+        }
+
+        @media (max-height: 760px) and (min-width: 1181px) {
+            .pwb-hero {
+                min-height: 112px;
+                padding: 18px 24px;
+            }
+
+            .pwb-title {
+                font-size: clamp(2.8rem, 5vw, 4.8rem);
+                margin: 8px 0 5px;
+            }
+
+            .pwb-subtitle {
+                font-size: 0.86rem;
+                line-height: 1.36;
+            }
+
+            .pwb-controls,
+            .pwb-intelligence {
+                padding: 13px;
+            }
+
+            .pwb-result {
+                padding: 18px;
+            }
+
+            .pwb-stat-chip,
+            .prediction-stat-chip {
+                min-height: 56px;
+                padding: 9px 10px;
+            }
+
+            .pwb-player-name,
+            .prediction-player-name {
+                font-size: clamp(2.7rem, 5.2vw, 4.8rem);
+            }
+        }
+    </style>
 </head>
 
-<body class="prediction-workbench-page">
+
+<body class="pwb-enterprise-body prediction-workbench-page">
 <div
-    class="app-shell"
+    class="pwb-shell app-shell"
     data-page="prediction-workbench"
     data-bootstrap-endpoint="/api/player-explorer/bootstrap"
     data-v2-bootstrap-endpoint="/api/v2/player-explorer/bootstrap"
     data-prediction-endpoint="/predict/player"
+    data-profile-endpoint="/api/player-explorer/profile"
+    data-health-endpoint="/api/prediction/intelligence/health"
 >
+
     <!-- ========================================================
-         SECTION 02 - TOP NAVIGATION
+         SECTION 03 - TOP NAVIGATION
+         FILE: templates/prediction_workbench.html
          ======================================================== -->
-    <header class="topbar">
-        <a class="brand-mark" href="/">
-            <span class="brand-icon">⚾</span>
+
+    <header class="pwb-topbar topbar">
+        <a class="pwb-brand brand-mark" href="/" aria-label="AISP2 Baseball home">
+            <span class="pwb-brand-icon brand-icon">⚾</span>
             <span>AISP2</span>
         </a>
 
-        <nav class="nav-links">
+        <nav class="pwb-nav nav-links" aria-label="Primary navigation">
             <a href="/">Chat</a>
             <a href="/players">Players</a>
-            <a href="/tools/prediction">Predictions</a>
+            <a href="/tools/prediction" aria-current="page">Predictions</a>
             <a href="/dashboard">Dashboard</a>
             <a href="/docs">API</a>
+            <a href="/auth/login" class="pwb-nav-login" data-auth-nav-link="login">Login</a>
+            <a href="/account" data-auth-nav-link="account">Account</a>
+            <a href="/ceo" data-auth-nav-link="ceo">CEO</a>
         </nav>
     </header>
 
+
     <!-- ========================================================
-         SECTION 03 - PAGE SHELL
+         SECTION 04 - PAGE WORKBENCH
+         FILE: templates/prediction_workbench.html
          ======================================================== -->
-    <main class="prediction-workbench">
+
+    <main class="pwb-main prediction-workbench" data-prediction-workbench>
+
         <!-- ====================================================
-             SECTION 04 - HERO
+             SECTION 04.01 - HERO
+             FILE: templates/prediction_workbench.html
              ==================================================== -->
-        <section class="prediction-hero panel-glass">
-            <div class="prediction-hero-copy">
-                <div class="eyebrow">
-                    <span class="pulse"></span>
+
+        <section class="pwb-hero prediction-hero panel-glass">
+            <div class="pwb-hero-copy prediction-hero-copy">
+                <div class="pwb-kicker eyebrow">
+                    <span class="pwb-kicker-dot pulse"></span>
                     AISP2 Prediction Engine
                 </div>
 
-                <h1 class="prediction-title">Prediction Workbench</h1>
+                <h1 class="pwb-title prediction-title">
+                    Prediction Workbench
+                </h1>
 
-                <p class="prediction-subtitle">
+                <p class="pwb-subtitle prediction-subtitle">
                     Build database-backed player predictions, review model reasoning,
-                    inspect data coverage, track selector health, and surface exactly
-                    which information AISP2 used before generating a probability.
+                    inspect production truth states, track selector health, and surface
+                    exactly which information AISP2 used before generating a probability.
                 </p>
             </div>
+
+            <aside class="pwb-hero-status" aria-label="Prediction runtime status">
+                <article class="pwb-status-card">
+                    <span>Selector Runtime</span>
+                    <strong data-selector-health>Initializing</strong>
+                </article>
+
+                <article class="pwb-status-card">
+                    <span>Prediction API</span>
+                    <strong data-prediction-api-status>Pending</strong>
+                </article>
+
+                <article class="pwb-status-card">
+                    <span>Warehouse</span>
+                    <strong data-warehouse-status>Pending</strong>
+                </article>
+            </aside>
         </section>
 
-        <!-- ====================================================
-             SECTION 06 - CONTROL CENTER
-             ==================================================== -->
-        <section class="prediction-controls-card panel-glass">
-            <div class="panel-heading-row">
-                <div>
-                    <h2 class="panel-title">Prediction Controls</h2>
-                    <p class="panel-copy">
-                        Select a team, choose a player, pick an outcome, then run a live
-                        AISP2 prediction request.
-                    </p>
-                </div>
-
-                <div class="selector-state-badge">
-                    <span class="selector-state-badge-label">Selector State</span>
-                    <strong data-selector-state>Loading</strong>
-                </div>
-            </div>
-
-            <div class="prediction-form-grid" data-prediction-form>
-                <div class="prediction-field">
-                    <label for="prediction-team">Team</label>
-                    <select id="prediction-team" data-prediction-team>
-                        <option value="">Loading teams...</option>
-                    </select>
-                    <div class="field-note" data-team-selector-note">Waiting for team bootstrap.</div>
-                </div>
-
-                <div class="prediction-field">
-                    <label for="prediction-player">Player</label>
-                    <select id="prediction-player" data-prediction-player>
-                        <option value="">Loading players...</option>
-                    </select>
-                    <div class="field-note" data-player-selector-note>Player list pending.</div>
-                </div>
-
-                <div class="prediction-field">
-                    <label for="prediction-outcome">Outcome</label>
-                    <select id="prediction-outcome" data-prediction-outcome>
-                        <option value="home_run">Home Run</option>
-                        <option value="hit">Hit</option>
-                        <option value="rbi">RBI</option>
-                        <option value="run_scored">Run Scored</option>
-                        <option value="total_bases">Total Bases</option>
-                        <option value="strikeout">Strikeout</option>
-                    </select>
-                    <div class="field-note">Outcome determines model weighting.</div>
-                </div>
-            </div>
-
-            <div class="prediction-action-row">
-                <button class="prediction-primary-button" type="button" data-prediction-submit>
-                    Run Prediction
-                </button>
-
-                <button class="prediction-secondary-button" type="button" data-prediction-reset>
-                    Reset
-                </button>
-
-                <button class="prediction-secondary-button" type="button" data-selector-refresh>
-                    Refresh Selectors
-                </button>
-
-                <a class="prediction-secondary-button" href="/players">
-                    Open Player Explorer
-                </a>
-            </div>
-
-            <div class="diagnostic-mini-grid">
-                <article class="diagnostic-mini-card">
-                    <span>Teams Loaded</span>
-                    <strong data-teams-loaded>0</strong>
-                </article>
-
-                <article class="diagnostic-mini-card">
-                    <span>Players Loaded</span>
-                    <strong data-players-loaded>0</strong>
-                </article>
-
-                <article class="diagnostic-mini-card">
-                    <span>Bootstrap Source</span>
-                    <strong data-bootstrap-source>Pending</strong>
-                </article>
-
-                <article class="diagnostic-mini-card">
-                    <span>Fallback Chain</span>
-                    <strong data-fallback-chain>Pending</strong>
-                </article>
-            </div>
-
-            <div class="selector-diagnostic-bar" data-selector-warning>
-                Selector diagnostics will appear here if the database, roster lookup,
-                or live MLB fallback has an issue.
-            </div>
-        </section>
 
         <!-- ====================================================
-             SECTION 07 - PREDICTION CORE GRID
+             SECTION 05 - PRIMARY COCKPIT
+             FILE: templates/prediction_workbench.html
              ==================================================== -->
-        <section class="prediction-core-grid">
-            <!-- =================================================
-                 SECTION 07.01 - PRIMARY RESULT CARD
-                 ================================================= -->
-            <article class="main-probability-card panel-glass" data-prediction-result>
-                <div class="prediction-eyebrow">AISP2 Intelligence Engine</div>
 
-                <div class="result-header-row">
+        <section class="pwb-cockpit-grid prediction-core-grid">
+
+            <!-- ================================================
+                 SECTION 05.01 - CONTROL CENTER
+                 FILE: templates/prediction_workbench.html
+                 ================================================ -->
+
+            <section class="pwb-panel pwb-controls prediction-controls-card prediction-selector-panel panel-glass">
+                <div class="pwb-panel-head panel-heading-row">
                     <div>
-                        <h2 class="prediction-player-name" data-result-player>Select Player</h2>
-                        <div class="prediction-team-line">
+                        <h2 class="pwb-panel-title panel-title">
+                            Prediction Controls
+                        </h2>
+
+                        <p class="pwb-panel-copy panel-copy">
+                            Select a team, choose a player, pick an outcome, then run
+                            an AISP2 prediction request.
+                        </p>
+                    </div>
+
+                    <div class="pwb-pill selector-state-badge">
+                        <span class="selector-state-badge-label" style="display:none;">Selector State</span>
+                        <strong data-selector-state>Loading</strong>
+                    </div>
+                </div>
+
+                <div class="pwb-form-grid prediction-form-grid" data-prediction-form>
+                    <div class="pwb-field prediction-field">
+                        <label for="prediction-team">Team</label>
+
+                        <select id="prediction-team" data-prediction-team>
+                            <option value="">Loading teams...</option>
+                        </select>
+
+                        <div class="pwb-field-note field-note" data-team-selector-note>
+                            Waiting for team bootstrap.
+                        </div>
+                    </div>
+
+                    <div class="pwb-field prediction-field">
+                        <label for="prediction-player">Player</label>
+
+                        <select id="prediction-player" data-prediction-player>
+                            <option value="">Loading players...</option>
+                        </select>
+
+                        <div class="pwb-field-note field-note" data-player-selector-note>
+                            Player list pending.
+                        </div>
+                    </div>
+
+                    <div class="pwb-field prediction-field">
+                        <label for="prediction-outcome">Outcome</label>
+
+                        <select id="prediction-outcome" data-prediction-outcome>
+                            <option value="home_run">Home Run</option>
+                            <option value="hit">Hit</option>
+                            <option value="rbi">RBI</option>
+                            <option value="run_scored">Run Scored</option>
+                            <option value="total_bases">Total Bases</option>
+                            <option value="strikeout">Strikeout</option>
+                            <option value="walk">Walk</option>
+                        </select>
+
+                        <div class="pwb-field-note field-note">
+                            Outcome determines model weighting.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pwb-action-row prediction-action-row">
+                    <button class="pwb-button pwb-button-primary prediction-primary-button" type="button" data-prediction-submit>
+                        Run Prediction
+                    </button>
+
+                    <button class="pwb-button pwb-button-secondary prediction-secondary-button" type="button" data-prediction-reset>
+                        Reset
+                    </button>
+                </div>
+
+                <div class="pwb-action-row prediction-action-row">
+                    <button class="pwb-button pwb-button-secondary prediction-secondary-button" type="button" data-selector-refresh>
+                        Refresh
+                    </button>
+
+                    <a class="pwb-button pwb-button-secondary prediction-secondary-button" href="/players">
+                        Player Explorer
+                    </a>
+                </div>
+
+                <div class="pwb-diagnostic-grid diagnostic-mini-grid">
+                    <article class="pwb-mini-card diagnostic-mini-card">
+                        <span>Teams Loaded</span>
+                        <strong data-teams-loaded>0</strong>
+                    </article>
+
+                    <article class="pwb-mini-card diagnostic-mini-card">
+                        <span>Players Loaded</span>
+                        <strong data-players-loaded>0</strong>
+                    </article>
+
+                    <article class="pwb-mini-card diagnostic-mini-card">
+                        <span>Bootstrap Source</span>
+                        <strong data-bootstrap-source>Pending</strong>
+                    </article>
+
+                    <article class="pwb-mini-card diagnostic-mini-card">
+                        <span>Fallback Chain</span>
+                        <strong data-fallback-chain>Pending</strong>
+                    </article>
+                </div>
+
+                <div class="pwb-selector-warning selector-diagnostic-bar" data-selector-warning>
+                    Selector diagnostics will appear here if the database, roster lookup,
+                    or live MLB fallback has an issue.
+                </div>
+            </section>
+
+
+            <!-- ================================================
+                 SECTION 05.02 - PRIMARY RESULT CARD
+                 FILE: templates/prediction_workbench.html
+                 ================================================ -->
+
+            <article class="pwb-panel pwb-result main-probability-card panel-glass" data-prediction-result>
+                <div class="pwb-result-top result-header-row">
+                    <div>
+                        <div class="pwb-result-kicker prediction-eyebrow">
+                            AISP2 Intelligence Engine
+                        </div>
+
+                        <h2 class="pwb-player-name prediction-player-name" data-result-player>
+                            Select Player
+                        </h2>
+
+                        <div class="pwb-team-line prediction-team-line">
                             <span data-result-team>Team Pending</span>
                             <span class="middot">•</span>
                             <span data-result-outcome>Outcome Pending</span>
                         </div>
                     </div>
 
-                    <div class="result-source-pill" data-result-source>Pending</div>
+                    <div class="pwb-source-pill result-source-pill" data-result-source>
+                        Pending
+                    </div>
                 </div>
 
-                <div class="probability-row">
-                    <div class="probability-column">
-                        <div class="prediction-big-number" data-result-probability>Pending</div>
-                        <div class="result-confidence-row">
-                            <span class="result-inline-label">Confidence</span>
-                            <strong data-result-confidence>Confidence Pending</strong>
+                <div class="pwb-probability-row probability-row">
+                    <div class="pwb-probability-card probability-column">
+                        <div class="pwb-big-number prediction-big-number" data-result-probability>
+                            Pending
+                        </div>
+
+                        <div class="pwb-confidence-row result-confidence-row">
+                            <span class="pwb-inline-label result-inline-label">
+                                Confidence
+                            </span>
+
+                            <strong data-result-confidence>
+                                Confidence Pending
+                            </strong>
                         </div>
                     </div>
 
-                    <div class="result-highlights-grid">
-                        <article class="prediction-stat-chip compact-chip">
+                    <div class="pwb-highlight-grid result-highlights-grid">
+                        <article class="pwb-stat-chip prediction-stat-chip compact-chip">
                             <span>Prediction Tier</span>
                             <strong data-result-tier>Pending</strong>
                         </article>
 
-                        <article class="prediction-stat-chip compact-chip">
+                        <article class="pwb-stat-chip prediction-stat-chip compact-chip">
                             <span>Risk Profile</span>
                             <strong data-result-risk>Pending</strong>
                         </article>
 
-                        <article class="prediction-stat-chip compact-chip">
+                        <article class="pwb-stat-chip prediction-stat-chip compact-chip">
                             <span>Outcome Profile</span>
                             <strong data-result-profile>Pending</strong>
                         </article>
 
-                        <article class="prediction-stat-chip compact-chip">
+                        <article class="pwb-stat-chip prediction-stat-chip compact-chip">
                             <span>Primary Metric</span>
                             <strong data-result-supporting-metric>Pending</strong>
                         </article>
                     </div>
                 </div>
 
-                <div class="metric-card-grid dense-grid-4">
-                    <article class="prediction-stat-chip">
+                <div class="pwb-metric-grid metric-card-grid dense-grid-4">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Player Style</span>
                         <strong data-result-style>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Recent Form</span>
                         <strong data-result-form>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Primary Metric</span>
                         <strong data-result-metric>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Model</span>
                         <strong data-result-model>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Data Coverage</span>
                         <strong data-result-data-coverage>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Sample Size</span>
                         <strong data-result-sample-size>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Prediction Source</span>
                         <strong data-result-source>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Warehouse</span>
                         <strong data-result-warehouse-status>Pending</strong>
                     </article>
                 </div>
 
-                <div class="reasoning-panel">
-                    <h3 class="subpanel-title">Prediction Summary</h3>
-                    <p class="prediction-explanation-text" data-result-ai-explanation>
+                <div class="pwb-reasoning-panel reasoning-panel">
+                    <h3 class="pwb-subpanel-title subpanel-title">
+                        Prediction Summary
+                    </h3>
+
+                    <p class="pwb-explanation-text prediction-explanation-text" data-result-ai-explanation>
                         Select a player and outcome to generate AISP2 baseball intelligence.
                     </p>
                 </div>
             </article>
 
-            <!-- =================================================
-                 SECTION 07.02 - AI INTELLIGENCE PANEL
-                 ================================================= -->
-            <aside class="prediction-explanation-panel panel-glass">
-                <h2 class="prediction-explanation-title">AI Prediction Intelligence</h2>
 
-                <p class="prediction-explanation-text" data-intelligence-summary>
+            <!-- ================================================
+                 SECTION 05.03 - AI INTELLIGENCE PANEL
+                 FILE: templates/prediction_workbench.html
+                 ================================================ -->
+
+            <aside class="pwb-panel pwb-intelligence prediction-explanation-panel panel-glass">
+                <h2 class="pwb-panel-title prediction-explanation-title">
+                    AI Prediction Intelligence
+                </h2>
+
+                <p class="pwb-panel-copy prediction-explanation-text" data-intelligence-summary>
                     Select a team, player, and outcome to generate AISP2 prediction intelligence.
                 </p>
 
-                <div class="metric-card-grid dense-grid-2">
-                    <article class="prediction-stat-chip">
+                <div class="pwb-intelligence-grid metric-card-grid dense-grid-2">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Prediction Tier</span>
                         <strong data-intelligence-tier>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Risk Profile</span>
                         <strong data-intelligence-risk>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Outcome Profile</span>
                         <strong data-intelligence-profile>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Primary Metric</span>
                         <strong data-intelligence-primary-metric>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Data Source</span>
                         <strong data-intelligence-data-source>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Coverage</span>
                         <strong data-intelligence-coverage>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Warehouse Status</span>
                         <strong data-intelligence-warehouse>Pending</strong>
                     </article>
 
-                    <article class="prediction-stat-chip">
+                    <article class="pwb-stat-chip prediction-stat-chip">
                         <span>Model Guidance</span>
                         <strong data-intelligence-guidance>Pending</strong>
                     </article>
                 </div>
 
-                <div class="stacked-subpanel">
-                    <h3 class="subpanel-title">Model Reasoning</h3>
-                    <p class="prediction-explanation-text" data-intelligence-reasoning>
+                <div class="pwb-reasoning-panel stacked-subpanel">
+                    <h3 class="pwb-subpanel-title subpanel-title">
+                        Model Reasoning
+                    </h3>
+
+                    <p class="pwb-explanation-text prediction-explanation-text" data-intelligence-reasoning>
                         Model reasoning will appear after a prediction request completes.
                     </p>
                 </div>
 
-                <div class="stacked-subpanel">
-                    <h3 class="subpanel-title">Warnings</h3>
-                    <ul class="prediction-list" data-intelligence-warnings>
+                <div class="pwb-reasoning-panel stacked-subpanel">
+                    <h3 class="pwb-subpanel-title subpanel-title">
+                        Warnings
+                    </h3>
+
+                    <ul class="pwb-list prediction-list" data-intelligence-warnings>
                         <li>No prediction warnings yet.</li>
                     </ul>
                 </div>
 
-                <div class="stacked-subpanel">
-                    <h3 class="subpanel-title">Next Data Needed</h3>
-                    <ul class="prediction-list" data-intelligence-next-data>
+                <div class="pwb-reasoning-panel stacked-subpanel">
+                    <h3 class="pwb-subpanel-title subpanel-title">
+                        Next Data Needed
+                    </h3>
+
+                    <ul class="pwb-list prediction-list" data-intelligence-next-data>
                         <li>Run a prediction to inspect missing data requirements.</li>
                     </ul>
                 </div>
             </aside>
         </section>
 
+
         <!-- ====================================================
-             SECTION 08 - SUPPORTING ANALYSIS GRID
+             SECTION 06 - SUPPORTING ANALYSIS GRID
+             FILE: templates/prediction_workbench.html
              ==================================================== -->
-        <section class="supporting-analysis-grid">
-            <article class="analysis-panel panel-glass">
-                <h2 class="panel-title">Matchup Analysis</h2>
-                <p class="panel-copy">
+
+        <section class="pwb-support-grid supporting-analysis-grid">
+            <article class="pwb-analysis-panel analysis-panel panel-glass">
+                <h2 class="pwb-analysis-title panel-title">
+                    Matchup Analysis
+                </h2>
+
+                <p class="pwb-analysis-copy panel-copy">
                     AISP2 will evaluate batter-vs-pitcher history, handedness splits,
                     probable pitchers, ballpark factors, weather context, bullpen strength,
                     and lineup position once required datasets are loaded.
                 </p>
 
-                <div class="bullet-metric-grid">
-                    <div class="bullet-metric"><span>Batter vs Pitcher</span><strong>Pending Ingestion</strong></div>
-                    <div class="bullet-metric"><span>Handedness Splits</span><strong>Pending Ingestion</strong></div>
-                    <div class="bullet-metric"><span>Ballpark</span><strong>Pending Ingestion</strong></div>
-                    <div class="bullet-metric"><span>Weather</span><strong>Pending Ingestion</strong></div>
+                <div class="pwb-bullet-grid bullet-metric-grid">
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Batter vs Pitcher</span>
+                        <strong data-matchup-bvp>Pending Ingestion</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Handedness Splits</span>
+                        <strong data-matchup-handedness>Pending Ingestion</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Ballpark</span>
+                        <strong data-matchup-ballpark>Pending Ingestion</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Weather</span>
+                        <strong data-matchup-weather>Pending Ingestion</strong>
+                    </div>
                 </div>
             </article>
 
-            <article class="analysis-panel panel-glass">
-                <h2 class="panel-title">Outcome Library</h2>
+            <article class="pwb-analysis-panel analysis-panel panel-glass">
+                <h2 class="pwb-analysis-title panel-title">
+                    Outcome Library
+                </h2>
 
-                <div class="prop-grid">
-                    <article class="prop-card">
+                <p class="pwb-analysis-copy panel-copy">
+                    Outcome library values remain transparent until each outcome engine is feature-backed.
+                </p>
+
+                <div class="pwb-bullet-grid prop-grid">
+                    <article class="pwb-bullet prop-card">
                         <div class="prop-title">Home Run</div>
                         <div class="prop-probability" data-prop-home-run>Pending</div>
                     </article>
 
-                    <article class="prop-card">
+                    <article class="pwb-bullet prop-card">
                         <div class="prop-title">Hit</div>
                         <div class="prop-probability" data-prop-hit>Pending</div>
                     </article>
 
-                    <article class="prop-card">
+                    <article class="pwb-bullet prop-card">
                         <div class="prop-title">RBI</div>
                         <div class="prop-probability" data-prop-rbi>Pending</div>
                     </article>
 
-                    <article class="prop-card">
+                    <article class="pwb-bullet prop-card">
                         <div class="prop-title">Run</div>
                         <div class="prop-probability" data-prop-run-scored>Pending</div>
                     </article>
 
-                    <article class="prop-card">
+                    <article class="pwb-bullet prop-card">
                         <div class="prop-title">Total Bases</div>
                         <div class="prop-probability" data-prop-total-bases>Pending</div>
                     </article>
 
-                    <article class="prop-card">
+                    <article class="pwb-bullet prop-card">
                         <div class="prop-title">Strikeout</div>
                         <div class="prop-probability" data-prop-strikeout>Pending</div>
                     </article>
                 </div>
             </article>
 
-            <article class="analysis-panel panel-glass">
-                <h2 class="panel-title">Monte Carlo Simulation Preview</h2>
-                <p class="panel-copy">
-                    Future AISP2 simulation will run repeated outcome trials to estimate
-                    expected value, confidence interval, upside/downside scenarios,
-                    and distribution shape. This panel remains transparent until the
-                    Monte Carlo engine is connected.
+            <article class="pwb-analysis-panel analysis-panel panel-glass">
+                <h2 class="pwb-analysis-title panel-title">
+                    Monte Carlo Simulation Preview
+                </h2>
+
+                <p class="pwb-analysis-copy panel-copy">
+                    Future AISP2 simulation will run repeated outcome trials to estimate expected value,
+                    confidence intervals, upside/downside scenarios, and distribution shape.
                 </p>
 
-                <div class="bullet-metric-grid">
-                    <div class="bullet-metric"><span>Simulation Count</span><strong>Pending</strong></div>
-                    <div class="bullet-metric"><span>Confidence Interval</span><strong>Pending</strong></div>
-                    <div class="bullet-metric"><span>Upside Scenario</span><strong>Pending</strong></div>
-                    <div class="bullet-metric"><span>Downside Scenario</span><strong>Pending</strong></div>
+                <div class="pwb-bullet-grid bullet-metric-grid">
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Simulation Count</span>
+                        <strong data-simulation-count>Pending</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Confidence Interval</span>
+                        <strong data-confidence-interval>Pending</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Upside Scenario</span>
+                        <strong data-upside-scenario>Pending</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Downside Scenario</span>
+                        <strong data-downside-scenario>Pending</strong>
+                    </div>
                 </div>
             </article>
 
-            <article class="analysis-panel panel-glass">
-                <h2 class="panel-title">AI Analyst Notes</h2>
-                <p class="panel-copy">
-                    AISP2 is currently operating as a transparent prediction intelligence
-                    workbench. When warehouse coverage is incomplete, the system must say so.
+            <article class="pwb-analysis-panel analysis-panel panel-glass">
+                <h2 class="pwb-analysis-title panel-title">
+                    AI Analyst Notes
+                </h2>
+
+                <p class="pwb-analysis-copy panel-copy">
+                    AISP2 operates as a transparent prediction intelligence workbench.
+                    When warehouse coverage is incomplete, the system must say so.
                     When live roster fallback is used, the system must show that source.
                     When Statcast is missing, the model must not pretend advanced metrics exist.
                 </p>
 
-                <div class="bullet-metric-grid">
-                    <div class="bullet-metric"><span>Runtime Mode</span><strong>Transparent</strong></div>
-                    <div class="bullet-metric"><span>Guarantee Policy</span><strong>No Guarantees</strong></div>
-                    <div class="bullet-metric"><span>Betting Policy</span><strong>Not Advice</strong></div>
-                    <div class="bullet-metric"><span>Model State</span><strong data-result-model-secondary>Pending</strong></div>
+                <div class="pwb-bullet-grid bullet-metric-grid">
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Runtime Mode</span>
+                        <strong>Transparent</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Guarantee Policy</span>
+                        <strong>No Guarantees</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Betting Policy</span>
+                        <strong>Not Advice</strong>
+                    </div>
+
+                    <div class="pwb-bullet bullet-metric">
+                        <span>Model State</span>
+                        <strong data-result-model-secondary>Pending</strong>
+                    </div>
                 </div>
             </article>
         </section>
 
-        
 
         <!-- ====================================================
-             SECTION 99 - BOTTOM RUNTIME STATUS STRIP
+             SECTION 07 - RUNTIME STATUS STRIP
+             FILE: templates/prediction_workbench.html
              ==================================================== -->
-        <section class="runtime-status-grid runtime-status-bottom" aria-label="Runtime system status">
-            <article class="runtime-status-card">
+
+        <section class="pwb-runtime-status runtime-status-grid runtime-status-bottom" aria-label="Runtime system status">
+            <article class="pwb-status-card runtime-status-card">
                 <span class="runtime-status-label">Selector Runtime</span>
                 <strong class="runtime-status-value" data-selector-health>Initializing</strong>
             </article>
 
-            <article class="runtime-status-card">
+            <article class="pwb-status-card runtime-status-card">
                 <span class="runtime-status-label">Prediction API</span>
                 <strong class="runtime-status-value" data-selector-state>Pending Check</strong>
             </article>
 
-            <article class="runtime-status-card">
+            <article class="pwb-status-card runtime-status-card">
                 <span class="runtime-status-label">Data Source</span>
                 <strong class="runtime-status-value" data-selector-source>Pending</strong>
             </article>
 
-            <article class="runtime-status-card">
+            <article class="pwb-status-card runtime-status-card">
                 <span class="runtime-status-label">Warehouse</span>
                 <strong class="runtime-status-value" data-warehouse-status>Pending</strong>
             </article>
         </section>
 
+
+        <!-- ====================================================
+             SECTION 08 - ACCOUNT ACTION BAR
+             FILE: templates/prediction_workbench.html
+             NOTE:
+             Hidden by default visually but hooks remain present for the
+             Phase 14 account integration runtime.
+             ==================================================== -->
+
+        <section class="pwb-account-action-bar prediction-account-action-bar" data-prediction-account-action-bar>
+            <div class="prediction-account-action-copy">
+                <span class="prediction-account-eyebrow">Account Intelligence</span>
+
+                <strong>
+                    Save, follow, and track this prediction.
+                </strong>
+
+                <p>
+                    Logged-in users can save searches, follow players, follow teams,
+                    and store prediction history for later scoring.
+                </p>
+            </div>
+
+            <div class="prediction-account-actions">
+                <button type="button" class="prediction-account-button" data-account-action="save-search">
+                    Save Search
+                </button>
+
+                <button type="button" class="prediction-account-button" data-account-action="follow-player">
+                    Follow Player
+                </button>
+
+                <button type="button" class="prediction-account-button" data-account-action="follow-team">
+                    Follow Team
+                </button>
+
+                <a class="prediction-account-button secondary" href="/account">
+                    Account Dashboard
+                </a>
+            </div>
+
+            <div class="prediction-account-status" data-prediction-account-status>
+                Account runtime standing by.
+            </div>
+        </section>
+
+
         <!-- ====================================================
              SECTION 09 - ERROR PANEL
+             FILE: templates/prediction_workbench.html
              ==================================================== -->
-        <section class="prediction-error-panel panel-glass is-hidden" data-prediction-error-panel>
-            <h2 class="panel-title">Prediction Error</h2>
-            <p class="prediction-error-text" data-prediction-error>No errors reported.</p>
+
+        <section class="pwb-error-panel prediction-error-panel panel-glass is-hidden" data-prediction-error-panel>
+            <h2 class="pwb-analysis-title panel-title">
+                Prediction Error
+            </h2>
+
+            <p class="prediction-error-text" data-prediction-error>
+                No errors reported.
+            </p>
+        </section>
+
+
+        <!-- ====================================================
+             SECTION 10 - HIDDEN RUNTIME TARGETS
+             FILE: templates/prediction_workbench.html
+             PURPOSE:
+             Preserve legacy and upcoming data hooks without cluttering
+             the restored enterprise layout.
+             ==================================================== -->
+
+        <section class="pwb-hidden-runtime-targets" aria-hidden="true">
+            <strong data-matchup-status>Pending Matchup Dataset</strong>
+            <strong data-monte-carlo-status>Simulation Engine Pending</strong>
+            <strong data-model-state>Production Truth</strong>
+            <div data-analyst-notes></div>
         </section>
     </main>
 </div>
 
+
 <!-- ============================================================
-     SECTION 10 - SCRIPT LOADING
+     SECTION 11 - SCRIPT LOADING
+     FILE: templates/prediction_workbench.html
      ============================================================ -->
+
 <script src="/static/js/aisp2.js"></script>
 <script src="/static/js/prediction.js"></script>
+
+
+<!-- ============================================================
+     SECTION 12 - PAGE-LOCAL STABILIZER
+     FILE: templates/prediction_workbench.html
+     PURPOSE:
+     Remove the classes introduced by failed layout experiments while
+     preserving all prediction runtime behavior.
+     ============================================================ -->
+
+<script>
+    (function initializePredictionWorkbenchStabilizer() {
+        "use strict";
+
+        function stabilizePredictionWorkbench() {
+            try {
+                document.body.classList.remove("aisp2-prediction-cockpit-repair");
+                document.body.classList.remove("aisp2-disable-scroll-restore");
+                document.body.classList.remove("prediction-final-body");
+                document.body.classList.add("pwb-enterprise-body");
+
+                document
+                    .querySelectorAll(".aisp2-prediction-fit-parent")
+                    .forEach(function removeFailedFitClass(node) {
+                        node.classList.remove("aisp2-prediction-fit-parent");
+                    });
+
+                document.documentElement.style.removeProperty("--aisp2-prediction-available-height");
+                document.documentElement.style.removeProperty("--aisp2-prediction-hero-height");
+                document.documentElement.style.removeProperty("--aisp2-prediction-viewport-width");
+
+                if ("scrollRestoration" in window.history) {
+                    window.history.scrollRestoration = "manual";
+                }
+            } catch (error) {
+                return null;
+            }
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", stabilizePredictionWorkbench);
+        } else {
+            stabilizePredictionWorkbench();
+        }
+
+        window.addEventListener("load", stabilizePredictionWorkbench);
+
+        window.AISP2PredictionWorkbenchStabilizerPhase1478 = {
+            version: "phase_14_part_7_8_enterprise_prediction_workbench_restore",
+            refresh: stabilizePredictionWorkbench
+        };
+    }());
+</script>
+
 </body>
 </html>
-
