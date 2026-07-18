@@ -2492,3 +2492,80 @@ def validate_model_feedback_calibration_helpers() -> dict:
         "checks": checks,
     }
 
+
+# ============================================================
+# SECTION 99 - PHASE 14 PART 7.0 - PRODUCTION TRUTH PROBABILITY POLICY
+# FILE: 04_ai/probability_engine.py
+# PURPOSE:
+# Central probability policy that forbids fabricated probability,
+# fabricated confidence, and hidden demo readiness.
+# ============================================================
+
+PRODUCTION_TRUTH_PROBABILITY_VERSION = "phase_14_part_7_0_production_truth_probability_policy"
+
+PRODUCTION_TRUTH_STATES = {
+    "database_ready": "database_ready",
+    "live_api_fallback": "live_api_fallback",
+    "warehouse_pending": "warehouse_pending",
+    "insufficient_sample": "insufficient_sample",
+    "stale_data": "stale_data",
+    "missing_statcast": "missing_statcast",
+    "prediction_ready": "prediction_ready",
+    "prediction_blocked": "prediction_blocked",
+}
+
+
+def build_prediction_blocked_payload(
+    *,
+    player_name: str,
+    outcome_key: str,
+    missing_inputs: list[str],
+    data_coverage: float = 0.0,
+    model_version: str = PRODUCTION_TRUTH_PROBABILITY_VERSION,
+) -> dict:
+    return {
+        "status": PRODUCTION_TRUTH_STATES["prediction_blocked"],
+        "player": player_name,
+        "outcome_key": outcome_key,
+        "predicted_probability": None,
+        "confidence": 0.0,
+        "data_coverage": data_coverage,
+        "model_name": "AISP2 Production Truth Gate",
+        "model_version": model_version,
+        "missing_inputs": list(dict.fromkeys(missing_inputs or [])),
+        "policy": {
+            "no_fake_player_stats": True,
+            "no_fake_team_stats": True,
+            "no_fake_confidence": True,
+            "no_fake_warehouse_completeness": True,
+        },
+    }
+
+
+def validate_production_truth_probability_policy() -> dict:
+    sample = build_prediction_blocked_payload(
+        player_name="Example Player",
+        outcome_key="home_run",
+        missing_inputs=["missing_statcast"],
+    )
+
+    checks = {
+        "version_present": bool(PRODUCTION_TRUTH_PROBABILITY_VERSION),
+        "blocked_payload_has_no_probability": sample["predicted_probability"] is None,
+        "blocked_payload_has_zero_confidence": sample["confidence"] == 0.0,
+        "policy_forbids_fake_confidence": sample["policy"]["no_fake_confidence"],
+        "states_include_prediction_blocked": "prediction_blocked" in PRODUCTION_TRUTH_STATES,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 7.0",
+        "probability_policy_version": PRODUCTION_TRUTH_PROBABILITY_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "sample_blocked_payload": sample,
+    }
+

@@ -4400,3 +4400,43 @@ if __name__ == "__main__":
 
     if report["status"] != "ok":
         raise SystemExit(1)
+
+# ============================================================
+# SECTION 99 - PHASE 14 PART 7.0 - PLAYER INGESTION TRUTH CONTRACT
+# FILE: 03_ingestion/player_ingestion.py
+# PURPOSE:
+# Declare production truth requirements for player ingestion.
+# ============================================================
+
+PHASE14_PLAYER_INGESTION_TRUTH_VERSION = "phase_14_part_7_0_player_ingestion_truth_contract"
+
+PHASE14_PLAYER_INGESTION_REQUIRED_OUTPUTS = {
+    "must_store_mlb_player_id": True,
+    "must_store_full_name": True,
+    "must_link_current_team": True,
+    "must_store_source_attribution": True,
+    "must_not_emit_demo_players": True,
+}
+
+
+def validate_phase14_player_ingestion_truth_contract() -> dict:
+    checks = {
+        "truth_version_present": bool(PHASE14_PLAYER_INGESTION_TRUTH_VERSION),
+        "mlb_player_id_required": PHASE14_PLAYER_INGESTION_REQUIRED_OUTPUTS["must_store_mlb_player_id"],
+        "team_link_required": PHASE14_PLAYER_INGESTION_REQUIRED_OUTPUTS["must_link_current_team"],
+        "source_attribution_required": PHASE14_PLAYER_INGESTION_REQUIRED_OUTPUTS["must_store_source_attribution"],
+        "demo_players_forbidden": PHASE14_PLAYER_INGESTION_REQUIRED_OUTPUTS["must_not_emit_demo_players"],
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 7.0",
+        "truth_version": PHASE14_PLAYER_INGESTION_TRUTH_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "requirements": PHASE14_PLAYER_INGESTION_REQUIRED_OUTPUTS,
+    }
+

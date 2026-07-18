@@ -4735,3 +4735,45 @@ if __name__ == "__main__":
 
     if report["status"] != "ok":
         raise SystemExit(1)
+
+# ============================================================
+# SECTION 99 - PHASE 14 PART 7.0 - STATCAST WAREHOUSE TRUTH CONTRACT
+# FILE: 03_ingestion/statcast_warehouse_ingestion.py
+# PURPOSE:
+# Declare production truth requirements for Statcast warehouse
+# ingestion and prediction-readiness gating.
+# ============================================================
+
+PHASE14_STATCAST_TRUTH_VERSION = "phase_14_part_7_0_statcast_warehouse_truth_contract"
+
+PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS = {
+    "advanced_batting_stats": True,
+    "percentile_rankings": True,
+    "batted_ball_profiles": True,
+    "home_run_profiles": True,
+    "team_plate_discipline": True,
+}
+
+
+def validate_phase14_statcast_truth_contract() -> dict:
+    checks = {
+        "truth_version_present": bool(PHASE14_STATCAST_TRUTH_VERSION),
+        "advanced_batting_required": PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS["advanced_batting_stats"],
+        "percentiles_required": PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS["percentile_rankings"],
+        "batted_ball_required": PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS["batted_ball_profiles"],
+        "home_run_required": PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS["home_run_profiles"],
+        "team_plate_discipline_required": PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS["team_plate_discipline"],
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 7.0",
+        "truth_version": PHASE14_STATCAST_TRUTH_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "required_feature_groups": PHASE14_STATCAST_REQUIRED_FEATURE_GROUPS,
+    }
+

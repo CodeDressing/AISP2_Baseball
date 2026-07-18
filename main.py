@@ -3027,30 +3027,25 @@ def build_player_prediction_payload(
     team: str | None = None,
     season: int | None = None,
 ) -> dict[str, Any]:
+    if "build_phase14_prediction_readiness_payload" in globals():
+        return build_phase14_prediction_readiness_payload(
+            player=player,
+            outcome=outcome,
+            team=team,
+            season=season,
+        )
+
+    # Fallback only exists so older local branches still import.
+    # It intentionally refuses to fabricate a probability.
     outcome_key = normalize_prediction_outcome(outcome)
-    matches = search_players_warehouse_first(player, limit=5)
-    resolved_player = matches[0] if matches else None
-    player_name = str((resolved_player or {}).get("name") or player)
-    team_name = str(
-        (resolved_player or {}).get("team")
-        or (resolved_player or {}).get("team_name")
-        or team
-        or "Unknown team"
-    )
-
-    baseline = PREDICTION_BASELINES[outcome_key]
-    identity_adjustment = stable_player_adjustment(player_name)
-    probability = clamp(baseline + identity_adjustment, 0.5, 95.0)
-    confidence = 42.0 if resolved_player else 30.0
-
     return {
-        "status": "ready",
-        "mode": "identity_aware_baseline",
-        "player": player_name,
-        "player_id": (resolved_player or {}).get("player_id"),
+        "status": "prediction_blocked",
+        "mode": "production_truth_mode_unavailable",
+        "player": player,
+        "player_id": None,
         "team": {
-            "name": team_name,
-            "team_id": (resolved_player or {}).get("team_id"),
+            "name": team or "Unknown team",
+            "team_id": None,
         },
         "season": season or DEFAULT_SEASON,
         "outcome": {
@@ -3058,23 +3053,33 @@ def build_player_prediction_payload(
             "label": outcome_key.replace("_", " ").title(),
         },
         "prediction": {
-            "estimated_probability": round(probability, 1),
-            "confidence": confidence,
-            "model": "AISP2 Identity-Aware Baseline",
-            "model_version": "phase_10_part_12",
-            "data_coverage": 15.0 if resolved_player else 5.0,
+            "estimated_probability": None,
+            "confidence": 0.0,
+            "model": "AISP2 Production Truth Gate",
+            "model_version": "phase_14_part_7_0_import_fallback",
+            "data_coverage": 0.0,
+            "prediction_tier": "Blocked",
+            "risk_profile": "Production Truth Gate Unavailable",
+            "prediction_source": "production_truth_gate",
+            "warehouse_readiness": {
+                "prediction_blocked": True,
+            },
+            "sample_size": None,
+            "confidence_reason": "Production truth runtime was unavailable at import time.",
+            "missing_inputs": [
+                "Production truth runtime section did not load before prediction runtime."
+            ],
         },
         "explanation": (
-            "This is a conservative identity-aware baseline, not a trained game-day model. "
-            "The player was resolved against the warehouse when possible. Production probability "
-            "requires season statistics, Statcast features, opponent, venue, weather, lineup, "
-            "calibration, and backtesting."
+            "AISP2 refused to fabricate a probability because production truth mode "
+            "was unavailable."
         ),
         "disclaimer": (
-            "Statistical estimate only. Not a guarantee, gambling recommendation, "
+            "Statistical estimate only when production-ready. Not a guarantee, gambling recommendation, "
             "financial recommendation, or professional advice."
         ),
     }
+
 
 # ============================================================
 # SECTION 15 - NLU-FIRST CHAT ORCHESTRATOR
@@ -13399,6 +13404,443 @@ def validate_model_feedback_training_queue_runtime() -> dict[str, Any]:
 @app.get("/api/admin/model-feedback/health")
 def api_admin_model_feedback_health() -> dict[str, Any]:
     return validate_model_feedback_training_queue_runtime()
+
+
+
+
+
+# ============================================================
+# SECTION 15.995 - PHASE 14 PART 7.0 - PRODUCTION TRUTH MODE AND DATA TRUTH PANEL
+# FILE: main.py
+# PURPOSE:
+# Kill demo mode completely by exposing explicit production truth
+# states, CEO-only data truth endpoints, and prediction readiness
+# policies that refuse to fabricate confidence or statistics.
+# ============================================================
+
+
+# ============================================================
+# SECTION 15.995.01 - PRODUCTION TRUTH CONSTANTS
+# ============================================================
+
+AISP2_PRODUCTION_TRUTH_VERSION: Final[str] = "phase_14_part_7_0_production_truth_mode"
+
+AISP2_PRODUCTION_STATES: Final[dict[str, str]] = {
+    "database_ready": "database_ready",
+    "live_api_fallback": "live_api_fallback",
+    "warehouse_pending": "warehouse_pending",
+    "insufficient_sample": "insufficient_sample",
+    "stale_data": "stale_data",
+    "missing_statcast": "missing_statcast",
+    "prediction_ready": "prediction_ready",
+    "prediction_blocked": "prediction_blocked",
+}
+
+AISP2_REQUIRED_FEATURE_BACKED_COVERAGE: Final[float] = 65.0
+AISP2_REQUIRED_MINIMUM_SAMPLE_SIZE: Final[int] = 25
+
+
+# ============================================================
+# SECTION 15.995.02 - PRODUCTION TRUTH COUNT HELPERS
+# ============================================================
+
+def aisp2_truth_count_model(model: Any) -> int:
+    if model is None or not callable(managed_database_session):
+        return 0
+
+    try:
+        with managed_database_session(commit_on_success=False) as database_session:
+            return int(database_session.query(model).count())
+    except TypeError:
+        try:
+            with managed_database_session() as database_session:
+                return int(database_session.query(model).count())
+        except Exception:
+            return 0
+    except Exception:
+        return 0
+
+
+def aisp2_truth_count_optional_model(model_name: str) -> int:
+    model = globals().get(model_name)
+
+    if model is None:
+        model = _optional_import("models", model_name)
+
+    return aisp2_truth_count_model(model)
+
+
+def aisp2_truth_auth_model_count(global_name: str) -> int:
+    model = globals().get(global_name)
+    return aisp2_truth_count_model(model)
+
+
+def aisp2_truth_database_connected() -> bool:
+    try:
+        return bool(database_health_check())
+    except Exception:
+        return False
+
+
+def aisp2_truth_inventory_payload() -> dict[str, Any]:
+    try:
+        inventory = collect_database_inventory() if callable(collect_database_inventory) else {}
+    except Exception as error:
+        inventory = {"error": str(error)}
+
+    return dict(inventory or {})
+
+
+# ============================================================
+# SECTION 15.995.03 - DATA TRUTH PAYLOAD
+# ============================================================
+
+def build_phase14_data_truth_payload() -> dict[str, Any]:
+    teams_count = safe_int(count_database_teams())
+    players_count = safe_int(count_database_players())
+
+    roster_count = aisp2_truth_count_model(RosterEntryModel)
+    games_count = aisp2_truth_count_model(GameModel)
+
+    statcast_counts = {
+        "player_statcast_metrics": aisp2_truth_count_model(PlayerStatcastMetricModel),
+        "advanced_batting_stats": aisp2_truth_count_optional_model("PlayerAdvancedBattingStat"),
+        "percentile_rankings": aisp2_truth_count_optional_model("PlayerPercentileRanking"),
+        "pitch_arsenals": aisp2_truth_count_optional_model("PlayerPitchArsenal"),
+        "pitch_tempo": aisp2_truth_count_optional_model("PlayerPitchTempo"),
+        "batted_ball_profiles": aisp2_truth_count_optional_model("PlayerBattedBallProfile"),
+        "batting_stances": aisp2_truth_count_optional_model("PlayerBattingStance"),
+        "home_run_profiles": aisp2_truth_count_optional_model("PlayerHomeRunProfile"),
+        "team_plate_discipline": aisp2_truth_count_optional_model("TeamPlateDiscipline"),
+    }
+
+    statcast_total = sum(safe_int(value) for value in statcast_counts.values())
+
+    prediction_history_count = aisp2_truth_auth_model_count("AuthUserPredictionHistoryModel")
+    resolved_prediction_count = 0
+
+    if AuthUserPredictionHistoryModel is not None and callable(managed_database_session):
+        try:
+            with managed_database_session() as database_session:
+                rows = database_session.query(AuthUserPredictionHistoryModel).limit(5000).all()
+                for row in rows:
+                    if (
+                        getattr(row, "was_correct", None) is not None
+                        or getattr(row, "actual_result", None) not in (None, "")
+                        or getattr(row, "actual_value", None) not in (None, "")
+                        or str(getattr(row, "prediction_lifecycle", "")).lower() in {"resolved", "scored", "training_ready"}
+                    ):
+                        resolved_prediction_count += 1
+        except Exception:
+            resolved_prediction_count = 0
+
+    feedback_event_count = aisp2_truth_auth_model_count("AuthModelTrainingFeedbackEventModel")
+
+    training_ready_count = 0
+    if AuthModelTrainingFeedbackEventModel is not None and callable(managed_database_session):
+        try:
+            with managed_database_session() as database_session:
+                rows = database_session.query(AuthModelTrainingFeedbackEventModel).limit(5000).all()
+                for row in rows:
+                    if bool(getattr(row, "approved_for_training", False)) and not bool(getattr(row, "used_for_training", False)):
+                        training_ready_count += 1
+        except Exception:
+            training_ready_count = 0
+
+    warehouse_tables = {
+        "teams": teams_count,
+        "players": players_count,
+        "rosters": roster_count,
+        "games": games_count,
+        "statcast_total": statcast_total,
+        "prediction_history": prediction_history_count,
+        "resolved_predictions": resolved_prediction_count,
+        "feedback_events": feedback_event_count,
+        "training_ready": training_ready_count,
+    }
+
+    database_ready = teams_count >= 30 and players_count > 0 and roster_count > 0
+    warehouse_pending = not database_ready
+    missing_statcast = statcast_total <= 0
+    prediction_ready = (
+        database_ready
+        and games_count > 0
+        and statcast_total > 0
+        and resolved_prediction_count > 0
+    )
+
+    explicit_states = {
+        "database_ready": database_ready,
+        "live_api_fallback": not database_ready,
+        "warehouse_pending": warehouse_pending,
+        "insufficient_sample": players_count <= 0 or roster_count <= 0,
+        "stale_data": False,
+        "missing_statcast": missing_statcast,
+        "prediction_ready": prediction_ready,
+        "prediction_blocked": not prediction_ready,
+    }
+
+    missing_requirements = []
+
+    if teams_count < 30:
+        missing_requirements.append("Load all 30 MLB teams into the production database.")
+
+    if players_count <= 0:
+        missing_requirements.append("Load player identity records into the production database.")
+
+    if roster_count <= 0:
+        missing_requirements.append("Load roster entries linking players to teams.")
+
+    if games_count <= 0:
+        missing_requirements.append("Load MLB schedule/game rows before game-context predictions.")
+
+    if statcast_total <= 0:
+        missing_requirements.append("Load Statcast warehouse rows before feature-backed player predictions.")
+
+    if resolved_prediction_count <= 0:
+        missing_requirements.append("Resolve prediction outcomes before training-feedback calibration.")
+
+    return {
+        "success": True,
+        "phase": "Phase 14 Part 7.0",
+        "truth_version": AISP2_PRODUCTION_TRUTH_VERSION,
+        "database_connected": aisp2_truth_database_connected(),
+        "production_states": explicit_states,
+        "counts": {
+            "teams": teams_count,
+            "players": players_count,
+            "rosters": roster_count,
+            "games": games_count,
+            "statcast_rows": statcast_total,
+            "warehouse_tables": warehouse_tables,
+            "prediction_history_count": prediction_history_count,
+            "resolved_prediction_count": resolved_prediction_count,
+            "feedback_event_count": feedback_event_count,
+            "training_ready_count": training_ready_count,
+        },
+        "statcast_breakdown": statcast_counts,
+        "inventory": aisp2_truth_inventory_payload(),
+        "prediction_policy": {
+            "no_fake_player_stats": True,
+            "no_fake_team_stats": True,
+            "no_fake_confidence": True,
+            "no_fake_warehouse_completeness": True,
+            "no_hard_coded_demo_player_profiles": True,
+            "required_feature_backed_coverage": AISP2_REQUIRED_FEATURE_BACKED_COVERAGE,
+            "required_minimum_sample_size": AISP2_REQUIRED_MINIMUM_SAMPLE_SIZE,
+        },
+        "missing_requirements": missing_requirements,
+        "completion_gate": {
+            "demo_mode_removed": True,
+            "truth_states_exposed": True,
+            "prediction_ready": prediction_ready,
+            "prediction_blocked_with_reason": not prediction_ready and bool(missing_requirements),
+        },
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+# ============================================================
+# SECTION 15.995.04 - PRODUCTION PREDICTION READINESS
+# ============================================================
+
+def build_phase14_prediction_readiness_payload(
+    *,
+    player: str,
+    outcome: str | None,
+    team: str | None = None,
+    season: int | None = None,
+) -> dict[str, Any]:
+    outcome_key = normalize_prediction_outcome(outcome)
+    matches = search_players_warehouse_first(player, limit=5)
+    resolved_player = matches[0] if matches else None
+
+    player_name = str((resolved_player or {}).get("name") or player)
+    team_name = str(
+        (resolved_player or {}).get("team")
+        or (resolved_player or {}).get("team_name")
+        or team
+        or "Unknown team"
+    )
+
+    source_text = str((resolved_player or {}).get("source") or "").lower()
+    live_api_fallback = "live" in source_text or "api" in source_text
+
+    data_truth = build_phase14_data_truth_payload()
+    states = dict(data_truth.get("production_states") or {})
+
+    missing_inputs = list(data_truth.get("missing_requirements") or [])
+
+    if not resolved_player:
+        missing_inputs.append("Player could not be resolved from the warehouse or live roster fallback.")
+
+    if live_api_fallback:
+        missing_inputs.append("Player identity came from live API fallback, not durable warehouse data.")
+
+    data_coverage = 0.0
+
+    if resolved_player:
+        data_coverage += 15.0
+
+    if states.get("database_ready"):
+        data_coverage += 20.0
+
+    if not states.get("missing_statcast"):
+        data_coverage += 25.0
+
+    if data_truth["counts"]["games"] > 0:
+        data_coverage += 15.0
+
+    if data_truth["counts"]["resolved_prediction_count"] > 0:
+        data_coverage += 25.0
+
+    data_coverage = clamp(data_coverage, 0.0, 100.0)
+
+    feature_backed_ready = (
+        data_coverage >= AISP2_REQUIRED_FEATURE_BACKED_COVERAGE
+        and not live_api_fallback
+        and resolved_player is not None
+        and not states.get("missing_statcast")
+        and data_truth["counts"]["games"] > 0
+    )
+
+    prediction_state = (
+        AISP2_PRODUCTION_STATES["prediction_ready"]
+        if feature_backed_ready
+        else AISP2_PRODUCTION_STATES["prediction_blocked"]
+    )
+
+    confidence_reason = (
+        "Feature-backed prediction readiness passed production thresholds."
+        if feature_backed_ready
+        else "Confidence is intentionally withheld because the production warehouse is missing required feature layers."
+    )
+
+    return {
+        "status": prediction_state,
+        "mode": "production_truth_mode",
+        "player": player_name,
+        "player_id": (resolved_player or {}).get("player_id"),
+        "team": {
+            "name": team_name,
+            "team_id": (resolved_player or {}).get("team_id"),
+        },
+        "season": season or DEFAULT_SEASON,
+        "outcome": {
+            "key": outcome_key,
+            "label": outcome_key.replace("_", " ").title(),
+        },
+        "prediction": {
+            "estimated_probability": None,
+            "confidence": 0.0,
+            "model": "AISP2 Production Truth Gate",
+            "model_version": AISP2_PRODUCTION_TRUTH_VERSION,
+            "data_coverage": round(data_coverage, 1),
+            "prediction_tier": "Blocked" if not feature_backed_ready else "Feature Backed",
+            "risk_profile": "Warehouse Pending" if not feature_backed_ready else "Production Ready",
+            "prediction_source": "production_truth_gate",
+            "warehouse_readiness": data_truth.get("production_states"),
+            "sample_size": None,
+            "confidence_reason": confidence_reason,
+            "missing_inputs": list(dict.fromkeys(missing_inputs)),
+        },
+        "data_source": {
+            "player_identity_source": (resolved_player or {}).get("source") or "unresolved",
+            "live_api_fallback": live_api_fallback,
+            "warehouse_backed": bool(resolved_player) and not live_api_fallback,
+        },
+        "production_truth": {
+            "truth_version": AISP2_PRODUCTION_TRUTH_VERSION,
+            "states": data_truth.get("production_states"),
+            "counts": data_truth.get("counts"),
+            "policy": data_truth.get("prediction_policy"),
+        },
+        "explanation": (
+            "AISP2 is now in production truth mode. It will not fabricate player statistics, "
+            "team statistics, confidence, warehouse completeness, or probability. This request is "
+            "blocked until the required feature layers are present."
+            if not feature_backed_ready
+            else "AISP2 found enough production-backed feature coverage to continue."
+        ),
+        "disclaimer": (
+            "Statistical estimate only when production-ready. Not a guarantee, gambling recommendation, "
+            "financial recommendation, or professional advice."
+        ),
+    }
+
+
+# ============================================================
+# SECTION 15.995.05 - CEO DATA TRUTH ROUTES
+# ============================================================
+
+@app.get("/api/admin/data-truth")
+def api_admin_data_truth(
+    request: Request,
+) -> dict[str, Any]:
+    aisp2_model_feedback_require_ceo_or_admin(request)
+    return build_phase14_data_truth_payload()
+
+
+@app.get("/api/admin/data-truth/health")
+def api_admin_data_truth_health() -> dict[str, Any]:
+    payload = build_phase14_data_truth_payload()
+
+    return {
+        "status": "ok",
+        "phase": "Phase 14 Part 7.0",
+        "truth_version": AISP2_PRODUCTION_TRUTH_VERSION,
+        "production_states": payload.get("production_states"),
+        "counts": payload.get("counts"),
+        "completion_gate": payload.get("completion_gate"),
+        "checked_at": utc_now().isoformat(),
+    }
+
+
+def validate_phase14_production_truth_runtime() -> dict[str, Any]:
+    route_paths = {route.path for route in app.routes}
+
+    required_routes = {
+        "/api/admin/data-truth",
+        "/api/admin/data-truth/health",
+    }
+
+    payload = build_phase14_data_truth_payload()
+
+    checks = {
+        "production_truth_version_present": bool(AISP2_PRODUCTION_TRUTH_VERSION),
+        "states_present": set(AISP2_PRODUCTION_STATES).issuperset({
+            "database_ready",
+            "live_api_fallback",
+            "warehouse_pending",
+            "insufficient_sample",
+            "stale_data",
+            "missing_statcast",
+            "prediction_ready",
+            "prediction_blocked",
+        }),
+        "data_truth_payload_available": callable(build_phase14_data_truth_payload),
+        "prediction_truth_payload_available": callable(build_phase14_prediction_readiness_payload),
+        "admin_data_truth_route_registered": "/api/admin/data-truth" in route_paths,
+        "admin_data_truth_health_route_registered": "/api/admin/data-truth/health" in route_paths,
+        "no_fake_probability_policy": payload["prediction_policy"]["no_fake_confidence"],
+        "missing_requirements_reported": isinstance(payload.get("missing_requirements"), list),
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 7.0",
+        "truth_version": AISP2_PRODUCTION_TRUTH_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [name for name, value in checks.items() if not value],
+        "required_routes": sorted(required_routes),
+        "registered_required_routes": sorted(required_routes.intersection(route_paths)),
+        "data_truth": payload,
+        "checked_at": utc_now().isoformat(),
+    }
 
 
 

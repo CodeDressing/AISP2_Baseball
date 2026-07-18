@@ -2423,3 +2423,56 @@ if __name__ == "__main__":
             default=str,
         )
     )
+
+# ============================================================
+# SECTION 99 - PHASE 14 PART 7.0 - DATABASE TRUTH CONTRACT
+# FILE: 01_database/database.py
+# PURPOSE:
+# Shared production truth states for callers that need to avoid
+# demo-mode language and expose exact warehouse readiness.
+# ============================================================
+
+PHASE14_DATABASE_TRUTH_VERSION = "phase_14_part_7_0_database_truth_contract"
+
+PHASE14_PRODUCTION_STATES = {
+    "database_ready": "database_ready",
+    "live_api_fallback": "live_api_fallback",
+    "warehouse_pending": "warehouse_pending",
+    "insufficient_sample": "insufficient_sample",
+    "stale_data": "stale_data",
+    "missing_statcast": "missing_statcast",
+    "prediction_ready": "prediction_ready",
+    "prediction_blocked": "prediction_blocked",
+}
+
+
+def validate_phase14_database_truth_contract() -> dict:
+    required_states = {
+        "database_ready",
+        "live_api_fallback",
+        "warehouse_pending",
+        "insufficient_sample",
+        "stale_data",
+        "missing_statcast",
+        "prediction_ready",
+        "prediction_blocked",
+    }
+
+    checks = {
+        "truth_version_present": bool(PHASE14_DATABASE_TRUTH_VERSION),
+        "all_required_states_present": required_states.issubset(set(PHASE14_PRODUCTION_STATES)),
+        "no_demo_ready_state": "demo_ready" not in PHASE14_PRODUCTION_STATES,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "degraded",
+        "phase": "Phase 14 Part 7.0",
+        "truth_version": PHASE14_DATABASE_TRUTH_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "production_states": PHASE14_PRODUCTION_STATES,
+    }
+
