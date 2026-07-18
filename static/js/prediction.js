@@ -2287,3 +2287,84 @@ window.AISP2_PREDICTION_PAGE_SCROLL_RESET_PHASE_14_PART_7_2 = true;
 
 window.AISP2_PREDICTION_COCKPIT_LAYOUT_CONTROLLER_PHASE_14_PART_7_3 = true;
 
+
+/* ============================================================
+   PHASE 14 PART 7.5 - FINAL LAYOUT NEUTRALIZER
+   FILE: static/js/prediction.js
+   PURPOSE:
+   Neutralize old failed layout-controller side effects while
+   preserving prediction runtime behavior.
+   ============================================================ */
+
+(function initializeAISP2PredictionFinalLayoutNeutralizer() {
+    "use strict";
+
+    const VERSION = "phase_14_part_7_5_final_layout_neutralizer";
+
+    function isPredictionPage() {
+        const path = String(window.location.pathname || "").toLowerCase();
+        return path.includes("/tools/prediction") || path.includes("prediction");
+    }
+
+    function neutralizeOldLayoutSideEffects() {
+        if (!isPredictionPage()) {
+            return;
+        }
+
+        document.body.classList.remove("aisp2-prediction-cockpit-repair");
+        document.body.classList.remove("aisp2-disable-scroll-restore");
+        document.body.classList.add("prediction-final-body");
+        document.body.classList.add("aisp2-final-prediction-layout-v75");
+
+        document
+            .querySelectorAll(".aisp2-prediction-fit-parent")
+            .forEach(function removeFitParent(node) {
+                node.classList.remove("aisp2-prediction-fit-parent");
+            });
+
+        document.documentElement.style.removeProperty("--aisp2-prediction-available-height");
+        document.documentElement.style.removeProperty("--aisp2-prediction-hero-height");
+        document.documentElement.style.removeProperty("--aisp2-prediction-viewport-width");
+
+        try {
+            if ("scrollRestoration" in window.history) {
+                window.history.scrollRestoration = "manual";
+            }
+            window.scrollTo(0, 0);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function boot() {
+        neutralizeOldLayoutSideEffects();
+
+        window.requestAnimationFrame(function frameOne() {
+            neutralizeOldLayoutSideEffects();
+
+            window.requestAnimationFrame(function frameTwo() {
+                neutralizeOldLayoutSideEffects();
+            });
+        });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+    } else {
+        boot();
+    }
+
+    window.addEventListener("load", boot);
+    window.addEventListener("resize", function delayedPredictionFinalNeutralizer() {
+        window.clearTimeout(window.__aisp2PredictionFinalNeutralizerTimer);
+        window.__aisp2PredictionFinalNeutralizerTimer = window.setTimeout(boot, 75);
+    });
+
+    window.AISP2PredictionFinalLayoutNeutralizer = {
+        version: VERSION,
+        refresh: boot
+    };
+}());
+
+window.AISP2_PREDICTION_FINAL_LAYOUT_NEUTRALIZER_PHASE_14_PART_7_5 = true;
+

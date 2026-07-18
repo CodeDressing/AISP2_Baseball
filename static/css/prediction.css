@@ -1,50 +1,38 @@
 ﻿/* ============================================================
    AISP2 BASEBALL
    FILE: static/css/prediction.css
-   PHASE: PHASE 14 PART 7.4
+   PHASE: PHASE 14 PART 7.5
    PURPOSE:
-   Clean single-screen Prediction Workbench cockpit styling.
+   Final authoritative Prediction Workbench layout.
    ============================================================ */
 
-/* ------------------------------------------------------------
-   SECTION 01 - BASE TOKENS
-   ------------------------------------------------------------ */
-
 :root {
-    --prediction-bg: #020815;
-    --prediction-bg-2: #061426;
-    --prediction-panel: rgba(7, 22, 40, 0.92);
-    --prediction-panel-2: rgba(10, 29, 50, 0.88);
-    --prediction-border: rgba(102, 201, 255, 0.18);
-    --prediction-border-strong: rgba(102, 201, 255, 0.34);
-    --prediction-text: rgba(247, 252, 255, 0.96);
-    --prediction-muted: rgba(217, 234, 247, 0.68);
-    --prediction-soft: rgba(217, 234, 247, 0.48);
-    --prediction-blue: #70d9ff;
-    --prediction-mint: #8ff5bd;
-    --prediction-warning: #ffe29e;
-    --prediction-danger: #ff9f9f;
-    --prediction-radius-lg: 24px;
-    --prediction-radius-md: 18px;
-    --prediction-radius-sm: 12px;
-    --prediction-topbar-height: 64px;
-    --prediction-shell-height: calc(100svh - var(--prediction-topbar-height));
+    --pf-bg: #020815;
+    --pf-bg-2: #071426;
+    --pf-panel: rgba(7, 22, 40, 0.94);
+    --pf-panel-2: rgba(11, 31, 54, 0.88);
+    --pf-border: rgba(103, 202, 255, 0.18);
+    --pf-border-2: rgba(103, 202, 255, 0.34);
+    --pf-text: rgba(247, 252, 255, 0.96);
+    --pf-muted: rgba(218, 234, 248, 0.68);
+    --pf-soft: rgba(218, 234, 248, 0.46);
+    --pf-blue: #71d9ff;
+    --pf-mint: #8ff5bd;
+    --pf-warn: #ffe29e;
+    --pf-danger: #ff9f9f;
+    --pf-nav-h: 64px;
 }
-
-/* ------------------------------------------------------------
-   SECTION 02 - PAGE RESET
-   ------------------------------------------------------------ */
 
 html,
 body {
-    min-height: 100%;
     margin: 0;
-    background: var(--prediction-bg);
+    min-height: 100%;
+    background: var(--pf-bg);
 }
 
-body {
+body.prediction-final-body {
     overflow: hidden;
-    color: var(--prediction-text);
+    color: var(--pf-text);
     font-family:
         Inter,
         ui-sans-serif,
@@ -55,632 +43,591 @@ body {
         sans-serif;
 }
 
-.prediction-app-shell {
-    min-height: 100svh;
+.prediction-final-shell {
     height: 100svh;
     overflow: hidden;
     background:
-        radial-gradient(circle at 75% 0%, rgba(50, 190, 160, 0.10), transparent 36%),
-        radial-gradient(circle at 10% 20%, rgba(60, 170, 255, 0.13), transparent 34%),
-        linear-gradient(180deg, #020815 0%, #050c18 100%);
+        radial-gradient(circle at 12% 18%, rgba(71, 175, 255, 0.13), transparent 34%),
+        radial-gradient(circle at 82% 0%, rgba(79, 230, 170, 0.10), transparent 34%),
+        linear-gradient(180deg, #020815 0%, #050d19 100%);
 }
 
-/* ------------------------------------------------------------
-   SECTION 03 - TOPBAR
-   ------------------------------------------------------------ */
+/* NAV */
 
-.prediction-topbar,
-.topbar {
-    height: var(--prediction-topbar-height);
-    min-height: var(--prediction-topbar-height);
+.prediction-final-nav {
+    height: var(--pf-nav-h);
+    min-height: var(--pf-nav-h);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 38px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
-    background: rgba(3, 9, 22, 0.86);
-    backdrop-filter: blur(18px);
+    background: rgba(2, 8, 20, 0.88);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    box-sizing: border-box;
 }
 
-.brand-mark {
+.prediction-final-brand {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    color: var(--prediction-text);
-    font-weight: 950;
+    color: var(--pf-text);
     text-decoration: none;
 }
 
-.brand-icon {
+.prediction-final-logo {
     width: 30px;
     height: 30px;
-    display: inline-grid;
+    display: grid;
     place-items: center;
     border-radius: 11px;
-    background: rgba(112, 217, 255, 0.13);
-    border: 1px solid rgba(112, 217, 255, 0.20);
+    border: 1px solid rgba(113, 217, 255, 0.20);
+    background: rgba(113, 217, 255, 0.11);
 }
 
-.nav-links {
+.prediction-final-links {
     display: flex;
     align-items: center;
-    gap: 28px;
+    gap: 24px;
 }
 
-.nav-links a {
-    color: rgba(227, 237, 248, 0.76);
+.prediction-final-links a {
+    color: rgba(226, 238, 249, 0.76);
+    text-decoration: none;
     font-size: 0.82rem;
     font-weight: 850;
-    text-decoration: none;
 }
 
-.nav-links a:hover,
-.nav-links a[aria-current="page"] {
-    color: var(--prediction-blue);
+.prediction-final-links a:hover,
+.prediction-final-links a[aria-current="page"] {
+    color: var(--pf-blue);
 }
 
-/* ------------------------------------------------------------
-   SECTION 04 - COCKPIT LAYOUT
-   ------------------------------------------------------------ */
+/* COCKPIT */
 
-.prediction-cockpit {
-    height: var(--prediction-shell-height);
-    max-height: var(--prediction-shell-height);
-    width: 100%;
+.prediction-final-cockpit {
+    height: calc(100svh - var(--pf-nav-h));
+    max-height: calc(100svh - var(--pf-nav-h));
     padding: 14px 18px 16px;
-    overflow: hidden;
     box-sizing: border-box;
     display: grid;
-    grid-template-rows: 114px minmax(0, 1fr);
+    grid-template-rows: 118px minmax(0, 1fr);
     gap: 12px;
-}
-
-.prediction-cockpit-header {
-    min-height: 0;
-    border: 1px solid var(--prediction-border);
-    border-radius: 22px;
-    background:
-        linear-gradient(135deg, rgba(10, 29, 50, 0.86), rgba(4, 13, 28, 0.94));
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.46fr);
-    gap: 20px;
-    align-items: center;
-    padding: 18px 28px;
     overflow: hidden;
 }
 
-.prediction-cockpit-header h1 {
-    margin: 7px 0 4px;
-    color: var(--prediction-text);
-    font-size: clamp(2.6rem, 5vw, 4.7rem);
-    line-height: 0.86;
-    letter-spacing: -0.085em;
-    font-weight: 950;
-    white-space: nowrap;
+.prediction-final-hero {
+    min-height: 0;
+    border: 1px solid var(--pf-border);
+    border-radius: 22px;
+    background:
+        linear-gradient(135deg, rgba(11, 31, 54, 0.88), rgba(4, 13, 28, 0.96));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 0.45fr);
+    align-items: center;
+    gap: 18px;
+    padding: 18px 28px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
-.prediction-cockpit-header p {
-    max-width: 920px;
-    margin: 0;
-    color: var(--prediction-muted);
-    font-size: 0.9rem;
-    line-height: 1.35;
-}
-
-.prediction-eyebrow,
-.eyebrow {
+.prediction-final-kicker {
+    min-height: 24px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 24px;
-    padding: 0 11px;
     border-radius: 999px;
-    border: 1px solid rgba(112, 217, 255, 0.20);
-    background: rgba(112, 217, 255, 0.08);
-    color: var(--prediction-blue);
+    border: 1px solid rgba(113, 217, 255, 0.20);
+    background: rgba(113, 217, 255, 0.075);
+    color: var(--pf-blue);
+    padding: 0 11px;
     font-size: 0.68rem;
     font-weight: 950;
     letter-spacing: 0.11em;
     text-transform: uppercase;
 }
 
-.pulse {
+.prediction-final-kicker.compact {
+    margin-bottom: 8px;
+}
+
+.prediction-final-kicker i {
     width: 8px;
     height: 8px;
     border-radius: 999px;
     background: #35e98d;
-    box-shadow: 0 0 20px rgba(53, 233, 141, 0.65);
+    box-shadow: 0 0 18px rgba(53, 233, 141, 0.65);
 }
 
-.prediction-header-status {
+.prediction-final-hero h1 {
+    margin: 7px 0 4px;
+    font-size: clamp(2.55rem, 5vw, 4.8rem);
+    line-height: 0.86;
+    letter-spacing: -0.085em;
+    font-weight: 950;
+    white-space: nowrap;
+}
+
+.prediction-final-hero p {
+    max-width: 940px;
+    margin: 0;
+    color: var(--pf-muted);
+    font-size: 0.88rem;
+    line-height: 1.34;
+}
+
+.prediction-final-status-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 9px;
+    gap: 8px;
 }
 
-.prediction-header-status article {
-    min-height: 58px;
-    padding: 10px 11px;
+.prediction-final-status-grid article,
+.prediction-final-mini-grid article,
+.prediction-final-band article,
+.prediction-final-metrics article,
+.prediction-final-ai-grid article {
+    border: 1px solid rgba(113, 217, 255, 0.13);
     border-radius: 14px;
-    border: 1px solid rgba(112, 217, 255, 0.14);
     background: rgba(255, 255, 255, 0.035);
+    box-sizing: border-box;
 }
 
-.prediction-header-status span,
-.prediction-header-status strong {
+.prediction-final-status-grid article {
+    min-height: 56px;
+    padding: 10px 11px;
+}
+
+.prediction-final-status-grid span,
+.prediction-final-mini-grid span,
+.prediction-final-band span,
+.prediction-final-metrics span,
+.prediction-final-ai-grid span {
     display: block;
-}
-
-.prediction-header-status span {
-    color: var(--prediction-soft);
+    color: var(--pf-soft);
     font-size: 0.58rem;
     font-weight: 950;
     letter-spacing: 0.09em;
     text-transform: uppercase;
 }
 
-.prediction-header-status strong {
-    margin-top: 6px;
-    color: var(--prediction-text);
-    font-size: 0.78rem;
-    line-height: 1.1;
+.prediction-final-status-grid strong,
+.prediction-final-mini-grid strong,
+.prediction-final-band strong,
+.prediction-final-metrics strong,
+.prediction-final-ai-grid strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--pf-text);
+    line-height: 1.12;
 }
 
-.prediction-cockpit-grid {
+.prediction-final-status-grid strong {
+    font-size: 0.78rem;
+}
+
+/* GRID */
+
+.prediction-final-grid {
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(270px, 0.72fr) minmax(560px, 1.72fr) minmax(310px, 0.86fr);
+    grid-template-columns: minmax(280px, 0.72fr) minmax(620px, 1.82fr) minmax(330px, 0.88fr);
     gap: 12px;
     overflow: hidden;
 }
 
-/* ------------------------------------------------------------
-   SECTION 05 - PANEL SYSTEM
-   ------------------------------------------------------------ */
-
-.prediction-panel {
+.prediction-final-panel {
+    min-width: 0;
     min-height: 0;
-    overflow: hidden;
-    border: 1px solid var(--prediction-border);
-    border-radius: var(--prediction-radius-md);
+    border: 1px solid var(--pf-border);
+    border-radius: 19px;
     background:
-        linear-gradient(180deg, var(--prediction-panel-2), var(--prediction-panel));
+        linear-gradient(180deg, var(--pf-panel-2), var(--pf-panel));
     box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
+    box-sizing: border-box;
 }
 
-.prediction-controls-panel,
-.prediction-explanation-panel {
+.prediction-final-controls,
+.prediction-final-ai {
+    padding: 14px;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 14px;
     scrollbar-width: thin;
-    scrollbar-color: rgba(112, 217, 255, 0.34) rgba(255, 255, 255, 0.04);
+    scrollbar-color: rgba(113, 217, 255, 0.32) rgba(255, 255, 255, 0.04);
 }
 
-.main-probability-card {
+.prediction-final-result {
     padding: 20px 22px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
 
-.prediction-controls-panel::-webkit-scrollbar,
-.prediction-explanation-panel::-webkit-scrollbar {
+.prediction-final-controls::-webkit-scrollbar,
+.prediction-final-ai::-webkit-scrollbar {
     width: 7px;
 }
 
-.prediction-controls-panel::-webkit-scrollbar-thumb,
-.prediction-explanation-panel::-webkit-scrollbar-thumb {
+.prediction-final-controls::-webkit-scrollbar-thumb,
+.prediction-final-ai::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: rgba(112, 217, 255, 0.34);
+    background: rgba(113, 217, 255, 0.32);
 }
 
-.panel-heading,
-.result-topline {
+/* PANEL CONTENT */
+
+.prediction-final-panel-head,
+.prediction-final-result-top {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
+    gap: 14px;
 }
 
-.panel-heading h2,
-.prediction-explanation-title {
+.prediction-final-panel-head h2,
+.prediction-final-ai h2 {
     margin: 0;
-    color: var(--prediction-text);
-    font-size: 1.22rem;
-    line-height: 1.02;
+    color: var(--pf-text);
+    font-size: 1.18rem;
+    line-height: 1.04;
     letter-spacing: -0.045em;
     font-weight: 900;
 }
 
-.panel-heading p,
-.prediction-explanation-panel p {
+.prediction-final-panel-head p,
+.prediction-final-ai p {
     margin: 5px 0 0;
-    color: var(--prediction-muted);
-    font-size: 0.78rem;
-    line-height: 1.35;
+    color: var(--pf-muted);
+    font-size: 0.76rem;
+    line-height: 1.32;
 }
 
-.state-pill,
-.result-status-pill {
+.prediction-final-pill {
     flex: 0 0 auto;
-    min-height: 30px;
+    min-height: 29px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0 12px;
-    border-radius: 999px;
-    color: var(--prediction-mint);
-    background: rgba(143, 245, 189, 0.09);
+    color: var(--pf-mint);
+    background: rgba(143, 245, 189, 0.085);
     border: 1px solid rgba(143, 245, 189, 0.20);
-    font-size: 0.78rem;
+    border-radius: 999px;
+    padding: 0 11px;
+    font-size: 0.76rem;
     font-weight: 950;
 }
 
-/* ------------------------------------------------------------
-   SECTION 06 - CONTROLS
-   ------------------------------------------------------------ */
+/* CONTROLS */
 
-.prediction-field {
+.prediction-final-field {
+    display: block;
     margin-top: 12px;
 }
 
-.prediction-field label {
+.prediction-final-field span {
     display: block;
-    margin: 0 0 5px;
-    color: var(--prediction-soft);
-    font-size: 0.62rem;
+    margin-bottom: 5px;
+    color: var(--pf-soft);
+    font-size: 0.61rem;
     font-weight: 950;
     letter-spacing: 0.10em;
     text-transform: uppercase;
 }
 
-.prediction-field select,
-.prediction-field input {
+.prediction-final-field select,
+.prediction-final-field input {
     width: 100%;
     height: 38px;
     min-height: 38px;
     border-radius: 11px;
-    padding: 0 12px;
-    border: 1px solid rgba(112, 217, 255, 0.16);
+    border: 1px solid rgba(113, 217, 255, 0.16);
     background: rgba(1, 8, 19, 0.78);
-    color: var(--prediction-text);
-    font-size: 0.86rem;
-    font-weight: 800;
-    outline: none;
+    color: var(--pf-text);
+    padding: 0 12px;
     box-sizing: border-box;
+    outline: none;
+    font-size: 0.85rem;
+    font-weight: 800;
 }
 
-.prediction-field select:focus,
-.prediction-field input:focus {
-    border-color: var(--prediction-border-strong);
-    box-shadow: 0 0 0 3px rgba(112, 217, 255, 0.08);
-}
-
-.prediction-field small {
+.prediction-final-field small {
     display: block;
     margin-top: 5px;
-    color: var(--prediction-soft);
-    font-size: 0.70rem;
+    color: var(--pf-soft);
+    font-size: 0.69rem;
     line-height: 1.25;
 }
 
-.prediction-action-row {
+.prediction-final-button-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 11px;
 }
 
-.secondary-row {
-    margin-top: 8px;
-}
-
-.prediction-primary-button,
-.prediction-secondary-button {
-    min-height: 36px;
+.prediction-final-primary,
+.prediction-final-secondary {
+    min-height: 35px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
     padding: 0 12px;
-    font-size: 0.74rem;
+    font-size: 0.73rem;
     font-weight: 950;
     text-decoration: none;
     cursor: pointer;
     box-sizing: border-box;
 }
 
-.prediction-primary-button {
+.prediction-final-primary {
     border: 0;
-    background: linear-gradient(135deg, var(--prediction-blue), var(--prediction-mint));
+    background: linear-gradient(135deg, var(--pf-blue), var(--pf-mint));
     color: #00111d;
 }
 
-.prediction-secondary-button {
-    border: 1px solid rgba(112, 217, 255, 0.18);
+.prediction-final-secondary {
+    border: 1px solid rgba(113, 217, 255, 0.18);
     background: rgba(255, 255, 255, 0.045);
-    color: var(--prediction-text);
+    color: var(--pf-text);
 }
 
-.mini-metric-grid {
+.prediction-final-mini-grid {
     display: grid;
-    grid-template-columns: 1fr;
     gap: 7px;
     margin-top: 12px;
 }
 
-.mini-metric-grid article,
-.selector-warning {
+.prediction-final-mini-grid article {
     min-height: 40px;
     padding: 8px 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(112, 217, 255, 0.13);
-    background: rgba(255, 255, 255, 0.035);
-    box-sizing: border-box;
 }
 
-.mini-metric-grid span,
-.mini-metric-grid strong {
-    display: block;
-}
-
-.mini-metric-grid span {
-    color: var(--prediction-soft);
-    font-size: 0.58rem;
-    font-weight: 950;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-}
-
-.mini-metric-grid strong {
-    margin-top: 4px;
-    color: var(--prediction-text);
+.prediction-final-mini-grid strong {
     font-size: 0.76rem;
-    line-height: 1.15;
 }
 
-.selector-warning {
+.prediction-final-note {
     margin-top: 10px;
-    min-height: auto;
-    color: var(--prediction-muted);
-    font-size: 0.72rem;
+    border-radius: 13px;
+    border: 1px solid rgba(113, 217, 255, 0.13);
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--pf-muted);
+    padding: 9px 10px;
+    font-size: 0.71rem;
     line-height: 1.35;
 }
 
-/* ------------------------------------------------------------
-   SECTION 07 - RESULT CENTER
-   ------------------------------------------------------------ */
+/* RESULT */
 
 .prediction-player-name {
     margin: 10px 0 4px;
     max-width: 100%;
-    color: var(--prediction-text);
-    font-size: clamp(3rem, 5.5vw, 5.25rem);
+    color: var(--pf-text);
+    font-size: clamp(3rem, 5.45vw, 5.15rem);
     line-height: 0.84;
     letter-spacing: -0.09em;
     font-weight: 950;
 }
 
-.prediction-outcome-label {
+.prediction-final-result-top p {
     margin: 0;
-    color: var(--prediction-muted);
-    font-size: 0.95rem;
+    color: var(--pf-muted);
+    font-size: 0.94rem;
 }
 
-.result-probability-band {
+.prediction-final-band {
     display: grid;
-    grid-template-columns: 1.2fr 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: 1.15fr 1fr 1fr;
+    gap: 9px;
     margin-top: 18px;
 }
 
-.result-probability-band div,
-.result-metric-grid article,
-.intelligence-grid article {
-    border: 1px solid rgba(112, 217, 255, 0.13);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.035);
-    padding: 10px 12px;
-    box-sizing: border-box;
+.prediction-final-band article {
+    min-height: 66px;
+    padding: 11px 12px;
 }
 
-.result-probability-band span,
-.result-probability-band strong,
-.result-metric-grid span,
-.result-metric-grid strong,
-.intelligence-grid span,
-.intelligence-grid strong {
-    display: block;
+.prediction-final-band strong {
+    font-size: 1.02rem;
 }
 
-.result-probability-band span,
-.result-metric-grid span,
-.intelligence-grid span {
-    color: var(--prediction-soft);
-    font-size: 0.58rem;
-    font-weight: 950;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-}
-
-.result-probability-band strong {
-    margin-top: 6px;
-    color: var(--prediction-text);
-    font-size: 1.08rem;
-    line-height: 1.1;
-}
-
-.result-metric-grid {
+.prediction-final-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     margin-top: 12px;
 }
 
-.result-metric-grid article {
-    min-height: 56px;
+.prediction-final-metrics article {
+    min-height: 54px;
     padding: 9px 10px;
 }
 
-.result-metric-grid strong,
-.intelligence-grid strong {
-    margin-top: 5px;
-    color: var(--prediction-text);
-    font-size: 0.78rem;
-    line-height: 1.12;
+.prediction-final-metrics strong,
+.prediction-final-ai-grid strong {
+    font-size: 0.77rem;
 }
 
-.prediction-summary-block {
+.prediction-final-summary {
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.075);
 }
 
-.prediction-summary-block h3 {
+.prediction-final-summary h3,
+.prediction-final-text-block h3 {
     margin: 0 0 6px;
-    color: var(--prediction-text);
-    font-size: 0.96rem;
+    color: var(--pf-text);
+    font-size: 0.92rem;
     letter-spacing: -0.02em;
 }
 
-.prediction-summary-block p {
+.prediction-final-summary p {
     margin: 0;
-    color: var(--prediction-muted);
-    font-size: 0.84rem;
+    color: var(--pf-muted);
+    font-size: 0.82rem;
     line-height: 1.4;
 }
 
-/* ------------------------------------------------------------
-   SECTION 08 - AI PANEL
-   ------------------------------------------------------------ */
+/* AI PANEL */
 
-.intelligence-grid {
+.prediction-final-ai-grid {
     display: grid;
     gap: 8px;
     margin-top: 12px;
 }
 
-.intelligence-grid article {
+.prediction-final-ai-grid article {
     min-height: 48px;
     padding: 8px 10px;
 }
 
-.ai-text-section {
+.prediction-final-text-block {
     margin-top: 13px;
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.075);
 }
 
-.ai-text-section h3 {
-    margin: 0 0 6px;
-    color: var(--prediction-text);
-    font-size: 0.90rem;
-    letter-spacing: -0.02em;
-}
-
-.ai-text-section div,
-.ai-text-section ul {
+.prediction-final-text-block div,
+.prediction-final-text-block ul {
     margin: 0;
-    color: var(--prediction-muted);
-    font-size: 0.76rem;
+    color: var(--pf-muted);
+    font-size: 0.75rem;
     line-height: 1.35;
 }
 
-.ai-text-section ul {
+.prediction-final-text-block ul {
     padding-left: 18px;
 }
 
-.ai-text-section li {
-    margin-bottom: 4px;
-}
-
-.hidden-runtime-targets {
+.prediction-final-hidden-targets {
     display: none !important;
 }
 
-/* ------------------------------------------------------------
-   SECTION 09 - RESPONSIVE / SHORT HEIGHT
-   ------------------------------------------------------------ */
+/* NEUTRALIZE OLD BROKEN CLASSES FROM PREVIOUS PATCHES */
+
+body.aisp2-prediction-cockpit-repair .prediction-final-shell,
+body.aisp2-prediction-cockpit-repair .prediction-final-cockpit,
+body.aisp2-prediction-cockpit-repair .prediction-final-grid,
+body.aisp2-prediction-cockpit-repair .prediction-final-panel,
+body.aisp2-prediction-cockpit-repair .prediction-final-hero {
+    width: auto !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+body.aisp2-prediction-cockpit-repair .prediction-workbench,
+body.aisp2-prediction-cockpit-repair .prediction-hero,
+body.aisp2-prediction-cockpit-repair .prediction-controls-card,
+body.aisp2-prediction-cockpit-repair .prediction-selector-panel:not(.prediction-final-controls),
+body.aisp2-prediction-cockpit-repair .main-probability-card:not(.prediction-final-result),
+body.aisp2-prediction-cockpit-repair .prediction-explanation-panel:not(.prediction-final-ai) {
+    all: revert-layer;
+}
+
+/* SHORT HEIGHT */
 
 @media (max-height: 820px) and (min-width: 1100px) {
-    .prediction-cockpit {
+    .prediction-final-cockpit {
         grid-template-rows: 92px minmax(0, 1fr);
         padding: 10px 14px 12px;
         gap: 10px;
     }
 
-    .prediction-cockpit-header {
+    .prediction-final-hero {
         padding: 14px 24px;
         border-radius: 18px;
     }
 
-    .prediction-cockpit-header h1 {
+    .prediction-final-hero h1 {
         font-size: clamp(2.15rem, 4.2vw, 3.75rem);
         margin: 5px 0 2px;
     }
 
-    .prediction-cockpit-header p {
+    .prediction-final-hero p {
         font-size: 0.78rem;
         line-height: 1.24;
     }
 
-    .prediction-header-status article {
+    .prediction-final-status-grid article {
         min-height: 44px;
         padding: 8px 9px;
     }
 
-    .prediction-controls-panel,
-    .prediction-explanation-panel {
+    .prediction-final-controls,
+    .prediction-final-ai {
         padding: 11px;
     }
 
-    .main-probability-card {
+    .prediction-final-result {
         padding: 16px 18px;
     }
 
     .prediction-player-name {
-        font-size: clamp(2.55rem, 4.7vw, 4.35rem);
+        font-size: clamp(2.45rem, 4.7vw, 4.25rem);
     }
 
-    .result-metric-grid article {
-        min-height: 48px;
+    .prediction-final-metrics article {
+        min-height: 47px;
         padding: 8px;
     }
 
-    .result-probability-band {
+    .prediction-final-band {
         margin-top: 12px;
     }
 }
 
 @media (max-height: 710px) and (min-width: 1100px) {
-    .prediction-cockpit {
+    .prediction-final-cockpit {
         grid-template-rows: minmax(0, 1fr);
     }
 
-    .prediction-cockpit-header {
+    .prediction-final-hero {
         display: none;
     }
 }
 
-@media (max-width: 1180px) {
-    body {
+/* RESPONSIVE */
+
+@media (max-width: 1200px) {
+    body.prediction-final-body {
         overflow: auto;
     }
 
-    .prediction-app-shell {
+    .prediction-final-shell {
         height: auto;
         min-height: 100svh;
         overflow: visible;
     }
 
-    .prediction-cockpit {
+    .prediction-final-cockpit {
         height: auto;
         max-height: none;
         overflow: visible;
-        grid-template-rows: auto auto;
     }
 
-    .prediction-cockpit-grid {
+    .prediction-final-grid {
         grid-template-columns: 300px minmax(0, 1fr);
         grid-template-areas:
             "controls result"
@@ -688,39 +635,38 @@ body {
         overflow: visible;
     }
 
-    .prediction-controls-panel {
+    .prediction-final-controls {
         grid-area: controls;
     }
 
-    .main-probability-card {
+    .prediction-final-result {
         grid-area: result;
     }
 
-    .prediction-explanation-panel {
+    .prediction-final-ai {
         grid-area: ai;
     }
 }
 
-@media (max-width: 820px) {
-    .prediction-topbar,
-    .topbar {
+@media (max-width: 840px) {
+    .prediction-final-nav {
         padding: 0 16px;
     }
 
-    .nav-links {
+    .prediction-final-links {
         gap: 12px;
     }
 
-    .prediction-cockpit-header {
+    .prediction-final-hero {
         grid-template-columns: 1fr;
         height: auto;
     }
 
-    .prediction-header-status {
+    .prediction-final-status-grid {
         grid-template-columns: 1fr;
     }
 
-    .prediction-cockpit-grid {
+    .prediction-final-grid {
         grid-template-columns: 1fr;
         grid-template-areas:
             "controls"
@@ -728,8 +674,8 @@ body {
             "ai";
     }
 
-    .result-metric-grid,
-    .result-probability-band {
+    .prediction-final-band,
+    .prediction-final-metrics {
         grid-template-columns: 1fr;
     }
 

@@ -1,28 +1,20 @@
 ﻿<!-- ============================================================
-     AISP2 BASEBALL INTELLIGENCE PLATFORM
+     AISP2 BASEBALL
      FILE: templates/prediction_workbench.html
-     PHASE: PHASE 14 PART 7.4
+     PHASE: PHASE 14 PART 7.5
      PURPOSE:
-     Clean single-screen Prediction Workbench cockpit.
+     Final clean Prediction Workbench cockpit layout.
 
-     DESIGN RULES:
-     - One primary desktop viewport.
-     - No below-fold extra panels in the main workbench.
-     - No hard-coded prediction results.
-     - No fabricated probabilities.
-     - Every visible runtime value has a data-* target.
-     - Missing values display transparent production states.
+     RULE:
+     This page is intentionally compact. Extended analysis modules
+     belong behind dashboard/admin drilldowns, not below the primary
+     prediction cockpit.
      ============================================================ -->
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-aisp2-page="prediction-workbench-final">
 
 <head>
-    <!-- ========================================================
-         SECTION 01 - DOCUMENT SETUP
-         FILE: templates/prediction_workbench.html
-         ======================================================== -->
-
     <meta charset="UTF-8">
 
     <meta
@@ -32,38 +24,21 @@
 
     <meta
         name="description"
-        content="AISP2 Baseball Prediction Workbench for MLB player predictions, probability analysis, selector diagnostics, model confidence, data-source transparency, and AI explanation workflows."
-    >
-
-    <meta
-        name="aisp2-template"
-        content="prediction_workbench"
-    >
-
-    <meta
-        name="aisp2-contract-version"
-        content="phase_14_part_7_4_clean_cockpit"
+        content="AISP2 Baseball Prediction Workbench"
     >
 
     <title>
         AISP2 Baseball | Prediction Workbench
     </title>
 
-    <link
-        rel="stylesheet"
-        href="/static/css/aisp2.css"
-    >
-
-    <link
-        rel="stylesheet"
-        href="/static/css/prediction.css"
-    >
+    <link rel="stylesheet" href="/static/css/aisp2.css">
+    <link rel="stylesheet" href="/static/css/prediction.css">
 </head>
 
-<body>
+<body class="prediction-final-body">
 
 <div
-    class="app-shell prediction-app-shell"
+    class="prediction-final-shell"
     data-page="prediction-workbench"
     data-bootstrap-endpoint="/api/player-explorer/bootstrap"
     data-v2-bootstrap-endpoint="/api/v2/player-explorer/bootstrap"
@@ -73,96 +48,59 @@
 >
 
     <!-- ========================================================
-         SECTION 02 - TOP NAVIGATION
-         FILE: templates/prediction_workbench.html
+         SECTION 01 - NAV
          ======================================================== -->
 
-    <header class="topbar prediction-topbar">
-
-        <a
-            class="brand-mark"
-            href="/"
-            aria-label="AISP2 Baseball home"
-        >
-            <span class="brand-icon">
-                ⚾
-            </span>
-
-            <span>
-                AISP2
-            </span>
+    <header class="prediction-final-nav">
+        <a class="prediction-final-brand" href="/">
+            <span class="prediction-final-logo">⚾</span>
+            <strong>AISP2</strong>
         </a>
 
-        <nav
-            class="nav-links"
-            aria-label="Primary navigation"
-        >
-            <a href="/">
-                Chat
-            </a>
-
-            <a href="/players">
-                Players
-            </a>
-
-            <a
-                href="/tools/prediction"
-                aria-current="page"
-            >
-                Predictions
-            </a>
-
-            <a href="/dashboard">
-                Dashboard
-            </a>
-
-            <a href="/docs">
-                API
-            </a>
+        <nav class="prediction-final-links" aria-label="Primary navigation">
+            <a href="/">Chat</a>
+            <a href="/players">Players</a>
+            <a href="/tools/prediction" aria-current="page">Predictions</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/docs">API</a>
+            <a href="/auth/login">Login</a>
         </nav>
-
     </header>
 
 
     <!-- ========================================================
-         SECTION 03 - SINGLE SCREEN COCKPIT
-         FILE: templates/prediction_workbench.html
+         SECTION 02 - COCKPIT
          ======================================================== -->
 
-    <main class="prediction-cockpit" data-prediction-workbench>
+    <main class="prediction-final-cockpit">
 
         <!-- ====================================================
-             SECTION 04 - COMPACT HEADER
-             FILE: templates/prediction_workbench.html
+             SECTION 02.01 - HEADER STRIP
              ==================================================== -->
 
-        <section class="prediction-cockpit-header">
-
+        <section class="prediction-final-hero">
             <div>
-                <div class="prediction-eyebrow">
-                    <span class="pulse"></span>
+                <span class="prediction-final-kicker">
+                    <i></i>
                     AISP2 Prediction Engine
-                </div>
+                </span>
 
-                <h1>
-                    Prediction Workbench
-                </h1>
+                <h1>Prediction Workbench</h1>
 
                 <p>
-                    Database-backed player prediction workspace with selector diagnostics,
-                    production truth states, model reasoning, data coverage, and transparent
-                    warehouse readiness.
+                    Player outcome prediction workspace with production truth states,
+                    data-source transparency, model coverage, and account-ready prediction history.
                 </p>
             </div>
 
-            <div class="prediction-header-status">
+            <div class="prediction-final-status-grid">
                 <article>
-                    <span>Selector Runtime</span>
+                    <span>Selectors</span>
                     <strong data-selector-health>Initializing</strong>
                 </article>
 
                 <article>
-                    <span>Prediction API</span>
+                    <span>API</span>
                     <strong data-prediction-api-status>Pending</strong>
                 </article>
 
@@ -171,163 +109,83 @@
                     <strong data-warehouse-status>Pending</strong>
                 </article>
             </div>
-
         </section>
 
 
         <!-- ====================================================
-             SECTION 05 - THREE COLUMN WORKSPACE
-             FILE: templates/prediction_workbench.html
+             SECTION 02.02 - GRID
              ==================================================== -->
 
-        <section class="prediction-cockpit-grid">
+        <section class="prediction-final-grid" data-prediction-workbench>
 
             <!-- ================================================
-                 SECTION 05.01 - CONTROLS
-                 FILE: templates/prediction_workbench.html
+                 CONTROLS
                  ================================================ -->
 
-            <aside
-                class="prediction-panel prediction-controls-panel prediction-selector-panel"
-                data-prediction-control-center
-            >
+            <aside class="prediction-final-panel prediction-final-controls prediction-selector-panel">
 
-                <div class="panel-heading">
+                <div class="prediction-final-panel-head">
                     <div>
-                        <h2>
-                            Controls
-                        </h2>
-
-                        <p>
-                            Choose team, player, outcome, then run.
-                        </p>
+                        <h2>Controls</h2>
+                        <p>Select team, player, and outcome.</p>
                     </div>
 
-                    <div class="state-pill" data-selector-state>
+                    <strong class="prediction-final-pill" data-selector-state>
                         Loading
-                    </div>
+                    </strong>
                 </div>
 
-                <div class="prediction-field">
-                    <label for="prediction-team-select">
-                        Team
-                    </label>
-
-                    <select
-                        id="prediction-team-select"
-                        data-prediction-team
-                        aria-label="Select MLB team"
-                    >
-                        <option value="">
-                            Loading teams...
-                        </option>
+                <label class="prediction-final-field">
+                    <span>Team</span>
+                    <select id="prediction-team-select" data-prediction-team>
+                        <option value="">Loading teams...</option>
                     </select>
+                    <small data-team-selector-note>Waiting for team bootstrap.</small>
+                </label>
 
-                    <small data-team-selector-note>
-                        Waiting for team bootstrap.
-                    </small>
-                </div>
-
-                <div class="prediction-field">
-                    <label for="prediction-player-select">
-                        Player
-                    </label>
-
-                    <select
-                        id="prediction-player-select"
-                        data-prediction-player
-                        aria-label="Select MLB player"
-                    >
-                        <option value="">
-                            Select a team first
-                        </option>
+                <label class="prediction-final-field">
+                    <span>Player</span>
+                    <select id="prediction-player-select" data-prediction-player>
+                        <option value="">Select a team first</option>
                     </select>
+                    <small data-player-selector-note>Player list pending.</small>
+                </label>
 
-                    <small data-player-selector-note>
-                        Player list pending.
-                    </small>
-                </div>
-
-                <div class="prediction-field">
-                    <label for="prediction-outcome-select">
-                        Outcome
-                    </label>
-
-                    <select
-                        id="prediction-outcome-select"
-                        data-prediction-outcome
-                        aria-label="Select prediction outcome"
-                    >
-                        <option value="home_run">
-                            Home Run
-                        </option>
-
-                        <option value="hit">
-                            Hit
-                        </option>
-
-                        <option value="rbi">
-                            RBI
-                        </option>
-
-                        <option value="run_scored">
-                            Run Scored
-                        </option>
-
-                        <option value="total_bases">
-                            Total Bases
-                        </option>
-
-                        <option value="strikeout">
-                            Strikeout
-                        </option>
-
-                        <option value="walk">
-                            Walk
-                        </option>
+                <label class="prediction-final-field">
+                    <span>Outcome</span>
+                    <select id="prediction-outcome-select" data-prediction-outcome>
+                        <option value="home_run">Home Run</option>
+                        <option value="hit">Hit</option>
+                        <option value="rbi">RBI</option>
+                        <option value="run_scored">Run Scored</option>
+                        <option value="total_bases">Total Bases</option>
+                        <option value="strikeout">Strikeout</option>
+                        <option value="walk">Walk</option>
                     </select>
+                    <small data-outcome-selector-note>Outcome determines model weighting.</small>
+                </label>
 
-                    <small data-outcome-selector-note>
-                        Outcome determines model weighting.
-                    </small>
-                </div>
-
-                <div class="prediction-action-row">
-                    <button
-                        class="prediction-primary-button"
-                        type="button"
-                        data-prediction-submit
-                    >
+                <div class="prediction-final-button-row">
+                    <button type="button" class="prediction-final-primary" data-prediction-submit>
                         Run Prediction
                     </button>
 
-                    <button
-                        class="prediction-secondary-button"
-                        type="button"
-                        data-prediction-reset
-                    >
+                    <button type="button" class="prediction-final-secondary" data-prediction-reset>
                         Reset
                     </button>
                 </div>
 
-                <div class="prediction-action-row secondary-row">
-                    <button
-                        class="prediction-secondary-button"
-                        type="button"
-                        data-selector-refresh
-                    >
+                <div class="prediction-final-button-row">
+                    <button type="button" class="prediction-final-secondary" data-selector-refresh>
                         Refresh
                     </button>
 
-                    <a
-                        class="prediction-secondary-button"
-                        href="/players"
-                    >
-                        Player Explorer
+                    <a class="prediction-final-secondary" href="/players">
+                        Explorer
                     </a>
                 </div>
 
-                <div class="mini-metric-grid" data-selector-diagnostics>
+                <section class="prediction-final-mini-grid">
                     <article>
                         <span>Teams</span>
                         <strong data-teams-loaded>0</strong>
@@ -347,76 +205,59 @@
                         <span>Fallback</span>
                         <strong data-fallback-chain>Pending</strong>
                     </article>
-                </div>
+                </section>
 
-                <div class="selector-warning" data-selector-warning>
-                    Selector diagnostics will appear here if the database,
-                    roster lookup, or live MLB fallback has an issue.
+                <div class="prediction-final-note" data-selector-warning>
+                    Selector diagnostics will appear here if the database or live fallback has an issue.
                 </div>
 
             </aside>
 
 
             <!-- ================================================
-                 SECTION 05.02 - RESULT COMMAND CENTER
-                 FILE: templates/prediction_workbench.html
+                 RESULT
                  ================================================ -->
 
-            <article
-                class="prediction-panel main-probability-card"
-                data-prediction-result
-            >
+            <article class="prediction-final-panel prediction-final-result main-probability-card" data-prediction-result>
 
-                <div class="result-topline">
+                <div class="prediction-final-result-top">
                     <div>
-                        <div class="prediction-eyebrow">
+                        <span class="prediction-final-kicker compact">
                             AISP2 Intelligence Engine
-                        </div>
+                        </span>
 
-                        <h2
-                            class="prediction-player-name"
-                            data-result-player
-                        >
+                        <h2 class="prediction-player-name" data-result-player>
                             Select Player
                         </h2>
 
-                        <p
-                            class="prediction-outcome-label"
-                            data-result-outcome
-                        >
+                        <p data-result-outcome>
                             Outcome Pending
                         </p>
                     </div>
 
-                    <div class="result-status-pill" data-result-tier>
+                    <strong class="prediction-final-pill" data-result-tier>
                         Pending
-                    </div>
+                    </strong>
                 </div>
 
-                <section class="result-probability-band">
-                    <div>
+                <section class="prediction-final-band">
+                    <article>
                         <span>Probability</span>
-                        <strong data-result-probability>
-                            Pending
-                        </strong>
-                    </div>
+                        <strong data-result-probability>Pending</strong>
+                    </article>
 
-                    <div>
+                    <article>
                         <span>Confidence</span>
-                        <strong data-result-confidence>
-                            Confidence Pending
-                        </strong>
-                    </div>
+                        <strong data-result-confidence>Pending</strong>
+                    </article>
 
-                    <div>
+                    <article>
                         <span>Risk</span>
-                        <strong data-result-risk>
-                            Pending
-                        </strong>
-                    </div>
+                        <strong data-result-risk>Pending</strong>
+                    </article>
                 </section>
 
-                <section class="result-metric-grid">
+                <section class="prediction-final-metrics">
                     <article>
                         <span>Outcome Profile</span>
                         <strong data-result-profile>Pending</strong>
@@ -433,7 +274,7 @@
                     </article>
 
                     <article>
-                        <span>Data Coverage</span>
+                        <span>Coverage</span>
                         <strong data-result-data-coverage>Pending</strong>
                     </article>
 
@@ -443,7 +284,7 @@
                     </article>
 
                     <article>
-                        <span>Prediction Source</span>
+                        <span>Source</span>
                         <strong data-result-source>Pending</strong>
                     </article>
 
@@ -453,7 +294,7 @@
                     </article>
 
                     <article>
-                        <span>Player Style</span>
+                        <span>Style</span>
                         <strong data-result-style>Pending</strong>
                     </article>
 
@@ -463,7 +304,7 @@
                     </article>
 
                     <article>
-                        <span>Primary Metric</span>
+                        <span>Metric</span>
                         <strong data-result-metric>Pending</strong>
                     </article>
 
@@ -473,16 +314,13 @@
                     </article>
 
                     <article>
-                        <span>Runtime Mode</span>
-                        <strong data-runtime-mode>Transparent</strong>
+                        <span>Runtime</span>
+                        <strong data-runtime-mode>Truth Mode</strong>
                     </article>
                 </section>
 
-                <section class="prediction-summary-block">
-                    <h3>
-                        Prediction Summary
-                    </h3>
-
+                <section class="prediction-final-summary">
+                    <h3>Prediction Summary</h3>
                     <p data-result-ai-explanation>
                         Select a player and outcome to generate AISP2 baseball intelligence.
                     </p>
@@ -492,28 +330,21 @@
 
 
             <!-- ================================================
-                 SECTION 05.03 - AI INTELLIGENCE
-                 FILE: templates/prediction_workbench.html
+                 INTELLIGENCE
                  ================================================ -->
 
-            <aside
-                class="prediction-panel prediction-explanation-panel"
-                data-ai-intelligence-panel
-            >
+            <aside class="prediction-final-panel prediction-final-ai prediction-explanation-panel">
 
-                <div class="panel-heading">
+                <div class="prediction-final-panel-head">
                     <div>
-                        <h2 class="prediction-explanation-title">
-                            AI Intelligence
-                        </h2>
-
+                        <h2>AI Intelligence</h2>
                         <p data-intelligence-summary>
-                            Select a team, player, and outcome to generate intelligence.
+                            Select a player and outcome to generate intelligence.
                         </p>
                     </div>
                 </div>
 
-                <section class="intelligence-grid">
+                <section class="prediction-final-ai-grid">
                     <article>
                         <span>Prediction Tier</span>
                         <strong data-intelligence-tier>Pending</strong>
@@ -545,47 +376,38 @@
                     </article>
 
                     <article>
-                        <span>Warehouse Status</span>
+                        <span>Warehouse</span>
                         <strong data-intelligence-warehouse>Pending</strong>
                     </article>
 
                     <article>
-                        <span>Model Guidance</span>
+                        <span>Guidance</span>
                         <strong data-intelligence-guidance>Pending</strong>
                     </article>
                 </section>
 
-                <section class="ai-text-section">
-                    <h3>
-                        Model Reasoning
-                    </h3>
-
+                <section class="prediction-final-text-block">
+                    <h3>Model Reasoning</h3>
                     <div data-intelligence-reasoning>
                         Model reasoning will appear after a prediction request completes.
                     </div>
                 </section>
 
-                <section class="ai-text-section">
-                    <h3>
-                        Warnings
-                    </h3>
-
+                <section class="prediction-final-text-block">
+                    <h3>Warnings</h3>
                     <ul data-intelligence-warnings>
                         <li>No prediction warnings yet.</li>
                     </ul>
                 </section>
 
-                <section class="ai-text-section">
-                    <h3>
-                        Next Data Needed
-                    </h3>
-
+                <section class="prediction-final-text-block">
+                    <h3>Next Data Needed</h3>
                     <ul data-intelligence-next-data>
                         <li>Run a prediction to inspect missing data requirements.</li>
                     </ul>
                 </section>
 
-                <section class="hidden-runtime-targets" aria-hidden="true">
+                <section class="prediction-final-hidden-targets" aria-hidden="true">
                     <strong data-matchup-status>Pending Matchup Dataset</strong>
                     <strong data-matchup-bvp>Pending Ingestion</strong>
                     <strong data-matchup-handedness>Pending Ingestion</strong>
@@ -604,8 +426,8 @@
                     <strong data-confidence-interval>Pending</strong>
                     <strong data-upside-scenario>Pending</strong>
                     <strong data-downside-scenario>Pending</strong>
-
                     <strong data-model-state>Production Truth</strong>
+
                     <div data-analyst-notes></div>
                 </section>
 
