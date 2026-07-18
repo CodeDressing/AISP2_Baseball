@@ -519,3 +519,44 @@ async function fetchPredictionCounts() {
 16.10 Exportable reports
 
 */
+/* ============================================================
+   PHASE 14 PART 7.1 - DASHBOARD SCROLL RESTORE FIX
+   FILE: static/js/dashboard.js
+   PURPOSE:
+   Prevent the browser from reopening the dashboard halfway down
+   the page after reload/navigation.
+   ============================================================ */
+
+(function initializeAISP2DashboardScrollRestoreFix() {
+    "use strict";
+
+    try {
+        if ("scrollRestoration" in window.history) {
+            window.history.scrollRestoration = "manual";
+        }
+
+        document.body.classList.add("aisp2-disable-scroll-restore");
+
+        window.addEventListener("load", function resetDashboardScrollPosition() {
+            const path = String(window.location.pathname || "").toLowerCase();
+
+            if (
+                path === "/" ||
+                path.includes("dashboard") ||
+                path.includes("chat")
+            ) {
+                window.requestAnimationFrame(function scrollToTopFrameOne() {
+                    window.scrollTo(0, 0);
+                    window.requestAnimationFrame(function scrollToTopFrameTwo() {
+                        window.scrollTo(0, 0);
+                    });
+                });
+            }
+        });
+    } catch (error) {
+        return null;
+    }
+}());
+
+window.AISP2_DASHBOARD_SCROLL_RESTORE_FIX_PHASE_14_PART_7_1 = true;
+

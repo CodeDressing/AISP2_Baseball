@@ -544,3 +544,406 @@
 12.10 Multi-Agent Decision Dashboard
 
 */
+/* ============================================================
+   PHASE 14 PART 7.1 - DASHBOARD VIEWPORT FIT
+   FILE: static/css/dashboard.css
+   PURPOSE:
+   Make the AISP2 dashboard/chat cockpit fit inside the visible
+   browser viewport without starting cut off at the bottom.
+   ============================================================ */
+
+html,
+body {
+    min-height: 100%;
+}
+
+body {
+    overflow-x: hidden !important;
+}
+
+/* Main dashboard wrapper candidates */
+.dashboard-page,
+.dashboard-shell,
+.aisp2-dashboard,
+.aisp2-dashboard-shell,
+.workspace-page,
+.workspace-shell,
+.chat-dashboard-page,
+.chat-shell,
+main.dashboard-main,
+main.aisp2-main {
+    min-height: calc(100vh - 70px) !important;
+    max-height: calc(100vh - 70px) !important;
+    overflow: hidden !important;
+}
+
+/* Top-level grid candidates */
+.dashboard-layout,
+.dashboard-grid,
+.workspace-layout,
+.workspace-grid,
+.aisp2-workspace,
+.aisp2-workspace-grid,
+.chat-workspace,
+.chat-grid {
+    min-height: calc(100vh - 86px) !important;
+    max-height: calc(100vh - 86px) !important;
+    display: grid !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+}
+
+/* Compact dashboard padding */
+.dashboard-page,
+.dashboard-shell,
+.aisp2-dashboard,
+.workspace-page,
+.chat-dashboard-page {
+    padding-top: 14px !important;
+    padding-bottom: 10px !important;
+}
+
+/* Left and right columns should fit, not force the page downward */
+.dashboard-sidebar,
+.workspace-sidebar,
+.aisp2-sidebar,
+.chat-sidebar,
+.dashboard-right-panel,
+.workspace-right-panel,
+.aisp2-right-panel,
+.chat-right-panel,
+.aside-panel,
+aside {
+    max-height: calc(100vh - 104px) !important;
+    overflow: hidden auto !important;
+    scrollbar-width: thin;
+}
+
+/* Center chat panel should own its internal scroll */
+.dashboard-center,
+.workspace-center,
+.chat-center,
+.chat-main,
+.ai-chat-main,
+.aisp2-chat-main,
+.dashboard-chat-panel,
+.chat-panel {
+    min-height: 0 !important;
+    max-height: calc(100vh - 104px) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Header inside chat should be compact */
+.chat-header,
+.ai-chat-header,
+.dashboard-chat-header,
+.workspace-chat-header {
+    flex: 0 0 auto !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+}
+
+/* Main message area becomes the flexible area */
+.chat-messages,
+.ai-chat-messages,
+.dashboard-chat-messages,
+.workspace-chat-messages,
+.chat-output,
+.chat-thread,
+[data-chat-messages],
+[data-ai-chat-messages] {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden auto !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+}
+
+/* The action cards area must not push the input below the viewport */
+.dashboard-action-grid,
+.chat-action-grid,
+.workspace-action-grid,
+.quick-action-grid,
+.quick-actions-grid,
+.chat-quick-actions,
+[data-chat-actions],
+[data-quick-actions] {
+    flex: 0 0 auto !important;
+    display: grid !important;
+    gap: 10px !important;
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+}
+
+/* Compact quick cards */
+.dashboard-action-grid > *,
+.chat-action-grid > *,
+.workspace-action-grid > *,
+.quick-action-grid > *,
+.quick-actions-grid > *,
+.chat-quick-actions > * {
+    min-height: 50px !important;
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
+}
+
+/* Chips/buttons under action cards */
+.chat-chip-row,
+.quick-chip-row,
+.dashboard-chip-row,
+.workspace-chip-row,
+[data-chat-chips] {
+    flex: 0 0 auto !important;
+    gap: 8px !important;
+    margin: 6px 0 8px !important;
+}
+
+.chat-chip-row button,
+.quick-chip-row button,
+.dashboard-chip-row button,
+.workspace-chip-row button,
+[data-chat-chips] button,
+.chat-chip,
+.quick-chip {
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    border-radius: 999px !important;
+    font-size: 0.82rem !important;
+}
+
+/* Input row must remain visible */
+.chat-input-row,
+.ai-chat-input-row,
+.dashboard-chat-input-row,
+.workspace-chat-input-row,
+.chat-composer,
+[data-chat-input-row],
+form[data-chat-form] {
+    flex: 0 0 auto !important;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+
+.chat-input-row input,
+.ai-chat-input-row input,
+.dashboard-chat-input-row input,
+.workspace-chat-input-row input,
+.chat-composer input,
+[data-chat-input-row] input,
+form[data-chat-form] input {
+    min-height: 44px !important;
+    height: 44px !important;
+    font-size: 0.95rem !important;
+}
+
+.chat-input-row button,
+.ai-chat-input-row button,
+.dashboard-chat-input-row button,
+.workspace-chat-input-row button,
+.chat-composer button,
+[data-chat-input-row] button,
+form[data-chat-form] button {
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 0 18px !important;
+}
+
+/* Bottom nav/footer buttons should fit inside the viewport */
+.dashboard-footer-actions,
+.workspace-footer-actions,
+.chat-footer-actions,
+.bottom-action-row,
+.footer-pill-row,
+[data-footer-actions] {
+    flex: 0 0 auto !important;
+    margin-top: 8px !important;
+    margin-bottom: 4px !important;
+    gap: 8px !important;
+}
+
+.dashboard-footer-actions a,
+.workspace-footer-actions a,
+.chat-footer-actions a,
+.bottom-action-row a,
+.footer-pill-row a,
+[data-footer-actions] a {
+    min-height: 34px !important;
+    padding: 0 14px !important;
+    font-size: 0.82rem !important;
+}
+
+/* Global footer/disclaimer should not force extra scroll */
+.dashboard-disclaimer,
+.workspace-disclaimer,
+.chat-disclaimer,
+footer,
+.footer {
+    flex: 0 0 auto !important;
+    margin-top: 4px !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    font-size: 0.76rem !important;
+    line-height: 1.25 !important;
+}
+
+/* Right panel compacting */
+.selected-player-card,
+.prediction-engine-card,
+.safety-notice-card,
+.status-card,
+.metric-card,
+.sidebar-card,
+.right-panel-card {
+    padding: 14px !important;
+    border-radius: 18px !important;
+}
+
+.prediction-engine-card,
+.safety-notice-card {
+    margin-top: 12px !important;
+}
+
+/* Sidebar compacting */
+.dashboard-sidebar nav,
+.workspace-sidebar nav,
+.aisp2-sidebar nav {
+    gap: 8px !important;
+}
+
+.dashboard-sidebar a,
+.workspace-sidebar a,
+.aisp2-sidebar a,
+.sidebar-link {
+    min-height: 38px !important;
+    padding: 0 14px !important;
+    border-radius: 14px !important;
+}
+
+/* Slightly reduce oversized typography on dashboard */
+.dashboard-page h1,
+.workspace-page h1,
+.chat-dashboard-page h1 {
+    font-size: clamp(1.8rem, 3.2vw, 3.4rem) !important;
+    line-height: 0.96 !important;
+}
+
+.dashboard-page h2,
+.workspace-page h2,
+.chat-dashboard-page h2 {
+    font-size: clamp(1.2rem, 2vw, 1.9rem) !important;
+}
+
+/* On shorter screens, compact even more */
+@media (max-height: 850px) {
+    .dashboard-page,
+    .dashboard-shell,
+    .aisp2-dashboard,
+    .workspace-page,
+    .chat-dashboard-page {
+        padding-top: 8px !important;
+        padding-bottom: 6px !important;
+    }
+
+    .dashboard-action-grid > *,
+    .chat-action-grid > *,
+    .workspace-action-grid > *,
+    .quick-action-grid > *,
+    .quick-actions-grid > *,
+    .chat-quick-actions > * {
+        min-height: 44px !important;
+        padding: 10px 12px !important;
+    }
+
+    .chat-chip-row,
+    .quick-chip-row,
+    .dashboard-chip-row,
+    .workspace-chip-row,
+    [data-chat-chips] {
+        margin: 4px 0 6px !important;
+    }
+
+    .selected-player-card,
+    .prediction-engine-card,
+    .safety-notice-card,
+    .status-card,
+    .metric-card,
+    .sidebar-card,
+    .right-panel-card {
+        padding: 12px !important;
+    }
+
+    .chat-input-row input,
+    .ai-chat-input-row input,
+    .dashboard-chat-input-row input,
+    .workspace-chat-input-row input,
+    .chat-composer input,
+    [data-chat-input-row] input,
+    form[data-chat-form] input {
+        min-height: 40px !important;
+        height: 40px !important;
+    }
+
+    .chat-input-row button,
+    .ai-chat-input-row button,
+    .dashboard-chat-input-row button,
+    .workspace-chat-input-row button,
+    .chat-composer button,
+    [data-chat-input-row] button,
+    form[data-chat-form] button {
+        min-height: 40px !important;
+        height: 40px !important;
+    }
+}
+
+/* Mobile/tablet should scroll normally */
+@media (max-width: 980px) {
+    .dashboard-page,
+    .dashboard-shell,
+    .aisp2-dashboard,
+    .workspace-page,
+    .workspace-shell,
+    .chat-dashboard-page,
+    .chat-shell,
+    main.dashboard-main,
+    main.aisp2-main,
+    .dashboard-layout,
+    .dashboard-grid,
+    .workspace-layout,
+    .workspace-grid,
+    .aisp2-workspace,
+    .aisp2-workspace-grid,
+    .chat-workspace,
+    .chat-grid {
+        min-height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    .dashboard-sidebar,
+    .workspace-sidebar,
+    .aisp2-sidebar,
+    .chat-sidebar,
+    .dashboard-right-panel,
+    .workspace-right-panel,
+    .aisp2-right-panel,
+    .chat-right-panel,
+    aside {
+        max-height: none !important;
+    }
+
+    .dashboard-center,
+    .workspace-center,
+    .chat-center,
+    .chat-main,
+    .ai-chat-main,
+    .aisp2-chat-main,
+    .dashboard-chat-panel,
+    .chat-panel {
+        max-height: none !important;
+    }
+}
+
