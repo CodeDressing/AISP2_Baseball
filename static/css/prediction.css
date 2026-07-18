@@ -1,686 +1,2281 @@
 ﻿/* ============================================================
    AISP2 BASEBALL
    FILE: static/css/prediction.css
-   PHASE: PHASE 14 PART 7.5
+   PHASE: PHASE 12 PART 5.8
    PURPOSE:
-   Final authoritative Prediction Workbench layout.
+   Dense layout system for Prediction Workbench.
+   - Minimize negative space.
+   - Consolidate panels.
+   - Improve readability.
+   - Preserve responsive behavior.
    ============================================================ */
 
-:root {
-    --pf-bg: #020815;
-    --pf-bg-2: #071426;
-    --pf-panel: rgba(7, 22, 40, 0.94);
-    --pf-panel-2: rgba(11, 31, 54, 0.88);
-    --pf-border: rgba(103, 202, 255, 0.18);
-    --pf-border-2: rgba(103, 202, 255, 0.34);
-    --pf-text: rgba(247, 252, 255, 0.96);
-    --pf-muted: rgba(218, 234, 248, 0.68);
-    --pf-soft: rgba(218, 234, 248, 0.46);
-    --pf-blue: #71d9ff;
-    --pf-mint: #8ff5bd;
-    --pf-warn: #ffe29e;
-    --pf-danger: #ff9f9f;
-    --pf-nav-h: 64px;
-}
-
-html,
-body {
-    margin: 0;
-    min-height: 100%;
-    background: var(--pf-bg);
-}
-
-body.prediction-final-body {
-    overflow: hidden;
-    color: var(--pf-text);
-    font-family:
-        Inter,
-        ui-sans-serif,
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-}
-
-.prediction-final-shell {
-    height: 100svh;
-    overflow: hidden;
+/* ============================================================
+   SECTION 01 - PAGE FOUNDATION
+   ============================================================ */
+.prediction-workbench-page {
     background:
-        radial-gradient(circle at 12% 18%, rgba(71, 175, 255, 0.13), transparent 34%),
-        radial-gradient(circle at 82% 0%, rgba(79, 230, 170, 0.10), transparent 34%),
-        linear-gradient(180deg, #020815 0%, #050d19 100%);
+        radial-gradient(circle at top left, rgba(40, 165, 255, 0.12), transparent 34%),
+        radial-gradient(circle at top right, rgba(82, 255, 194, 0.12), transparent 28%),
+        linear-gradient(180deg, #02111f 0%, #031121 48%, #02111b 100%);
+    color: #edf7ff;
 }
 
-/* NAV */
-
-.prediction-final-nav {
-    height: var(--pf-nav-h);
-    min-height: var(--pf-nav-h);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 38px;
-    background: rgba(2, 8, 20, 0.88);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    box-sizing: border-box;
+.prediction-workbench {
+    width: min(1440px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 32px 0 64px;
+    display: grid;
+    gap: 18px;
 }
 
-.prediction-final-brand {
+.panel-glass {
+    background: linear-gradient(135deg, rgba(12, 34, 58, 0.88), rgba(9, 21, 35, 0.78));
+    border: 1px solid rgba(118, 177, 219, 0.18);
+    border-radius: 24px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 14px 36px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(10px);
+}
+
+.panel-title,
+.prediction-explanation-title {
+    margin: 0 0 8px;
+    font-size: clamp(1.4rem, 2.3vw, 2rem);
+    line-height: 1.1;
+    font-weight: 800;
+    color: #f4fbff;
+}
+
+.panel-copy,
+.prediction-subtitle,
+.prediction-explanation-text {
+    margin: 0;
+    color: rgba(232, 243, 255, 0.84);
+    line-height: 1.65;
+    font-size: 0.98rem;
+}
+
+.subpanel-title {
+    margin: 0 0 10px;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #f3fbff;
+}
+
+/* ============================================================
+   SECTION 02 - HERO
+   ============================================================ */
+.prediction-hero {
+    padding: 28px 32px;
+}
+
+.prediction-hero-copy {
+    display: grid;
+    gap: 12px;
+    max-width: 900px;
+}
+
+.prediction-title {
+    margin: 0;
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+    font-size: clamp(3rem, 7vw, 5.65rem);
+    color: #eaf6ff;
+}
+
+.eyebrow,
+.prediction-eyebrow {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    color: var(--pf-text);
-    text-decoration: none;
-}
-
-.prediction-final-logo {
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    border-radius: 11px;
-    border: 1px solid rgba(113, 217, 255, 0.20);
-    background: rgba(113, 217, 255, 0.11);
-}
-
-.prediction-final-links {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-}
-
-.prediction-final-links a {
-    color: rgba(226, 238, 249, 0.76);
-    text-decoration: none;
-    font-size: 0.82rem;
-    font-weight: 850;
-}
-
-.prediction-final-links a:hover,
-.prediction-final-links a[aria-current="page"] {
-    color: var(--pf-blue);
-}
-
-/* COCKPIT */
-
-.prediction-final-cockpit {
-    height: calc(100svh - var(--pf-nav-h));
-    max-height: calc(100svh - var(--pf-nav-h));
-    padding: 14px 18px 16px;
-    box-sizing: border-box;
-    display: grid;
-    grid-template-rows: 118px minmax(0, 1fr);
-    gap: 12px;
-    overflow: hidden;
-}
-
-.prediction-final-hero {
-    min-height: 0;
-    border: 1px solid var(--pf-border);
-    border-radius: 22px;
-    background:
-        linear-gradient(135deg, rgba(11, 31, 54, 0.88), rgba(4, 13, 28, 0.96));
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(380px, 0.45fr);
-    align-items: center;
-    gap: 18px;
-    padding: 18px 28px;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.prediction-final-kicker {
-    min-height: 24px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+    width: fit-content;
+    padding: 8px 14px;
     border-radius: 999px;
-    border: 1px solid rgba(113, 217, 255, 0.20);
-    background: rgba(113, 217, 255, 0.075);
-    color: var(--pf-blue);
-    padding: 0 11px;
-    font-size: 0.68rem;
-    font-weight: 950;
-    letter-spacing: 0.11em;
+    font-size: 0.8rem;
+    font-weight: 800;
     text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #dff6ff;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(155, 207, 255, 0.12);
 }
 
-.prediction-final-kicker.compact {
-    margin-bottom: 8px;
-}
-
-.prediction-final-kicker i {
-    width: 8px;
-    height: 8px;
+.pulse {
+    width: 10px;
+    height: 10px;
     border-radius: 999px;
-    background: #35e98d;
-    box-shadow: 0 0 18px rgba(53, 233, 141, 0.65);
+    background: #35e07d;
+    box-shadow: 0 0 14px rgba(53, 224, 125, 0.8);
 }
 
-.prediction-final-hero h1 {
-    margin: 7px 0 4px;
-    font-size: clamp(2.55rem, 5vw, 4.8rem);
-    line-height: 0.86;
-    letter-spacing: -0.085em;
-    font-weight: 950;
-    white-space: nowrap;
-}
-
-.prediction-final-hero p {
-    max-width: 940px;
-    margin: 0;
-    color: var(--pf-muted);
-    font-size: 0.88rem;
-    line-height: 1.34;
-}
-
-.prediction-final-status-grid {
+/* ============================================================
+   SECTION 03 - STATUS STRIP
+   ============================================================ */
+.runtime-status-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-}
-
-.prediction-final-status-grid article,
-.prediction-final-mini-grid article,
-.prediction-final-band article,
-.prediction-final-metrics article,
-.prediction-final-ai-grid article {
-    border: 1px solid rgba(113, 217, 255, 0.13);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.035);
-    box-sizing: border-box;
-}
-
-.prediction-final-status-grid article {
-    min-height: 56px;
-    padding: 10px 11px;
-}
-
-.prediction-final-status-grid span,
-.prediction-final-mini-grid span,
-.prediction-final-band span,
-.prediction-final-metrics span,
-.prediction-final-ai-grid span {
-    display: block;
-    color: var(--pf-soft);
-    font-size: 0.58rem;
-    font-weight: 950;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-}
-
-.prediction-final-status-grid strong,
-.prediction-final-mini-grid strong,
-.prediction-final-band strong,
-.prediction-final-metrics strong,
-.prediction-final-ai-grid strong {
-    display: block;
-    margin-top: 5px;
-    color: var(--pf-text);
-    line-height: 1.12;
-}
-
-.prediction-final-status-grid strong {
-    font-size: 0.78rem;
-}
-
-/* GRID */
-
-.prediction-final-grid {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(280px, 0.72fr) minmax(620px, 1.82fr) minmax(330px, 0.88fr);
-    gap: 12px;
-    overflow: hidden;
-}
-
-.prediction-final-panel {
-    min-width: 0;
-    min-height: 0;
-    border: 1px solid var(--pf-border);
-    border-radius: 19px;
-    background:
-        linear-gradient(180deg, var(--pf-panel-2), var(--pf-panel));
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
-    box-sizing: border-box;
-}
-
-.prediction-final-controls,
-.prediction-final-ai {
-    padding: 14px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(113, 217, 255, 0.32) rgba(255, 255, 255, 0.04);
-}
-
-.prediction-final-result {
-    padding: 20px 22px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.prediction-final-controls::-webkit-scrollbar,
-.prediction-final-ai::-webkit-scrollbar {
-    width: 7px;
-}
-
-.prediction-final-controls::-webkit-scrollbar-thumb,
-.prediction-final-ai::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(113, 217, 255, 0.32);
-}
-
-/* PANEL CONTENT */
-
-.prediction-final-panel-head,
-.prediction-final-result-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
 }
 
-.prediction-final-panel-head h2,
-.prediction-final-ai h2 {
-    margin: 0;
-    color: var(--pf-text);
-    font-size: 1.18rem;
-    line-height: 1.04;
-    letter-spacing: -0.045em;
-    font-weight: 900;
+.runtime-status-card {
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: rgba(10, 24, 38, 0.74);
+    border: 1px solid rgba(141, 198, 241, 0.14);
+    min-height: 84px;
+    display: grid;
+    gap: 8px;
+    align-content: center;
 }
 
-.prediction-final-panel-head p,
-.prediction-final-ai p {
-    margin: 5px 0 0;
-    color: var(--pf-muted);
-    font-size: 0.76rem;
-    line-height: 1.32;
-}
-
-.prediction-final-pill {
-    flex: 0 0 auto;
-    min-height: 29px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--pf-mint);
-    background: rgba(143, 245, 189, 0.085);
-    border: 1px solid rgba(143, 245, 189, 0.20);
-    border-radius: 999px;
-    padding: 0 11px;
-    font-size: 0.76rem;
-    font-weight: 950;
-}
-
-/* CONTROLS */
-
-.prediction-final-field {
-    display: block;
-    margin-top: 12px;
-}
-
-.prediction-final-field span {
-    display: block;
-    margin-bottom: 5px;
-    color: var(--pf-soft);
-    font-size: 0.61rem;
-    font-weight: 950;
-    letter-spacing: 0.10em;
+.runtime-status-label {
+    font-size: 0.75rem;
     text-transform: uppercase;
-}
-
-.prediction-final-field select,
-.prediction-final-field input {
-    width: 100%;
-    height: 38px;
-    min-height: 38px;
-    border-radius: 11px;
-    border: 1px solid rgba(113, 217, 255, 0.16);
-    background: rgba(1, 8, 19, 0.78);
-    color: var(--pf-text);
-    padding: 0 12px;
-    box-sizing: border-box;
-    outline: none;
-    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    color: rgba(206, 228, 246, 0.78);
     font-weight: 800;
 }
 
-.prediction-final-field small {
-    display: block;
-    margin-top: 5px;
-    color: var(--pf-soft);
-    font-size: 0.69rem;
-    line-height: 1.25;
+.runtime-status-value {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #8ee7ff;
 }
 
-.prediction-final-button-row {
+/* ============================================================
+   SECTION 04 - CONTROL CENTER
+   ============================================================ */
+.prediction-controls-card {
+    padding: 22px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 11px;
+    gap: 18px;
 }
 
-.prediction-final-primary,
-.prediction-final-secondary {
-    min-height: 35px;
+.panel-heading-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: start;
+}
+
+.selector-state-badge {
+    min-width: 180px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(146, 208, 255, 0.12);
+    display: grid;
+    gap: 6px;
+}
+
+.selector-state-badge-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(211, 232, 248, 0.74);
+}
+
+.selector-state-badge strong {
+    font-size: 1.15rem;
+    color: #8ef0bc;
+}
+
+.prediction-form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 18px;
+    align-items: end;
+}
+
+.prediction-field {
+    display: grid;
+    gap: 9px;
+}
+
+.prediction-field:nth-child(1) { grid-column: span 4; }
+.prediction-field:nth-child(2) { grid-column: span 4; }
+.prediction-field:nth-child(3) { grid-column: span 4; }
+
+.prediction-field label {
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(211, 232, 248, 0.78);
+}
+
+.prediction-field select {
+    width: 100%;
+    min-height: 54px;
+    padding: 0 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(124, 200, 255, 0.18);
+    background: rgba(1, 10, 24, 0.92);
+    color: #eff8ff;
+    font-size: 1rem;
+    font-weight: 700;
+    outline: none;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+.prediction-field select:focus {
+    border-color: rgba(110, 233, 184, 0.7);
+    box-shadow: 0 0 0 3px rgba(110, 233, 184, 0.12);
+}
+
+.field-note {
+    min-height: 20px;
+    font-size: 0.84rem;
+    color: rgba(220, 236, 250, 0.78);
+}
+
+.prediction-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.prediction-primary-button,
+.prediction-secondary-button {
+    min-height: 48px;
+    padding: 0 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(137, 199, 239, 0.18);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
-    padding: 0 12px;
-    font-size: 0.73rem;
-    font-weight: 950;
+    font-weight: 800;
     text-decoration: none;
     cursor: pointer;
-    box-sizing: border-box;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
-.prediction-final-primary {
-    border: 0;
-    background: linear-gradient(135deg, var(--pf-blue), var(--pf-mint));
-    color: #00111d;
+.prediction-primary-button {
+    background: linear-gradient(90deg, #81d6ff, #88e8b0);
+    color: #04111d;
+    box-shadow: 0 12px 24px rgba(84, 219, 195, 0.18);
 }
 
-.prediction-final-secondary {
-    border: 1px solid rgba(113, 217, 255, 0.18);
-    background: rgba(255, 255, 255, 0.045);
-    color: var(--pf-text);
+.prediction-secondary-button {
+    background: rgba(255, 255, 255, 0.06);
+    color: #eef8ff;
 }
 
-.prediction-final-mini-grid {
-    display: grid;
-    gap: 7px;
-    margin-top: 12px;
+.prediction-primary-button:hover,
+.prediction-secondary-button:hover {
+    transform: translateY(-1px);
 }
 
-.prediction-final-mini-grid article {
-    min-height: 40px;
-    padding: 8px 10px;
+.prediction-primary-button:disabled,
+.prediction-secondary-button:disabled {
+    opacity: 0.62;
+    cursor: not-allowed;
+    transform: none;
 }
 
-.prediction-final-mini-grid strong {
-    font-size: 0.76rem;
-}
-
-.prediction-final-note {
-    margin-top: 10px;
-    border-radius: 13px;
-    border: 1px solid rgba(113, 217, 255, 0.13);
-    background: rgba(255, 255, 255, 0.035);
-    color: var(--pf-muted);
-    padding: 9px 10px;
-    font-size: 0.71rem;
-    line-height: 1.35;
-}
-
-/* RESULT */
-
-.prediction-player-name {
-    margin: 10px 0 4px;
-    max-width: 100%;
-    color: var(--pf-text);
-    font-size: clamp(3rem, 5.45vw, 5.15rem);
-    line-height: 0.84;
-    letter-spacing: -0.09em;
-    font-weight: 950;
-}
-
-.prediction-final-result-top p {
-    margin: 0;
-    color: var(--pf-muted);
-    font-size: 0.94rem;
-}
-
-.prediction-final-band {
-    display: grid;
-    grid-template-columns: 1.15fr 1fr 1fr;
-    gap: 9px;
-    margin-top: 18px;
-}
-
-.prediction-final-band article {
-    min-height: 66px;
-    padding: 11px 12px;
-}
-
-.prediction-final-band strong {
-    font-size: 1.02rem;
-}
-
-.prediction-final-metrics {
+.diagnostic-mini-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 12px;
+    gap: 12px;
 }
 
-.prediction-final-metrics article {
-    min-height: 54px;
-    padding: 9px 10px;
-}
-
-.prediction-final-metrics strong,
-.prediction-final-ai-grid strong {
-    font-size: 0.77rem;
-}
-
-.prediction-final-summary {
-    margin-top: auto;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.075);
-}
-
-.prediction-final-summary h3,
-.prediction-final-text-block h3 {
-    margin: 0 0 6px;
-    color: var(--pf-text);
-    font-size: 0.92rem;
-    letter-spacing: -0.02em;
-}
-
-.prediction-final-summary p {
-    margin: 0;
-    color: var(--pf-muted);
-    font-size: 0.82rem;
-    line-height: 1.4;
-}
-
-/* AI PANEL */
-
-.prediction-final-ai-grid {
+.diagnostic-mini-card {
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(146, 206, 246, 0.10);
     display: grid;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 7px;
+    min-height: 78px;
+    align-content: center;
 }
 
-.prediction-final-ai-grid article {
+.diagnostic-mini-card span {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(214, 234, 250, 0.74);
+    font-weight: 800;
+}
+
+.diagnostic-mini-card strong {
+    font-size: 1.02rem;
+    color: #eff8ff;
+    font-weight: 800;
+}
+
+.selector-diagnostic-bar {
     min-height: 48px;
-    padding: 8px 10px;
+    padding: 13px 16px;
+    border-radius: 16px;
+    background: rgba(8, 17, 28, 0.52);
+    border: 1px solid rgba(126, 188, 230, 0.10);
+    color: rgba(229, 241, 251, 0.82);
+    display: flex;
+    align-items: center;
 }
 
-.prediction-final-text-block {
-    margin-top: 13px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.075);
+/* ============================================================
+   SECTION 05 - CORE GRID
+   ============================================================ */
+.prediction-core-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(360px, 0.95fr);
+    gap: 18px;
+    align-items: start;
 }
 
-.prediction-final-text-block div,
-.prediction-final-text-block ul {
+.main-probability-card,
+.prediction-explanation-panel,
+.analysis-panel,
+.prediction-error-panel {
+    padding: 22px;
+}
+
+.result-header-row {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+}
+
+.prediction-player-name {
     margin: 0;
-    color: var(--pf-muted);
+    font-size: clamp(2.5rem, 5vw, 4.25rem);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+    color: #f4fbff;
+}
+
+.prediction-team-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    color: rgba(220, 237, 250, 0.82);
+    font-size: 1rem;
+}
+
+.middot {
+    opacity: 0.72;
+}
+
+.result-source-pill {
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(140, 210, 251, 0.12);
+    color: #9be7ff;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.probability-row {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: minmax(210px, 0.8fr) minmax(0, 1.2fr);
+    gap: 16px;
+    align-items: stretch;
+}
+
+.probability-column {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+}
+
+.prediction-big-number {
+    font-size: clamp(4rem, 9vw, 7.2rem);
+    line-height: 0.88;
+    font-weight: 900;
+    letter-spacing: -0.06em;
+    color: #8ef0bc;
+}
+
+.result-confidence-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    color: rgba(228, 241, 252, 0.88);
+}
+
+.result-inline-label {
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
     font-size: 0.75rem;
+    font-weight: 800;
+    color: rgba(204, 227, 245, 0.72);
+}
+
+.result-highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-content: start;
+}
+
+.metric-card-grid {
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.dense-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dense-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.prediction-stat-chip {
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(134, 198, 239, 0.12);
+    display: grid;
+    gap: 7px;
+    min-height: 76px;
+    align-content: center;
+}
+
+.prediction-stat-chip span {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(205, 227, 244, 0.72);
+    font-weight: 800;
+}
+
+.prediction-stat-chip strong {
+    color: #f0f8ff;
+    font-weight: 800;
     line-height: 1.35;
 }
 
-.prediction-final-text-block ul {
-    padding-left: 18px;
+.compact-chip {
+    min-height: 82px;
 }
 
-.prediction-final-hidden-targets {
+.reasoning-panel,
+.stacked-subpanel {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.prediction-list {
+    margin: 0;
+    padding-left: 18px;
+    color: rgba(228, 241, 252, 0.86);
+    display: grid;
+    gap: 8px;
+}
+
+/* ============================================================
+   SECTION 06 - SUPPORTING ANALYSIS GRID
+   ============================================================ */
+.supporting-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.bullet-metric-grid {
+    margin-top: 16px;
+    display: grid;
+    gap: 10px;
+}
+
+.bullet-metric {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(137, 199, 240, 0.10);
+    color: rgba(229, 241, 251, 0.84);
+}
+
+.bullet-metric span {
+    font-weight: 700;
+}
+
+.bullet-metric strong {
+    color: #f5fbff;
+    font-weight: 800;
+    text-align: right;
+}
+
+/* ============================================================
+   SECTION 07 - PROP GRID
+   ============================================================ */
+.prop-grid {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.prop-card {
+    padding: 16px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(137, 199, 240, 0.10);
+    display: grid;
+    gap: 8px;
+    min-height: 88px;
+    align-content: center;
+}
+
+.prop-title {
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(206, 228, 246, 0.72);
+}
+
+.prop-probability {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #8ef0bc;
+}
+
+/* ============================================================
+   SECTION 08 - ERROR PANEL
+   ============================================================ */
+.prediction-error-panel {
+    display: grid;
+    gap: 8px;
+}
+
+.prediction-error-text {
+    margin: 0;
+    color: #ffd7d7;
+    line-height: 1.6;
+}
+
+.is-hidden {
     display: none !important;
 }
 
-/* NEUTRALIZE OLD BROKEN CLASSES FROM PREVIOUS PATCHES */
+/* ============================================================
+   SECTION 09 - RESPONSIVE
+   ============================================================ */
+@media (max-width: 1240px) {
+    .prediction-core-grid,
+    .supporting-analysis-grid {
+        grid-template-columns: 1fr;
+    }
 
-body.aisp2-prediction-cockpit-repair .prediction-final-shell,
-body.aisp2-prediction-cockpit-repair .prediction-final-cockpit,
-body.aisp2-prediction-cockpit-repair .prediction-final-grid,
-body.aisp2-prediction-cockpit-repair .prediction-final-panel,
-body.aisp2-prediction-cockpit-repair .prediction-final-hero {
-    width: auto !important;
-    max-width: none !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+    .dense-grid-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
-body.aisp2-prediction-cockpit-repair .prediction-workbench,
-body.aisp2-prediction-cockpit-repair .prediction-hero,
-body.aisp2-prediction-cockpit-repair .prediction-controls-card,
-body.aisp2-prediction-cockpit-repair .prediction-selector-panel:not(.prediction-final-controls),
-body.aisp2-prediction-cockpit-repair .main-probability-card:not(.prediction-final-result),
-body.aisp2-prediction-cockpit-repair .prediction-explanation-panel:not(.prediction-final-ai) {
-    all: revert-layer;
+@media (max-width: 980px) {
+    .runtime-status-grid,
+    .diagnostic-mini-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .prediction-field:nth-child(1),
+    .prediction-field:nth-child(2),
+    .prediction-field:nth-child(3) {
+        grid-column: span 12;
+    }
+
+    .probability-row {
+        grid-template-columns: 1fr;
+    }
+
+    .panel-heading-row,
+    .result-header-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .selector-state-badge {
+        min-width: 0;
+    }
 }
 
-/* SHORT HEIGHT */
-
-@media (max-height: 820px) and (min-width: 1100px) {
-    .prediction-final-cockpit {
-        grid-template-rows: 92px minmax(0, 1fr);
-        padding: 10px 14px 12px;
-        gap: 10px;
+@media (max-width: 720px) {
+    .prediction-workbench {
+        width: min(100%, calc(100% - 24px));
+        padding: 20px 0 40px;
+        gap: 14px;
     }
 
-    .prediction-final-hero {
-        padding: 14px 24px;
-        border-radius: 18px;
+    .prediction-hero,
+    .prediction-controls-card,
+    .main-probability-card,
+    .prediction-explanation-panel,
+    .analysis-panel,
+    .prediction-error-panel {
+        padding: 18px;
     }
 
-    .prediction-final-hero h1 {
-        font-size: clamp(2.15rem, 4.2vw, 3.75rem);
-        margin: 5px 0 2px;
+    .runtime-status-grid,
+    .diagnostic-mini-grid,
+    .dense-grid-2,
+    .dense-grid-4,
+    .prop-grid,
+    .supporting-analysis-grid,
+    .result-highlights-grid {
+        grid-template-columns: 1fr;
     }
 
-    .prediction-final-hero p {
-        font-size: 0.78rem;
-        line-height: 1.24;
+    .prediction-action-row {
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    .prediction-final-status-grid article {
-        min-height: 44px;
-        padding: 8px 9px;
-    }
-
-    .prediction-final-controls,
-    .prediction-final-ai {
-        padding: 11px;
-    }
-
-    .prediction-final-result {
-        padding: 16px 18px;
+    .prediction-primary-button,
+    .prediction-secondary-button {
+        width: 100%;
     }
 
     .prediction-player-name {
-        font-size: clamp(2.45rem, 4.7vw, 4.25rem);
+        font-size: clamp(2rem, 11vw, 3.25rem);
     }
 
-    .prediction-final-metrics article {
-        min-height: 47px;
-        padding: 8px;
-    }
-
-    .prediction-final-band {
-        margin-top: 12px;
+    .prediction-big-number {
+        font-size: clamp(3.2rem, 18vw, 5.6rem);
     }
 }
 
-@media (max-height: 710px) and (min-width: 1100px) {
-    .prediction-final-cockpit {
-        grid-template-rows: minmax(0, 1fr);
+/* ============================================================
+   SECTION 999 - PHASE 12 PART 5.10 PREMIUM DESIGN SYSTEM
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Final visual discipline pass for Prediction Workbench.
+
+   DESIGN TARGET:
+   - Less bulky.
+   - More balanced.
+   - More premium.
+   - Better information density.
+   - Cleaner prediction/result hierarchy.
+   - No huge negative space inside cards.
+   ============================================================ */
+
+
+/* ============================================================
+   999.01 - GLOBAL PAGE BALANCE
+   ============================================================ */
+
+.prediction-workbench,
+.prediction-container {
+    width: min(1380px, calc(100vw - 64px)) !important;
+    max-width: 1380px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-top: 28px !important;
+    padding-bottom: 56px !important;
+    gap: 16px !important;
+}
+
+.prediction-workbench-page,
+body {
+    background:
+        radial-gradient(circle at 16% 0%, rgba(70, 176, 255, 0.13), transparent 32%),
+        radial-gradient(circle at 84% 10%, rgba(92, 255, 202, 0.11), transparent 30%),
+        linear-gradient(135deg, #010816 0%, #031421 48%, #03140f 100%) !important;
+}
+
+
+/* ============================================================
+   999.02 - HERO SHOULD FEEL PREMIUM, NOT HUGE
+   ============================================================ */
+
+.prediction-hero,
+.prediction-header {
+    padding: 26px 30px !important;
+    margin-bottom: 0 !important;
+    border-radius: 28px !important;
+}
+
+.prediction-title {
+    max-width: 820px !important;
+    font-size: clamp(3.4rem, 6.4vw, 5.75rem) !important;
+    line-height: 0.92 !important;
+    letter-spacing: -0.065em !important;
+    margin: 0 !important;
+}
+
+.prediction-subtitle,
+.panel-copy {
+    max-width: 920px !important;
+    font-size: 0.98rem !important;
+    line-height: 1.58 !important;
+    color: rgba(224, 239, 252, 0.86) !important;
+}
+
+.eyebrow,
+.prediction-eyebrow {
+    margin-bottom: 12px !important;
+    padding: 7px 12px !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.14em !important;
+    border-color: rgba(140, 210, 255, 0.13) !important;
+    background: rgba(255, 255, 255, 0.055) !important;
+}
+
+
+/* ============================================================
+   999.03 - TOP STATUS STRIP
+   ============================================================ */
+
+.runtime-status-grid,
+.prediction-header .prediction-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+.runtime-status-card,
+.prediction-header .prediction-stat-chip {
+    min-height: 64px !important;
+    padding: 13px 15px !important;
+    border-radius: 16px !important;
+    background:
+        linear-gradient(145deg, rgba(18, 43, 68, 0.76), rgba(8, 22, 35, 0.72)) !important;
+    border: 1px solid rgba(132, 197, 239, 0.14) !important;
+}
+
+.runtime-status-label,
+.prediction-header .prediction-stat-chip span {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.12em !important;
+    color: rgba(203, 224, 241, 0.72) !important;
+}
+
+.runtime-status-value,
+.prediction-header .prediction-stat-chip strong {
+    font-size: 1rem !important;
+    line-height: 1.2 !important;
+}
+
+
+/* ============================================================
+   999.04 - CONTROL PANEL REBALANCE
+   ============================================================ */
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    padding: 20px 22px !important;
+    border-radius: 26px !important;
+    gap: 14px !important;
+    background:
+        linear-gradient(135deg, rgba(10, 34, 57, 0.86), rgba(8, 29, 25, 0.70)) !important;
+}
+
+.panel-heading-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 168px !important;
+    align-items: center !important;
+    gap: 18px !important;
+}
+
+.panel-title,
+.prediction-selector-panel h2 {
+    font-size: clamp(1.55rem, 2vw, 2.05rem) !important;
+    letter-spacing: -0.045em !important;
+    margin-bottom: 6px !important;
+}
+
+.selector-state-badge,
+[data-selector-status-card] {
+    min-height: 62px !important;
+    min-width: 0 !important;
+    padding: 12px 14px !important;
+    border-radius: 16px !important;
+    align-content: center !important;
+}
+
+.prediction-form-grid {
+    display: grid !important;
+    grid-template-columns: minmax(220px, 0.95fr) minmax(280px, 1.12fr) minmax(190px, 0.72fr) !important;
+    gap: 14px !important;
+    margin-top: 6px !important;
+}
+
+.prediction-field {
+    gap: 7px !important;
+}
+
+.prediction-field label {
+    font-size: 0.68rem !important;
+    letter-spacing: 0.16em !important;
+    color: rgba(204, 224, 241, 0.70) !important;
+}
+
+.prediction-field select {
+    min-height: 48px !important;
+    border-radius: 14px !important;
+    font-size: 0.96rem !important;
+    font-weight: 800 !important;
+}
+
+.field-note,
+.prediction-field small {
+    min-height: 18px !important;
+    font-size: 0.78rem !important;
+    line-height: 1.35 !important;
+    color: rgba(218, 234, 247, 0.72) !important;
+}
+
+.prediction-action-row {
+    margin-top: 4px !important;
+    gap: 10px !important;
+}
+
+.prediction-primary-button,
+.prediction-secondary-button {
+    min-height: 42px !important;
+    padding: 0 20px !important;
+    font-size: 0.9rem !important;
+}
+
+
+/* ============================================================
+   999.05 - DIAGNOSTIC STRIP SHOULD NOT FEEL LIKE FOUR BIG ROOMS
+   ============================================================ */
+
+.diagnostic-mini-grid,
+.prediction-selector-panel [data-selector-diagnostics],
+.prediction-selector-panel .prediction-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.diagnostic-mini-card,
+.prediction-selector-panel .prediction-stat-chip {
+    min-height: 58px !important;
+    padding: 11px 13px !important;
+    border-radius: 14px !important;
+    gap: 5px !important;
+    background: rgba(255, 255, 255, 0.038) !important;
+}
+
+.diagnostic-mini-card span,
+.prediction-selector-panel .prediction-stat-chip span {
+    font-size: 0.62rem !important;
+    letter-spacing: 0.14em !important;
+}
+
+.diagnostic-mini-card strong,
+.prediction-selector-panel .prediction-stat-chip strong {
+    font-size: 0.92rem !important;
+    line-height: 1.2 !important;
+}
+
+.selector-diagnostic-bar,
+[data-selector-warning] {
+    min-height: 40px !important;
+    padding: 10px 13px !important;
+    border-radius: 14px !important;
+    font-size: 0.84rem !important;
+}
+
+
+/* ============================================================
+   999.06 - RESULT GRID SHOULD FEEL LIKE A PRODUCT, NOT STACKED CARDS
+   ============================================================ */
+
+.prediction-core-grid,
+.prediction-result-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.38fr) minmax(390px, 0.82fr) !important;
+    gap: 16px !important;
+    align-items: start !important;
+}
+
+.main-probability-card,
+.prediction-explanation-panel {
+    padding: 20px !important;
+    border-radius: 26px !important;
+}
+
+.main-probability-card {
+    min-height: auto !important;
+    background:
+        radial-gradient(circle at 12% 8%, rgba(71, 190, 255, 0.16), transparent 34%),
+        linear-gradient(145deg, rgba(8, 34, 58, 0.94), rgba(5, 18, 32, 0.90)) !important;
+}
+
+.result-header-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: start !important;
+    gap: 12px !important;
+    margin-top: 10px !important;
+}
+
+.prediction-player-name {
+    font-size: clamp(2.6rem, 4.8vw, 4.45rem) !important;
+    line-height: 0.92 !important;
+    letter-spacing: -0.065em !important;
+    margin: 0 !important;
+}
+
+.prediction-team-line {
+    margin-top: 8px !important;
+    font-size: 0.92rem !important;
+    color: rgba(217, 235, 248, 0.76) !important;
+}
+
+.result-source-pill {
+    padding: 8px 12px !important;
+    font-size: 0.84rem !important;
+    border-radius: 999px !important;
+    color: #9feaff !important;
+}
+
+
+/* ============================================================
+   999.07 - PRIMARY NUMBER AREA
+   ============================================================ */
+
+.probability-row {
+    display: grid !important;
+    grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1fr) !important;
+    gap: 14px !important;
+    margin-top: 16px !important;
+    align-items: start !important;
+}
+
+.prediction-big-number {
+    font-size: clamp(4.4rem, 8vw, 7.2rem) !important;
+    line-height: 0.84 !important;
+    letter-spacing: -0.08em !important;
+    color: #89f5b8 !important;
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+}
+
+.prediction-big-number[data-result-probability] {
+    min-height: 86px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.result-confidence-row,
+.prediction-confidence {
+    font-size: 0.86rem !important;
+    line-height: 1.35 !important;
+}
+
+.result-highlights-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+
+/* ============================================================
+   999.08 - METRIC CARDS NEED LESS HEIGHT AND CLEANER TYPE
+   ============================================================ */
+
+.metric-card-grid,
+.main-probability-card .prediction-stat-grid,
+[data-ai-intelligence-panel] .prediction-stat-grid {
+    gap: 10px !important;
+}
+
+.dense-grid-4,
+.main-probability-card .prediction-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.dense-grid-2,
+[data-ai-intelligence-panel] .prediction-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.prediction-stat-chip,
+.compact-chip {
+    min-height: 62px !important;
+    padding: 12px 13px !important;
+    border-radius: 14px !important;
+    gap: 6px !important;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.028)) !important;
+    border: 1px solid rgba(135, 199, 238, 0.115) !important;
+}
+
+.prediction-stat-chip span {
+    font-size: 0.62rem !important;
+    letter-spacing: 0.13em !important;
+    color: rgba(204, 225, 241, 0.70) !important;
+}
+
+.prediction-stat-chip strong {
+    font-size: 0.9rem !important;
+    line-height: 1.28 !important;
+    color: rgba(244, 250, 255, 0.96) !important;
+}
+
+
+/* ============================================================
+   999.09 - AI PANEL SHOULD READ LIKE AN ANALYST CARD
+   ============================================================ */
+
+.prediction-explanation-panel {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(109, 235, 184, 0.08), transparent 32%),
+        linear-gradient(145deg, rgba(10, 31, 50, 0.94), rgba(5, 22, 28, 0.88)) !important;
+}
+
+.prediction-explanation-title {
+    font-size: clamp(1.75rem, 2.3vw, 2.35rem) !important;
+    letter-spacing: -0.05em !important;
+    margin-bottom: 8px !important;
+}
+
+.prediction-explanation-text {
+    font-size: 0.93rem !important;
+    line-height: 1.58 !important;
+    color: rgba(225, 239, 250, 0.84) !important;
+}
+
+.stacked-subpanel,
+.reasoning-panel {
+    margin-top: 14px !important;
+    padding-top: 14px !important;
+}
+
+.subpanel-title {
+    font-size: 0.95rem !important;
+    margin-bottom: 8px !important;
+}
+
+.prediction-list {
+    font-size: 0.88rem !important;
+    line-height: 1.45 !important;
+    gap: 6px !important;
+}
+
+
+/* ============================================================
+   999.10 - LOWER SECTIONS SHOULD BE COMPACT DASHBOARD MODULES
+   ============================================================ */
+
+.supporting-analysis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+}
+
+.analysis-panel {
+    padding: 20px !important;
+    border-radius: 24px !important;
+}
+
+.bullet-metric-grid {
+    gap: 8px !important;
+    margin-top: 12px !important;
+}
+
+.bullet-metric {
+    min-height: 42px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+    font-size: 0.86rem !important;
+}
+
+.prop-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 12px !important;
+}
+
+.prop-card {
+    min-height: 76px !important;
+    padding: 13px !important;
+    border-radius: 14px !important;
+}
+
+.prop-title {
+    font-size: 0.64rem !important;
+}
+
+.prop-probability {
+    font-size: 1.2rem !important;
+    margin-top: 0 !important;
+}
+
+
+/* ============================================================
+   999.11 - COLORS / TRUST SIGNALS
+   ============================================================ */
+
+[data-selector-health],
+[data-selector-state],
+[data-prediction-api-status] {
+    color: #8af3bd !important;
+}
+
+[data-selector-source],
+[data-bootstrap-source],
+[data-result-source],
+[data-intelligence-data-source] {
+    color: #9beaff !important;
+}
+
+[data-warehouse-status],
+[data-result-warehouse-status],
+[data-intelligence-warehouse],
+[data-result-risk],
+[data-intelligence-risk] {
+    color: #ffe29e !important;
+}
+
+[data-result-probability],
+[data-prop-home-run],
+[data-prop-hit],
+[data-prop-rbi],
+[data-prop-run-scored],
+[data-prop-total-bases],
+[data-prop-strikeout] {
+    color: #89f5b8 !important;
+}
+
+
+/* ============================================================
+   999.12 - RESPONSIVE SAFETY
+   ============================================================ */
+
+@media (max-width: 1260px) {
+    .prediction-core-grid,
+    .prediction-result-grid,
+    .supporting-analysis-grid {
+        grid-template-columns: 1fr !important;
     }
 
-    .prediction-final-hero {
-        display: none;
+    .prediction-explanation-panel {
+        position: relative !important;
+        top: auto !important;
     }
 }
 
-/* RESPONSIVE */
-
-@media (max-width: 1200px) {
-    body.prediction-final-body {
-        overflow: auto;
+@media (max-width: 980px) {
+    .prediction-workbench,
+    .prediction-container {
+        width: min(100%, calc(100vw - 28px)) !important;
     }
 
-    .prediction-final-shell {
-        height: auto;
-        min-height: 100svh;
-        overflow: visible;
+    .runtime-status-grid,
+    .diagnostic-mini-grid,
+    .prediction-form-grid,
+    .dense-grid-4,
+    .main-probability-card .prediction-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
-    .prediction-final-cockpit {
-        height: auto;
-        max-height: none;
-        overflow: visible;
+    .prediction-field:nth-child(1),
+    .prediction-field:nth-child(2),
+    .prediction-field:nth-child(3) {
+        grid-column: auto !important;
     }
 
-    .prediction-final-grid {
-        grid-template-columns: 300px minmax(0, 1fr);
+    .probability-row,
+    .panel-heading-row,
+    .result-header-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 680px) {
+    .prediction-workbench,
+    .prediction-container {
+        width: min(100%, calc(100vw - 20px)) !important;
+        padding-top: 18px !important;
+    }
+
+    .prediction-title {
+        font-size: clamp(3rem, 15vw, 4.2rem) !important;
+    }
+
+    .runtime-status-grid,
+    .diagnostic-mini-grid,
+    .prediction-form-grid,
+    .result-highlights-grid,
+    .dense-grid-4,
+    .dense-grid-2,
+    .main-probability-card .prediction-stat-grid,
+    [data-ai-intelligence-panel] .prediction-stat-grid,
+    .supporting-analysis-grid,
+    .prop-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .prediction-action-row {
+        align-items: stretch !important;
+    }
+
+    .prediction-primary-button,
+    .prediction-secondary-button {
+        width: 100% !important;
+    }
+}
+
+
+/* ============================================================
+   SECTION 1000 - PHASE 12 PART 5.11 BOTTOM RUNTIME STATUS
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Move runtime health/status presentation to the bottom of the
+   Prediction Workbench so the primary workflow appears first.
+   ============================================================ */
+
+.runtime-status-bottom {
+    margin-top: 18px !important;
+    order: 99 !important;
+}
+
+.runtime-status-bottom .runtime-status-card {
+    min-height: 58px !important;
+    padding: 12px 14px !important;
+    border-radius: 15px !important;
+    background:
+        linear-gradient(145deg, rgba(10, 28, 47, 0.78), rgba(5, 18, 30, 0.70)) !important;
+    border: 1px solid rgba(120, 190, 235, 0.12) !important;
+}
+
+.runtime-status-bottom .runtime-status-label {
+    font-size: 0.64rem !important;
+    letter-spacing: 0.13em !important;
+}
+
+.runtime-status-bottom .runtime-status-value {
+    font-size: 0.95rem !important;
+}
+
+.prediction-hero + .runtime-status-grid:not(.runtime-status-bottom),
+.prediction-header + .prediction-stat-grid {
+    display: none !important;
+}
+
+/* Tighten space after hero now that status moved down. */
+.prediction-hero,
+.prediction-header {
+    margin-bottom: 0 !important;
+}
+
+/* Keep bottom status compact on smaller screens. */
+@media (max-width: 980px) {
+    .runtime-status-bottom {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .runtime-status-bottom {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+
+/* ============================================================
+   SECTION 1001 - PHASE 12 PART 5.12 COMPACT HERO HEADER
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Compress Prediction Workbench hero/header so it uses fewer
+   lines, has less vertical weight, and reads like a premium
+   enterprise command header.
+   ============================================================ */
+
+
+/* ============================================================
+   1001.01 - HERO CONTAINER COMPRESSION
+   ============================================================ */
+
+.prediction-hero,
+.prediction-header {
+    min-height: unset !important;
+    padding: 22px 28px !important;
+    border-radius: 24px !important;
+    display: grid !important;
+    align-items: center !important;
+}
+
+.prediction-hero-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+    max-width: 100% !important;
+}
+
+.prediction-workbench .prediction-hero {
+    margin-bottom: 0 !important;
+}
+
+
+/* ============================================================
+   1001.02 - MAKE TITLE TAKE LESS VERTICAL SPACE
+   ============================================================ */
+
+.prediction-title {
+    max-width: none !important;
+    font-size: clamp(3.25rem, 5.4vw, 5.25rem) !important;
+    line-height: 0.88 !important;
+    letter-spacing: -0.07em !important;
+    margin: 0 !important;
+}
+
+/* Prefer one-line title on wide screens. */
+@media (min-width: 1180px) {
+    .prediction-title {
+        white-space: nowrap !important;
+        font-size: clamp(3.25rem, 5.1vw, 5rem) !important;
+    }
+}
+
+
+/* ============================================================
+   1001.03 - EYEBROW SMALLER AND CLEANER
+   ============================================================ */
+
+.eyebrow,
+.prediction-eyebrow {
+    margin-bottom: 4px !important;
+    padding: 6px 11px !important;
+    font-size: 0.66rem !important;
+    letter-spacing: 0.14em !important;
+    border-radius: 999px !important;
+}
+
+.eyebrow .pulse,
+.prediction-eyebrow .pulse,
+.pulse {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+
+/* ============================================================
+   1001.04 - SUBTITLE COMPACT WIDTH AND LINE HEIGHT
+   ============================================================ */
+
+.prediction-subtitle {
+    max-width: 980px !important;
+    font-size: 0.94rem !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+    color: rgba(224, 239, 252, 0.82) !important;
+}
+
+
+/* ============================================================
+   1001.05 - DESKTOP COMMAND-BAR VERSION
+   ============================================================ */
+
+@media (min-width: 1280px) {
+    .prediction-hero,
+    .prediction-header {
+        padding-top: 20px !important;
+        padding-bottom: 20px !important;
+    }
+
+    .prediction-hero-copy {
+        gap: 7px !important;
+    }
+
+    .prediction-title {
+        line-height: 0.86 !important;
+    }
+
+    .prediction-subtitle {
+        max-width: 1040px !important;
+    }
+}
+
+
+/* ============================================================
+   1001.06 - LAPTOP / TABLET SAFETY
+   ============================================================ */
+
+@media (max-width: 1179px) {
+    .prediction-title {
+        white-space: normal !important;
+        font-size: clamp(3rem, 8vw, 4.8rem) !important;
+        line-height: 0.92 !important;
+    }
+
+    .prediction-hero,
+    .prediction-header {
+        padding: 22px !important;
+    }
+}
+
+
+/* ============================================================
+   1001.07 - MOBILE SAFETY
+   ============================================================ */
+
+@media (max-width: 720px) {
+    .prediction-title {
+        font-size: clamp(2.7rem, 14vw, 4rem) !important;
+        line-height: 0.94 !important;
+    }
+
+    .prediction-subtitle {
+        font-size: 0.9rem !important;
+        line-height: 1.45 !important;
+    }
+
+    .prediction-hero,
+    .prediction-header {
+        padding: 18px !important;
+        border-radius: 20px !important;
+    }
+}
+
+
+/* ============================================================
+   SECTION 1002 - PHASE 12 PART 5.13 CONTROLS LEFT + IMAGE RIGHT
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Convert Prediction Controls into a two-zone command module:
+   - Left: compact controls, actions, diagnostics.
+   - Right: reserved premium image / visual intelligence slot.
+   ============================================================ */
+
+
+/* ============================================================
+   1002.01 - TWO-ZONE CONTROL CARD
+   ============================================================ */
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: minmax(420px, 0.58fr) minmax(380px, 0.42fr) !important;
+    grid-template-areas:
+        "heading visual"
+        "form visual"
+        "actions visual"
+        "diagnostics visual"
+        "warning visual" !important;
+    column-gap: 24px !important;
+    row-gap: 14px !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+}
+
+
+/* ============================================================
+   1002.02 - LEFT SIDE ASSIGNMENTS
+   ============================================================ */
+
+.prediction-controls-card .panel-heading-row,
+.prediction-selector-panel > div:first-child {
+    grid-area: heading !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 150px !important;
+    gap: 14px !important;
+    align-items: start !important;
+}
+
+.prediction-controls-card .prediction-form-grid,
+.prediction-selector-panel .prediction-form-grid {
+    grid-area: form !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    align-items: start !important;
+    margin-top: 0 !important;
+}
+
+.prediction-controls-card .prediction-field,
+.prediction-selector-panel .prediction-field {
+    grid-column: auto !important;
+}
+
+.prediction-controls-card .prediction-action-row,
+.prediction-selector-panel .prediction-action-row {
+    grid-area: actions !important;
+    margin-top: 0 !important;
+    gap: 10px !important;
+}
+
+.prediction-controls-card .diagnostic-mini-grid,
+.prediction-selector-panel [data-selector-diagnostics],
+.prediction-selector-panel .prediction-stat-grid {
+    grid-area: diagnostics !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 0 !important;
+}
+
+.prediction-controls-card .selector-diagnostic-bar,
+.prediction-selector-panel [data-selector-warning] {
+    grid-area: warning !important;
+}
+
+
+/* ============================================================
+   1002.03 - RIGHT SIDE RESERVED VISUAL SLOT
+   ============================================================ */
+
+.prediction-controls-card::after,
+.prediction-selector-panel::after {
+    content: "AISP2 Visual Intelligence Panel";
+    grid-area: visual;
+    min-height: 100%;
+    border-radius: 24px;
+    border: 1px solid rgba(137, 209, 255, 0.16);
+    background:
+        radial-gradient(circle at 50% 24%, rgba(118, 236, 255, 0.16), transparent 32%),
+        radial-gradient(circle at 72% 78%, rgba(104, 255, 184, 0.13), transparent 32%),
+        linear-gradient(145deg, rgba(5, 19, 34, 0.72), rgba(3, 18, 20, 0.88));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 0 80px rgba(55, 164, 255, 0.08),
+        0 20px 52px rgba(0, 0, 0, 0.22);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 22px;
+    color: rgba(219, 239, 255, 0.58);
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   1002.04 - MAKE LEFT CONTROLS FEEL INTENTIONAL
+   ============================================================ */
+
+.prediction-controls-card .panel-title,
+.prediction-selector-panel h2 {
+    font-size: clamp(1.45rem, 1.9vw, 1.95rem) !important;
+    margin-bottom: 5px !important;
+}
+
+.prediction-controls-card .panel-copy,
+.prediction-selector-panel .prediction-subtitle {
+    max-width: 520px !important;
+    font-size: 0.92rem !important;
+    line-height: 1.48 !important;
+}
+
+.prediction-controls-card .selector-state-badge,
+.prediction-selector-panel [data-selector-status-card] {
+    min-height: 58px !important;
+    padding: 11px 13px !important;
+}
+
+.prediction-controls-card .prediction-field label,
+.prediction-selector-panel .prediction-field label {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.16em !important;
+}
+
+.prediction-controls-card .prediction-field select,
+.prediction-selector-panel .prediction-field select {
+    min-height: 48px !important;
+    max-width: 100% !important;
+}
+
+.prediction-controls-card .field-note,
+.prediction-selector-panel .prediction-field small {
+    min-height: 16px !important;
+    font-size: 0.78rem !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card,
+.prediction-selector-panel .prediction-stat-chip {
+    min-height: 56px !important;
+}
+
+
+/* ============================================================
+   1002.05 - FUTURE IMAGE HOOK
+   PURPOSE:
+   In the next pass, we will apply:
+   background-image: url("/static/assets/<your-image>");
+   to this visual slot.
+   ============================================================ */
+
+.prediction-controls-card[data-has-visual-image]::after,
+.prediction-selector-panel[data-has-visual-image]::after {
+    content: "";
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+}
+
+
+/* ============================================================
+   1002.06 - LAPTOP RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1180px) {
+    .prediction-controls-card,
+    .prediction-selector-panel {
+        grid-template-columns: 1fr !important;
         grid-template-areas:
+            "heading"
+            "form"
+            "actions"
+            "diagnostics"
+            "warning"
+            "visual" !important;
+    }
+
+    .prediction-controls-card::after,
+    .prediction-selector-panel::after {
+        min-height: 260px !important;
+    }
+}
+
+
+/* ============================================================
+   1002.07 - MOBILE RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 720px) {
+    .prediction-controls-card .panel-heading-row,
+    .prediction-selector-panel > div:first-child {
+        grid-template-columns: 1fr !important;
+    }
+
+    .prediction-controls-card .diagnostic-mini-grid,
+    .prediction-selector-panel [data-selector-diagnostics],
+    .prediction-selector-panel .prediction-stat-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .prediction-controls-card::after,
+    .prediction-selector-panel::after {
+        min-height: 220px !important;
+        border-radius: 18px !important;
+    }
+}
+
+
+/* ============================================================
+   SECTION 1004 - PHASE 12 PART 5.15 FINAL THREE-COLUMN COCKPIT
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Finalize Prediction Workbench section placement:
+   - Prediction Controls on the left.
+   - AISP2 Intelligence Engine in the center.
+   - AI Prediction Intelligence on the right.
+   ============================================================ */
+
+
+/* ============================================================
+   1004.01 - MASTER PAGE GRID
+   ============================================================ */
+
+.prediction-workbench {
+    width: min(1640px, calc(100vw - 36px)) !important;
+    max-width: 1640px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+
+    display: grid !important;
+    grid-template-columns:
+        minmax(300px, 0.76fr)
+        minmax(560px, 1.72fr)
+        minmax(330px, 0.84fr) !important;
+
+    grid-template-areas:
+        "hero hero hero"
+        "controls result ai"
+        "support support support"
+        "status status status"
+        "error error error" !important;
+
+    gap: 16px !important;
+    align-items: start !important;
+}
+
+
+/* ============================================================
+   1004.02 - SECTION ASSIGNMENTS
+   ============================================================ */
+
+.prediction-hero,
+.prediction-header {
+    grid-area: hero !important;
+}
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    grid-area: controls !important;
+}
+
+.prediction-core-grid,
+.prediction-result-grid {
+    display: contents !important;
+}
+
+.main-probability-card {
+    grid-area: result !important;
+}
+
+.prediction-explanation-panel {
+    grid-area: ai !important;
+}
+
+.supporting-analysis-grid {
+    grid-area: support !important;
+}
+
+.runtime-status-bottom,
+.runtime-status-grid.runtime-status-bottom {
+    grid-area: status !important;
+}
+
+.prediction-error-panel {
+    grid-area: error !important;
+}
+
+
+/* ============================================================
+   1004.03 - REMOVE OLD CONTROLS RIGHT-SIDE VISUAL PLACEHOLDER
+   ============================================================ */
+
+.prediction-controls-card::after,
+.prediction-selector-panel::after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+.prediction-controls-card,
+.prediction-selector-panel {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+        "heading"
+        "form"
+        "actions"
+        "diagnostics"
+        "warning" !important;
+    padding: 18px !important;
+    gap: 12px !important;
+    min-height: auto !important;
+    height: auto !important;
+}
+
+
+/* ============================================================
+   1004.04 - LEFT COLUMN: PREDICTION CONTROLS
+   ============================================================ */
+
+.prediction-controls-card .panel-heading-row,
+.prediction-selector-panel > div:first-child {
+    grid-area: heading !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    align-items: start !important;
+}
+
+.prediction-controls-card .selector-state-badge,
+.prediction-selector-panel [data-selector-status-card] {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    padding: 10px 12px !important;
+}
+
+.prediction-controls-card .panel-title,
+.prediction-selector-panel h2 {
+    font-size: 1.35rem !important;
+    line-height: 1.05 !important;
+    margin: 0 0 4px !important;
+}
+
+.prediction-controls-card .panel-copy,
+.prediction-selector-panel .prediction-subtitle {
+    max-width: 100% !important;
+    font-size: 0.82rem !important;
+    line-height: 1.38 !important;
+}
+
+.prediction-controls-card .prediction-form-grid,
+.prediction-selector-panel .prediction-form-grid {
+    grid-area: form !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 9px !important;
+    margin: 0 !important;
+}
+
+.prediction-controls-card .prediction-field,
+.prediction-selector-panel .prediction-field {
+    grid-column: auto !important;
+    gap: 5px !important;
+}
+
+.prediction-controls-card .prediction-field label,
+.prediction-selector-panel .prediction-field label {
+    font-size: 0.58rem !important;
+    letter-spacing: 0.15em !important;
+}
+
+.prediction-controls-card .prediction-field select,
+.prediction-selector-panel .prediction-field select {
+    min-height: 40px !important;
+    padding: 0 12px !important;
+    border-radius: 12px !important;
+    font-size: 0.84rem !important;
+}
+
+.prediction-controls-card .field-note,
+.prediction-selector-panel .prediction-field small {
+    min-height: 12px !important;
+    font-size: 0.68rem !important;
+    line-height: 1.25 !important;
+}
+
+.prediction-controls-card .prediction-action-row,
+.prediction-selector-panel .prediction-action-row {
+    grid-area: actions !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin: 0 !important;
+}
+
+.prediction-controls-card .prediction-primary-button,
+.prediction-controls-card .prediction-secondary-button,
+.prediction-selector-panel .prediction-primary-button,
+.prediction-selector-panel .prediction-secondary-button {
+    min-height: 38px !important;
+    width: 100% !important;
+    padding: 0 10px !important;
+    font-size: 0.76rem !important;
+    white-space: nowrap !important;
+}
+
+.prediction-controls-card .diagnostic-mini-grid,
+.prediction-selector-panel [data-selector-diagnostics],
+.prediction-selector-panel .prediction-stat-grid {
+    grid-area: diagnostics !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 7px !important;
+    margin: 0 !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card,
+.prediction-selector-panel .prediction-stat-chip {
+    min-height: 42px !important;
+    padding: 8px 10px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card span,
+.prediction-selector-panel .prediction-stat-chip span {
+    font-size: 0.54rem !important;
+}
+
+.prediction-controls-card .diagnostic-mini-card strong,
+.prediction-selector-panel .prediction-stat-chip strong {
+    font-size: 0.76rem !important;
+    line-height: 1.15 !important;
+}
+
+.prediction-controls-card .selector-diagnostic-bar,
+.prediction-selector-panel [data-selector-warning] {
+    grid-area: warning !important;
+    min-height: 34px !important;
+    padding: 8px 10px !important;
+    font-size: 0.72rem !important;
+    line-height: 1.3 !important;
+}
+
+
+/* ============================================================
+   1004.05 - CENTER COLUMN: AISP2 INTELLIGENCE ENGINE
+   ============================================================ */
+
+.main-probability-card {
+    min-height: 640px !important;
+    padding: 22px !important;
+    border-radius: 26px !important;
+}
+
+.result-header-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 14px !important;
+    align-items: start !important;
+}
+
+.prediction-player-name {
+    font-size: clamp(3rem, 4.9vw, 5.4rem) !important;
+    line-height: 0.88 !important;
+    letter-spacing: -0.07em !important;
+}
+
+.probability-row {
+    display: grid !important;
+    grid-template-columns: minmax(250px, 0.62fr) minmax(300px, 1fr) !important;
+    gap: 18px !important;
+    align-items: center !important;
+    margin-top: 18px !important;
+}
+
+.prediction-big-number {
+    font-size: clamp(5rem, 7.5vw, 8.6rem) !important;
+    line-height: 0.82 !important;
+}
+
+.main-probability-card .dense-grid-4,
+.main-probability-card .prediction-stat-grid,
+.main-probability-card .metric-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.main-probability-card .prediction-stat-chip {
+    min-height: 58px !important;
+    padding: 11px 12px !important;
+}
+
+
+/* ============================================================
+   1004.06 - RIGHT COLUMN: AI PREDICTION INTELLIGENCE
+   ============================================================ */
+
+.prediction-explanation-panel {
+    min-height: 640px !important;
+    padding: 20px !important;
+    border-radius: 26px !important;
+}
+
+.prediction-explanation-title {
+    font-size: clamp(1.6rem, 2vw, 2.15rem) !important;
+    line-height: 1.05 !important;
+}
+
+.prediction-explanation-panel .metric-card-grid,
+.prediction-explanation-panel .prediction-stat-grid,
+.prediction-explanation-panel .dense-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+}
+
+.prediction-explanation-panel .prediction-stat-chip {
+    min-height: 50px !important;
+    padding: 10px 12px !important;
+}
+
+.prediction-explanation-panel .prediction-stat-chip span {
+    font-size: 0.56rem !important;
+}
+
+.prediction-explanation-panel .prediction-stat-chip strong {
+    font-size: 0.78rem !important;
+    line-height: 1.22 !important;
+}
+
+.prediction-explanation-panel .prediction-explanation-text,
+.prediction-explanation-panel .prediction-list {
+    font-size: 0.82rem !important;
+    line-height: 1.45 !important;
+}
+
+
+/* ============================================================
+   1004.07 - SUPPORTING SECTIONS BELOW
+   ============================================================ */
+
+.supporting-analysis-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+}
+
+
+/* ============================================================
+   1004.08 - RESPONSIVE FALLBACKS
+   ============================================================ */
+
+@media (max-width: 1420px) {
+    .prediction-workbench {
+        grid-template-columns:
+            minmax(280px, 0.78fr)
+            minmax(520px, 1.5fr) !important;
+        grid-template-areas:
+            "hero hero"
             "controls result"
-            "ai ai";
-        overflow: visible;
+            "ai ai"
+            "support support"
+            "status status"
+            "error error" !important;
     }
 
-    .prediction-final-controls {
-        grid-area: controls;
+    .prediction-explanation-panel {
+        min-height: auto !important;
     }
 
-    .prediction-final-result {
-        grid-area: result;
-    }
-
-    .prediction-final-ai {
-        grid-area: ai;
+    .prediction-explanation-panel .metric-card-grid,
+    .prediction-explanation-panel .prediction-stat-grid,
+    .prediction-explanation-panel .dense-grid-2 {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     }
 }
 
-@media (max-width: 840px) {
-    .prediction-final-nav {
-        padding: 0 16px;
-    }
-
-    .prediction-final-links {
-        gap: 12px;
-    }
-
-    .prediction-final-hero {
-        grid-template-columns: 1fr;
-        height: auto;
-    }
-
-    .prediction-final-status-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .prediction-final-grid {
-        grid-template-columns: 1fr;
+@media (max-width: 1080px) {
+    .prediction-workbench {
+        grid-template-columns: 1fr !important;
         grid-template-areas:
+            "hero"
             "controls"
             "result"
-            "ai";
+            "ai"
+            "support"
+            "status"
+            "error" !important;
     }
 
-    .prediction-final-band,
-    .prediction-final-metrics {
-        grid-template-columns: 1fr;
+    .main-probability-card,
+    .prediction-explanation-panel {
+        min-height: auto !important;
     }
 
-    .prediction-player-name {
-        font-size: clamp(2.35rem, 16vw, 4rem);
-        white-space: normal;
+    .prediction-controls-card .prediction-action-row,
+    .prediction-selector-panel .prediction-action-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 }
+
+@media (max-width: 760px) {
+    .main-probability-card .dense-grid-4,
+    .main-probability-card .prediction-stat-grid,
+    .main-probability-card .metric-card-grid,
+    .prediction-explanation-panel .metric-card-grid,
+    .prediction-explanation-panel .prediction-stat-grid,
+    .prediction-explanation-panel .dense-grid-2,
+    .supporting-analysis-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .probability-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+
+/* ============================================================
+   PHASE 14 PART 7.0 - PROFESSIONAL WORKBENCH HARDENING
+   FILE: static/css/prediction.css
+   PURPOSE:
+   Make Prediction Workbench less childish and more sleek,
+   compact, professional, and enterprise-analytics oriented.
+   ============================================================ */
+
+:root {
+    --phase14-panel-bg: rgba(5, 16, 32, 0.86);
+    --phase14-panel-border: rgba(122, 207, 255, 0.18);
+    --phase14-muted: rgba(220, 236, 248, 0.66);
+    --phase14-text: rgba(246, 251, 255, 0.96);
+    --phase14-blue: #73d8ff;
+    --phase14-mint: #8df5bd;
+}
+
+.prediction-shell,
+.prediction-page,
+.prediction-workbench-page {
+    background:
+        radial-gradient(circle at 75% 0%, rgba(25, 118, 210, 0.12), transparent 32%),
+        linear-gradient(180deg, #030914 0%, #06111f 52%, #050912 100%) !important;
+}
+
+.prediction-hero,
+.prediction-workbench-hero,
+.prediction-dashboard-hero {
+    min-height: auto !important;
+    padding: clamp(24px, 4vw, 42px) !important;
+    border-radius: 24px !important;
+    border: 1px solid var(--phase14-panel-border) !important;
+    background:
+        linear-gradient(135deg, rgba(10, 31, 54, 0.88), rgba(4, 15, 30, 0.94)) !important;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24) !important;
+}
+
+.prediction-hero h1,
+.prediction-workbench-hero h1,
+.prediction-dashboard-hero h1 {
+    max-width: 980px !important;
+    font-size: clamp(2.8rem, 6.2vw, 5.4rem) !important;
+    line-height: 0.94 !important;
+    letter-spacing: -0.075em !important;
+    font-weight: 900 !important;
+    color: var(--phase14-text) !important;
+    text-shadow: none !important;
+}
+
+.prediction-hero p,
+.prediction-workbench-hero p,
+.prediction-dashboard-hero p {
+    max-width: 940px !important;
+    color: var(--phase14-muted) !important;
+    font-size: 1rem !important;
+    line-height: 1.55 !important;
+}
+
+.prediction-controls-card,
+.prediction-selector-panel,
+.main-probability-card,
+.prediction-explanation-panel,
+.prediction-support-card,
+.prediction-runtime-status,
+.prediction-account-action-bar {
+    border-radius: 22px !important;
+    border: 1px solid var(--phase14-panel-border) !important;
+    background:
+        linear-gradient(180deg, rgba(12, 31, 52, 0.84), rgba(5, 14, 29, 0.92)) !important;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22) !important;
+}
+
+.prediction-controls-card h2,
+.prediction-selector-panel h2,
+.prediction-explanation-panel h2,
+.main-probability-card h2 {
+    font-size: clamp(1.2rem, 2vw, 1.8rem) !important;
+    letter-spacing: -0.035em !important;
+    font-weight: 850 !important;
+}
+
+.main-probability-card .prediction-player-name,
+.main-probability-card h1,
+.main-probability-card [data-result-player],
+.main-probability-card [data-prediction-player] {
+    font-size: clamp(2.4rem, 4.6vw, 4.6rem) !important;
+    line-height: 0.94 !important;
+    letter-spacing: -0.075em !important;
+    font-weight: 900 !important;
+    color: var(--phase14-text) !important;
+}
+
+.prediction-metric-card,
+.prediction-detail-card,
+.prediction-intelligence-card,
+.prediction-result-card {
+    border-radius: 16px !important;
+    border: 1px solid rgba(122, 207, 255, 0.14) !important;
+    background: rgba(255, 255, 255, 0.035) !important;
+    box-shadow: none !important;
+}
+
+.prediction-metric-card span,
+.prediction-detail-card span,
+.prediction-intelligence-card span,
+.prediction-result-card span,
+.prediction-label,
+label {
+    color: rgba(210, 228, 242, 0.62) !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.105em !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+}
+
+.prediction-metric-card strong,
+.prediction-detail-card strong,
+.prediction-intelligence-card strong,
+.prediction-result-card strong {
+    color: rgba(246, 251, 255, 0.94) !important;
+    font-size: 0.98rem !important;
+    font-weight: 850 !important;
+}
+
+.prediction-controls-card select,
+.prediction-selector-panel select,
+.prediction-controls-card input,
+.prediction-selector-panel input {
+    border-radius: 12px !important;
+    min-height: 42px !important;
+    border: 1px solid rgba(122, 207, 255, 0.18) !important;
+    background: rgba(1, 8, 20, 0.72) !important;
+    color: rgba(246, 251, 255, 0.95) !important;
+    font-size: 0.94rem !important;
+    font-weight: 780 !important;
+}
+
+.prediction-primary-button,
+.prediction-run-button,
+button[data-run-prediction],
+button[type="submit"] {
+    border-radius: 999px !important;
+    min-height: 42px !important;
+    font-size: 0.9rem !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.01em !important;
+    box-shadow: none !important;
+}
+
+.prediction-primary-button,
+.prediction-run-button,
+button[data-run-prediction] {
+    background: linear-gradient(135deg, #73d8ff, #8df5bd) !important;
+    color: #00111d !important;
+}
+
+.prediction-secondary-button,
+.prediction-account-button,
+.prediction-controls-card button:not(.prediction-run-button):not([data-run-prediction]) {
+    background: rgba(255,255,255,0.045) !important;
+    border: 1px solid rgba(122, 207, 255, 0.18) !important;
+    color: rgba(246,251,255,0.92) !important;
+}
+
+.prediction-status-pill,
+.prediction-badge,
+.prediction-eyebrow {
+    border-radius: 999px !important;
+    border: 1px solid rgba(115, 216, 255, 0.22) !important;
+    background: rgba(115, 216, 255, 0.075) !important;
+    color: var(--phase14-blue) !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.115em !important;
+    font-weight: 950 !important;
+    text-transform: uppercase !important;
+}
+
+.prediction-summary,
+.prediction-summary p,
+.prediction-explanation,
+.prediction-copy,
+.prediction-help-text {
+    color: rgba(220, 236, 248, 0.68) !important;
+    line-height: 1.55 !important;
+}
+
+.prediction-gauge,
+.prediction-visual-gauge {
+    filter: saturate(0.85) !important;
+}
+
+@media (max-width: 1100px) {
+    .prediction-hero h1,
+    .prediction-workbench-hero h1,
+    .prediction-dashboard-hero h1 {
+        font-size: clamp(2.5rem, 12vw, 4.4rem) !important;
+    }
+}
+
