@@ -14379,3 +14379,369 @@ if __name__ == "__main__":
 
 
 
+
+# ============================================================
+# SECTION 18.992 - PHASE 15 PART 1.2 - WORKBENCH GUARANTEED JSON PREDICTION ENDPOINT
+# FILE: main.py
+#
+# PURPOSE:
+# Provide a dedicated JSON-only endpoint for the Prediction Workbench
+# so the frontend no longer depends on any older route that may return
+# HTML, redirect content, or invalid JSON during an exception.
+#
+# ENDPOINT:
+#   POST /api/prediction/workbench/run
+#
+# GUARANTEE:
+#   Always returns a JSON object.
+# ============================================================
+
+try:
+    from fastapi import Request as _AISP2P1512Request
+except Exception:
+    _AISP2P1512Request = None
+
+AISP2_PHASE_15_PART_1_2_VERSION = "phase_15_part_1_2_workbench_guaranteed_json_prediction_endpoint"
+
+
+def _aisp2_p1512_safe_text(value, fallback=""):
+    try:
+        text = str(value if value is not None else "").strip()
+        return text if text else fallback
+    except Exception:
+        return fallback
+
+
+def _aisp2_p1512_safe_float(value, fallback=0.0):
+    try:
+        if value is None or value == "":
+            return float(fallback)
+        return float(value)
+    except Exception:
+        return float(fallback)
+
+
+def _aisp2_p1512_outcome_key(value):
+    text = _aisp2_p1512_safe_text(value, "home_run").lower()
+    text = text.replace("-", "_").replace(" ", "_")
+    while "__" in text:
+        text = text.replace("__", "_")
+
+    aliases = {
+        "": "home_run",
+        "hr": "home_run",
+        "homerun": "home_run",
+        "home_runs": "home_run",
+        "home_run": "home_run",
+        "hit": "hit",
+        "hits": "hit",
+        "rbi": "rbi",
+        "run": "run_scored",
+        "runs": "run_scored",
+        "run_scored": "run_scored",
+        "tb": "total_bases",
+        "total_base": "total_bases",
+        "total_bases": "total_bases",
+        "strikeout": "strikeout",
+        "strikeouts": "strikeout",
+        "k": "strikeout",
+        "walk": "walk",
+        "walks": "walk",
+        "bb": "walk",
+    }
+
+    return aliases.get(text, text or "home_run")
+
+
+def _aisp2_p1512_outcome_label(value):
+    key = _aisp2_p1512_outcome_key(value)
+    labels = {
+        "home_run": "Home Run",
+        "hit": "Hit",
+        "rbi": "RBI",
+        "run_scored": "Run",
+        "total_bases": "Total Bases",
+        "strikeout": "Strikeout",
+        "walk": "Walk",
+    }
+    return labels.get(key, "Home Run")
+
+
+def _aisp2_p1512_baseline_probability(outcome_key):
+    baselines = {
+        "home_run": 3.2,
+        "hit": 24.5,
+        "rbi": 13.5,
+        "run_scored": 15.0,
+        "total_bases": 36.0,
+        "strikeout": 22.0,
+        "walk": 8.6,
+    }
+    return float(baselines.get(outcome_key, 12.0))
+
+
+def _aisp2_p1512_pct(value):
+    try:
+        return f"{float(value):.1f}%"
+    except Exception:
+        return "Pending"
+
+
+def _aisp2_p1512_build_fallback_payload(request_payload):
+    outcome_key = _aisp2_p1512_outcome_key(request_payload.get("outcome_key") or request_payload.get("outcome"))
+    outcome_label = _aisp2_p1512_outcome_label(outcome_key)
+
+    player_name = _aisp2_p1512_safe_text(
+        request_payload.get("player_name")
+        or request_payload.get("player")
+        or request_payload.get("selected_player"),
+        "Selected Player",
+    )
+
+    team_name = _aisp2_p1512_safe_text(
+        request_payload.get("team_name")
+        or request_payload.get("team")
+        or request_payload.get("selected_team"),
+        "Team Pending",
+    )
+
+    probability = _aisp2_p1512_baseline_probability(outcome_key)
+    confidence = 30.0
+    coverage = 22.0
+
+    explanation = (
+        f"{player_name} {outcome_label} is currently using AISP2 transparent runtime "
+        f"baseline math because this workbench request did not include a usable player "
+        f"stat sample. This is a valid JSON prediction response, but it remains marked "
+        f"warehouse-pending until database player stats, Statcast, matchup, park, and "
+        f"weather inputs are loaded."
+    )
+
+    prediction_core = {
+        "player_id": request_payload.get("player_id"),
+        "player_name": player_name,
+        "team_id": request_payload.get("team_id"),
+        "team_name": team_name,
+        "outcome_key": outcome_key,
+        "outcome": outcome_label,
+        "probability": probability,
+        "probability_percent": _aisp2_p1512_pct(probability),
+        "confidence": confidence,
+        "confidence_percent": _aisp2_p1512_pct(confidence),
+        "tier": "Transparent Runtime Baseline",
+        "risk": "Warehouse Pending",
+        "profile": "Baseline outcome profile",
+        "primary_metric": "League baseline",
+        "supporting_metric": "League baseline",
+        "model": "AISP2 Workbench Runtime Baseline v15.1.2",
+        "version": AISP2_PHASE_15_PART_1_2_VERSION,
+        "source": "Workbench JSON Runtime",
+        "data_source": "workbench_runtime_baseline",
+        "data_coverage": coverage,
+        "data_coverage_percent": _aisp2_p1512_pct(coverage),
+        "sample_size": 0,
+        "warehouse_status": "Stats Needed",
+        "player_style": "Baseline profile",
+        "recent_form": "Pending ingestion",
+    }
+
+    intelligence = {
+        "summary": f"Prediction JSON generated for {player_name}.",
+        "tier": prediction_core["tier"],
+        "risk": prediction_core["risk"],
+        "profile": prediction_core["profile"],
+        "primary_metric": prediction_core["primary_metric"],
+        "data_source": prediction_core["source"],
+        "coverage": prediction_core["data_coverage_percent"],
+        "warehouse": prediction_core["warehouse_status"],
+        "guidance": "Runtime baseline active; full statistical feature model requires warehouse data.",
+        "reasoning": explanation,
+        "warnings": [
+            "Workbench endpoint returned valid JSON.",
+            "Prediction is baseline-level until real player stat sample is loaded.",
+        ],
+        "next_data_needed": [
+            "player season stat sample",
+            "Statcast batted-ball profile",
+            "pitcher matchup context",
+            "ballpark context",
+            "weather context",
+        ],
+    }
+
+    return {
+        "status": "ok",
+        "ok": True,
+        "prediction_ready": True,
+        "runtime_restored": True,
+        "blocked": False,
+        "phase": AISP2_PHASE_15_PART_1_2_VERSION,
+
+        "player_id": prediction_core["player_id"],
+        "player_name": player_name,
+        "team_id": prediction_core["team_id"],
+        "team_name": team_name,
+        "outcome_key": outcome_key,
+        "outcome": outcome_label,
+        "probability": probability,
+        "probability_percent": prediction_core["probability_percent"],
+        "confidence": confidence,
+        "confidence_percent": prediction_core["confidence_percent"],
+        "tier": prediction_core["tier"],
+        "risk": prediction_core["risk"],
+        "profile": prediction_core["profile"],
+        "primary_metric": prediction_core["primary_metric"],
+        "supporting_metric": prediction_core["supporting_metric"],
+        "model": prediction_core["model"],
+        "version": prediction_core["version"],
+        "source": prediction_core["source"],
+        "data_source": prediction_core["data_source"],
+        "data_coverage": coverage,
+        "data_coverage_percent": prediction_core["data_coverage_percent"],
+        "sample_size": 0,
+        "warehouse_status": prediction_core["warehouse_status"],
+        "player_style": prediction_core["player_style"],
+        "recent_form": prediction_core["recent_form"],
+        "explanation": explanation,
+        "ai_explanation": explanation,
+
+        "prediction": prediction_core,
+        "result": prediction_core,
+        "intelligence": intelligence,
+        "ai_intelligence": intelligence,
+        "readiness": {
+            "prediction_ready": True,
+            "status": "json_runtime_baseline_ready",
+            "state": "transparent_runtime_baseline",
+            "warehouse_status": prediction_core["warehouse_status"],
+            "data_coverage": coverage,
+            "warnings": intelligence["warnings"],
+            "missing_features": intelligence["next_data_needed"],
+        },
+        "outcome_library": {
+            "home_run": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("home_run")),
+            "hit": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("hit")),
+            "rbi": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("rbi")),
+            "run_scored": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("run_scored")),
+            "total_bases": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("total_bases")),
+            "strikeout": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("strikeout")),
+            "walk": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("walk")),
+        },
+        "account_history": {
+            "saved": False,
+            "reason": "Workbench JSON endpoint does not force authenticated save.",
+        },
+    }
+
+
+def _aisp2_p1512_normalize_builder_payload(payload, request_payload):
+    if not isinstance(payload, dict):
+        return _aisp2_p1512_build_fallback_payload(request_payload)
+
+    fallback = _aisp2_p1512_build_fallback_payload(request_payload)
+
+    for key, value in fallback.items():
+        payload.setdefault(key, value)
+
+    prediction = payload.get("prediction")
+    if not isinstance(prediction, dict):
+        payload["prediction"] = fallback["prediction"]
+
+    intelligence = payload.get("intelligence") or payload.get("ai_intelligence")
+    if not isinstance(intelligence, dict):
+        payload["intelligence"] = fallback["intelligence"]
+        payload["ai_intelligence"] = fallback["ai_intelligence"]
+
+    payload["status"] = "ok"
+    payload["ok"] = True
+    payload["prediction_ready"] = True
+    payload["blocked"] = False
+    payload["phase"] = AISP2_PHASE_15_PART_1_2_VERSION
+
+    return payload
+
+
+try:
+    @app.post("/api/prediction/workbench/run")
+    async def api_prediction_workbench_run(request: _AISP2P1512Request):
+        try:
+            request_payload = await request.json()
+            if not isinstance(request_payload, dict):
+                request_payload = {}
+        except Exception:
+            request_payload = {}
+
+        player_payload = {
+            "player_id": request_payload.get("player_id"),
+            "full_name": (
+                request_payload.get("player_name")
+                or request_payload.get("player")
+                or request_payload.get("selected_player")
+                or "Selected Player"
+            ),
+            "team_id": request_payload.get("team_id"),
+            "team_name": (
+                request_payload.get("team_name")
+                or request_payload.get("team")
+                or request_payload.get("selected_team")
+                or "Team Pending"
+            ),
+        }
+
+        # Carry through any stat fields if the frontend/runtime supplies them.
+        for stat_key in [
+            "pa", "plate_appearances", "ab", "at_bats", "hits", "doubles", "triples",
+            "home_runs", "walks", "strikeouts", "rbi", "runs", "total_bases",
+            "avg", "obp", "slg", "ops",
+        ]:
+            if stat_key in request_payload:
+                player_payload[stat_key] = request_payload.get(stat_key)
+
+        outcome_key = _aisp2_p1512_outcome_key(
+            request_payload.get("outcome_key")
+            or request_payload.get("outcome")
+            or "home_run"
+        )
+
+        builder = globals().get("build_player_prediction_payload")
+
+        if callable(builder):
+            try:
+                built = builder(player_payload, outcome_key=outcome_key)
+                return _aisp2_p1512_normalize_builder_payload(built, request_payload)
+            except Exception as exc:
+                fallback = _aisp2_p1512_build_fallback_payload(request_payload)
+                fallback["builder_error"] = str(exc)
+                fallback["warnings"] = fallback.get("warnings", []) + [
+                    "Primary prediction builder failed; workbench JSON fallback returned."
+                ]
+                return fallback
+
+        return _aisp2_p1512_build_fallback_payload(request_payload)
+except Exception:
+    pass
+
+
+try:
+    @app.get("/api/prediction/workbench/run/health")
+    def api_prediction_workbench_run_health():
+        sample = _aisp2_p1512_build_fallback_payload({
+            "player_name": "Aaron Judge",
+            "team_name": "New York Yankees",
+            "outcome_key": "home_run",
+        })
+
+        return {
+            "status": "ok",
+            "ok": True,
+            "phase": AISP2_PHASE_15_PART_1_2_VERSION,
+            "endpoint": "/api/prediction/workbench/run",
+            "guaranteed_json": True,
+            "sample_probability": sample.get("probability"),
+            "sample_confidence": sample.get("confidence"),
+            "sample_model": sample.get("model"),
+        }
+except Exception:
+    pass
+
+# END SECTION 18.992 - PHASE 15 PART 1.2

@@ -2485,6 +2485,374 @@
 </script>
 <!-- PHASE 14 PART 7.15 FINAL BUTTON CONTROLLER END -->
 
+
+<!-- PHASE 15 PART 1.2 WORKBENCH LOADING AND JSON RUNTIME START -->
+<style id="phase-15-part-1-2-workbench-loading-style">
+    .pwb-runtime-loading-panel {
+        position: absolute;
+        inset: 18px;
+        z-index: 30;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: 24px;
+        border: 1px solid rgba(113, 217, 255, 0.26);
+        background:
+            radial-gradient(circle at 50% 20%, rgba(113, 217, 255, 0.16), transparent 42%),
+            rgba(2, 8, 20, 0.78);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 26px 80px rgba(0, 0, 0, 0.38);
+    }
+
+    .pwb-runtime-loading-panel.is-active {
+        display: flex;
+    }
+
+    .pwb-runtime-loading-card {
+        width: min(420px, calc(100% - 28px));
+        padding: 26px;
+        border-radius: 24px;
+        border: 1px solid rgba(113, 217, 255, 0.22);
+        background:
+            linear-gradient(180deg, rgba(13, 35, 62, 0.94), rgba(5, 17, 34, 0.96));
+        text-align: center;
+    }
+
+    .pwb-runtime-loading-orb {
+        width: 58px;
+        height: 58px;
+        margin: 0 auto 16px;
+        border-radius: 999px;
+        border: 4px solid rgba(113, 217, 255, 0.16);
+        border-top-color: rgba(143, 245, 189, 0.96);
+        animation: pwbRuntimeSpin 860ms linear infinite;
+    }
+
+    @keyframes pwbRuntimeSpin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .pwb-runtime-loading-title {
+        margin: 0;
+        color: rgba(248, 252, 255, 0.98);
+        font-size: 1.15rem;
+        font-weight: 950;
+        letter-spacing: -0.03em;
+    }
+
+    .pwb-runtime-loading-copy {
+        margin: 8px 0 0;
+        color: rgba(226, 240, 251, 0.72);
+        font-size: 0.86rem;
+        line-height: 1.45;
+    }
+
+    .pwb-result,
+    .main-probability-card {
+        position: relative;
+    }
+
+    .pwb-runtime-error-note {
+        color: #ffb4b4 !important;
+    }
+</style>
+
+<script id="phase-15-part-1-2-workbench-runtime-script">
+    (function initializeAISP2WorkbenchJsonRuntime() {
+        "use strict";
+
+        const VERSION = "phase_15_part_1_2_workbench_loading_and_json_runtime";
+        const ENDPOINT = "/api/prediction/workbench/run";
+
+        function text(value, fallback) {
+            const cleaned = String(value === undefined || value === null ? "" : value).trim();
+            return cleaned || fallback || "";
+        }
+
+        function getSelectedOption(select) {
+            if (!select) {
+                return { value: "", label: "" };
+            }
+
+            const option = select.options && select.selectedIndex >= 0
+                ? select.options[select.selectedIndex]
+                : null;
+
+            return {
+                value: text(select.value, ""),
+                label: text(option ? option.textContent : select.value, "")
+            };
+        }
+
+        function setText(selector, value) {
+            document.querySelectorAll(selector).forEach(function updateNode(node) {
+                node.textContent = text(value, "Pending");
+            });
+        }
+
+        function normalizePercent(value, fallback) {
+            if (typeof value === "string" && value.includes("%")) {
+                return value;
+            }
+
+            const numeric = Number(value);
+
+            if (Number.isFinite(numeric)) {
+                return numeric.toFixed(1) + "%";
+            }
+
+            return fallback || "Pending";
+        }
+
+        function ensureLoadingPanel() {
+            const resultCard =
+                document.querySelector(".pwb-result.main-probability-card") ||
+                document.querySelector(".main-probability-card") ||
+                document.querySelector("[data-prediction-result]");
+
+            if (!resultCard) {
+                return null;
+            }
+
+            let panel = resultCard.querySelector(".pwb-runtime-loading-panel");
+
+            if (panel) {
+                return panel;
+            }
+
+            panel = document.createElement("div");
+            panel.className = "pwb-runtime-loading-panel";
+            panel.innerHTML = [
+                '<div class="pwb-runtime-loading-card">',
+                    '<div class="pwb-runtime-loading-orb" aria-hidden="true"></div>',
+                    '<h3 class="pwb-runtime-loading-title">Running Prediction Math</h3>',
+                    '<p class="pwb-runtime-loading-copy">AISP2 is building a JSON prediction payload, calculating probability, confidence, source, and model explanation.</p>',
+                '</div>'
+            ].join("");
+
+            resultCard.appendChild(panel);
+
+            return panel;
+        }
+
+        function setLoading(active) {
+            const panel = ensureLoadingPanel();
+
+            if (panel) {
+                panel.classList.toggle("is-active", Boolean(active));
+            }
+
+            const runButtons = document.querySelectorAll(
+                "[data-prediction-submit], [data-pwb-enterprise-action='run_prediction']"
+            );
+
+            runButtons.forEach(function toggleButton(button) {
+                button.disabled = Boolean(active);
+                button.setAttribute("aria-busy", active ? "true" : "false");
+            });
+        }
+
+        function collectPayload() {
+            const teamSelect = document.querySelector("[data-prediction-team]");
+            const playerSelect = document.querySelector("[data-prediction-player]");
+            const outcomeSelect = document.querySelector("[data-prediction-outcome]");
+
+            const team = getSelectedOption(teamSelect);
+            const player = getSelectedOption(playerSelect);
+            const outcome = getSelectedOption(outcomeSelect);
+
+            return {
+                team_id: team.value,
+                team_name: team.label,
+                player_id: player.value,
+                player_name: player.label,
+                outcome_key: outcome.value || "home_run",
+                outcome: outcome.label || "Home Run",
+                source: "prediction_workbench"
+            };
+        }
+
+        async function readJsonResponse(response) {
+            const raw = await response.text();
+
+            try {
+                return JSON.parse(raw);
+            } catch (error) {
+                throw new Error("Prediction endpoint returned invalid JSON. HTTP " + response.status + ". Body preview: " + raw.slice(0, 180));
+            }
+        }
+
+        function listToItems(values, fallback) {
+            if (!Array.isArray(values) || values.length === 0) {
+                return "<li>" + text(fallback, "Pending") + "</li>";
+            }
+
+            return values
+                .map(function item(value) {
+                    return "<li>" + text(value, "Pending") + "</li>";
+                })
+                .join("");
+        }
+
+        function renderPrediction(payload) {
+            const prediction = payload.prediction || payload.result || payload;
+            const intelligence = payload.intelligence || payload.ai_intelligence || {};
+
+            const playerName = prediction.player_name || payload.player_name || "Selected Player";
+            const teamName = prediction.team_name || payload.team_name || "Team Pending";
+            const outcome = prediction.outcome || payload.outcome || "Outcome Pending";
+
+            const probability = prediction.probability_percent || payload.probability_percent || normalizePercent(prediction.probability || payload.probability);
+            const confidence = prediction.confidence_percent || payload.confidence_percent || normalizePercent(prediction.confidence || payload.confidence);
+
+            setText("[data-result-player]", playerName);
+            setText("[data-result-team]", teamName);
+            setText("[data-result-outcome]", outcome);
+            setText("[data-result-probability]", probability);
+            setText("[data-result-confidence]", confidence);
+            setText("[data-result-tier]", prediction.tier || payload.tier || "Baseline Active");
+            setText("[data-result-risk]", prediction.risk || payload.risk || "Pending");
+            setText("[data-result-profile]", prediction.profile || payload.profile || "Pending");
+            setText("[data-result-supporting-metric]", prediction.supporting_metric || prediction.primary_metric || payload.primary_metric || "Pending");
+            setText("[data-result-style]", prediction.player_style || payload.player_style || "Pending");
+            setText("[data-result-form]", prediction.recent_form || payload.recent_form || "Pending");
+            setText("[data-result-metric]", prediction.primary_metric || payload.primary_metric || "Pending");
+            setText("[data-result-model]", prediction.model || payload.model || "Pending");
+            setText("[data-result-model-secondary]", prediction.model || payload.model || "Pending");
+            setText("[data-result-data-coverage]", prediction.data_coverage_percent || payload.data_coverage_percent || normalizePercent(prediction.data_coverage || payload.data_coverage));
+            setText("[data-result-sample-size]", prediction.sample_size || payload.sample_size || "0");
+            setText("[data-result-source]", prediction.source || payload.source || "Workbench JSON");
+            setText("[data-result-warehouse-status]", prediction.warehouse_status || payload.warehouse_status || "Pending");
+            setText("[data-result-ai-explanation]", payload.explanation || payload.ai_explanation || intelligence.reasoning || "Prediction completed.");
+
+            setText("[data-intelligence-summary]", intelligence.summary || ("Prediction generated for " + playerName + "."));
+            setText("[data-intelligence-tier]", intelligence.tier || prediction.tier || "Pending");
+            setText("[data-intelligence-risk]", intelligence.risk || prediction.risk || "Pending");
+            setText("[data-intelligence-profile]", intelligence.profile || prediction.profile || "Pending");
+            setText("[data-intelligence-primary-metric]", intelligence.primary_metric || prediction.primary_metric || "Pending");
+            setText("[data-intelligence-data-source]", intelligence.data_source || prediction.source || "Workbench JSON");
+            setText("[data-intelligence-coverage]", intelligence.coverage || prediction.data_coverage_percent || "Pending");
+            setText("[data-intelligence-warehouse]", intelligence.warehouse || prediction.warehouse_status || "Pending");
+            setText("[data-intelligence-guidance]", intelligence.guidance || "Prediction JSON returned successfully.");
+            setText("[data-intelligence-reasoning]", intelligence.reasoning || payload.explanation || payload.ai_explanation || "Prediction completed.");
+
+            const warningsNode = document.querySelector("[data-intelligence-warnings]");
+            if (warningsNode) {
+                warningsNode.innerHTML = listToItems(intelligence.warnings || payload.warnings, "No prediction warnings returned.");
+            }
+
+            const nextDataNode = document.querySelector("[data-intelligence-next-data]");
+            if (nextDataNode) {
+                nextDataNode.innerHTML = listToItems(intelligence.next_data_needed || payload.missing_features, "No missing data returned.");
+            }
+
+            const library = payload.outcome_library || payload.props || {};
+            setText("[data-prop-home-run]", library.home_run || "Pending");
+            setText("[data-prop-hit]", library.hit || "Pending");
+            setText("[data-prop-rbi]", library.rbi || "Pending");
+            setText("[data-prop-run-scored]", library.run_scored || library.run || "Pending");
+            setText("[data-prop-total-bases]", library.total_bases || "Pending");
+            setText("[data-prop-strikeout]", library.strikeout || "Pending");
+
+            setText("[data-prediction-api-status]", "Ready");
+        }
+
+        function renderPredictionError(error) {
+            const message = error && error.message ? error.message : String(error || "Prediction failed.");
+
+            setText("[data-intelligence-summary]", message);
+            setText("[data-result-ai-explanation]", message);
+            setText("[data-prediction-api-status]", "Error");
+
+            const reasoning = document.querySelector("[data-intelligence-reasoning]");
+            if (reasoning) {
+                reasoning.textContent = message;
+                reasoning.classList.add("pwb-runtime-error-note");
+            }
+        }
+
+        async function runPrediction(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof event.stopImmediatePropagation === "function") {
+                    event.stopImmediatePropagation();
+                }
+            }
+
+            setLoading(true);
+            setText("[data-prediction-api-status]", "Running");
+            setText("[data-intelligence-summary]", "Running prediction math...");
+            setText("[data-result-ai-explanation]", "AISP2 is calculating probability and confidence.");
+
+            try {
+                const payload = collectPayload();
+
+                const response = await fetch(ENDPOINT, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify(payload),
+                    credentials: "same-origin"
+                });
+
+                const json = await readJsonResponse(response);
+
+                if (!response.ok || json.ok === false || json.status === "error") {
+                    throw new Error(json.error || json.detail || "Prediction request failed.");
+                }
+
+                renderPrediction(json);
+            } catch (error) {
+                renderPredictionError(error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function bindButtons() {
+            const selectors = [
+                "[data-pwb-enterprise-action='run_prediction']",
+                "[data-prediction-submit]"
+            ];
+
+            selectors.forEach(function bindSelector(selector) {
+                document.querySelectorAll(selector).forEach(function bindButton(button) {
+                    if (button.dataset.pwbJsonRuntimeBound === "true") {
+                        return;
+                    }
+
+                    button.dataset.pwbJsonRuntimeBound = "true";
+                    button.addEventListener("click", runPrediction, true);
+                });
+            });
+        }
+
+        function boot() {
+            ensureLoadingPanel();
+            bindButtons();
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+
+        window.addEventListener("load", boot);
+        window.AISP2WorkbenchJsonRuntime = {
+            version: VERSION,
+            runPrediction: runPrediction,
+            refresh: boot
+        };
+    }());
+</script>
+<!-- PHASE 15 PART 1.2 WORKBENCH LOADING AND JSON RUNTIME END -->
+
 </body>
 </html>
 
