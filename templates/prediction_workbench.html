@@ -1,45 +1,54 @@
 ﻿<!-- ============================================================
      AISP2 BASEBALL INTELLIGENCE PLATFORM
      FILE: templates/prediction_workbench.html
-     PHASE: PHASE 14 PART 7.8
+     PHASE: PHASE 14 PART 7.9
+     TITLE:
+     Enterprise Prediction Workbench Polish Restoration
+
      PURPOSE:
-     Enterprise Prediction Workbench Restoration + Upgrade.
+     Restore and polish the AISP2 Prediction Workbench into a premium,
+     organized, animated, enterprise-grade prediction cockpit while
+     preserving every important runtime hook used by static/js/prediction.js.
 
-     PRIMARY OBJECTIVE:
-     Restore the original beauty of the Prediction Workbench while
-     making it stronger, cleaner, more professional, and more stable.
-
-     CRITICAL DESIGN RULES:
-     - Single-file replacement only.
-     - Preserve all existing JavaScript runtime hooks.
-     - Preserve /predict/player integration.
-     - Preserve bootstrap integration.
-     - Preserve selector diagnostics.
-     - Preserve AI intelligence panels.
-     - Preserve production truth messaging.
-     - Avoid broken previous layout-controller classes.
-     - Avoid childish oversized UI.
-     - Avoid fake results.
-     - Avoid visual dependence on damaged appended CSS.
-     - Use this page as the authoritative cockpit shell.
+     DESIGN INTENT:
+     - Keep the original beautiful cockpit direction.
+     - Improve spacing, hierarchy, legibility, motion, and organization.
+     - Avoid destructive full-app CSS overrides.
+     - Avoid broken full-screen forcing.
+     - Avoid fake model results.
+     - Keep transparent production truth states.
+     - Keep current prediction runtime working.
+     - Add classy motion, ambient lighting, status rails, section grouping,
+       and cleaner data cards.
 
      RUNTIME CONTRACTS PRESERVED:
+     - data-page="prediction-workbench"
      - data-bootstrap-endpoint="/api/player-explorer/bootstrap"
      - data-v2-bootstrap-endpoint="/api/v2/player-explorer/bootstrap"
      - data-prediction-endpoint="/predict/player"
      - data-profile-endpoint="/api/player-explorer/profile"
      - data-health-endpoint="/api/prediction/intelligence/health"
 
-     REQUIRED JS HOOKS PRESERVED:
+     REQUIRED JAVASCRIPT HOOKS PRESERVED:
      - data-prediction-team
      - data-prediction-player
      - data-prediction-outcome
      - data-prediction-submit
      - data-prediction-reset
      - data-selector-refresh
+     - data-selector-state
+     - data-selector-health
+     - data-prediction-api-status
+     - data-warehouse-status
+     - data-teams-loaded
+     - data-players-loaded
+     - data-bootstrap-source
+     - data-fallback-chain
+     - data-selector-warning
      - data-result-player
      - data-result-team
      - data-result-outcome
+     - data-result-source
      - data-result-probability
      - data-result-confidence
      - data-result-tier
@@ -50,10 +59,8 @@
      - data-result-form
      - data-result-metric
      - data-result-model
-     - data-result-model-secondary
      - data-result-data-coverage
      - data-result-sample-size
-     - data-result-source
      - data-result-warehouse-status
      - data-result-ai-explanation
      - data-intelligence-summary
@@ -68,20 +75,42 @@
      - data-intelligence-reasoning
      - data-intelligence-warnings
      - data-intelligence-next-data
+     - data-prop-home-run
+     - data-prop-hit
+     - data-prop-rbi
+     - data-prop-run-scored
+     - data-prop-total-bases
+     - data-prop-strikeout
+     - data-matchup-bvp
+     - data-matchup-handedness
+     - data-matchup-ballpark
+     - data-matchup-weather
+     - data-simulation-count
+     - data-confidence-interval
+     - data-upside-scenario
+     - data-downside-scenario
+     - data-result-model-secondary
+     - data-selector-source
+     - data-prediction-error-panel
+     - data-prediction-error
+     - data-prediction-account-action-bar
+     - data-account-action="save-search"
+     - data-account-action="follow-player"
+     - data-account-action="follow-team"
+     - data-prediction-account-status
 
      COMPLETION GATE:
-     The page opens as a premium three-column prediction cockpit:
-     controls left, main prediction center, AI intelligence right,
-     with supporting panels below when screen height allows.
+     The page should feel like a polished MLB intelligence cockpit:
+     classy, dense but readable, animated but not childish, and organized
+     into clear operational layers.
      ============================================================ -->
 
 <!DOCTYPE html>
-<html lang="en" data-aisp2-page="prediction-workbench-enterprise-restored">
+<html lang="en" data-aisp2-page="prediction-workbench-polished">
 
 <head>
     <!-- ========================================================
-         SECTION 01 - DOCUMENT METADATA
-         FILE: templates/prediction_workbench.html
+         SECTION 01 - DOCUMENT HEAD
          ======================================================== -->
 
     <meta charset="UTF-8">
@@ -93,7 +122,7 @@
 
     <meta
         name="description"
-        content="AISP2 Baseball Prediction Workbench for player outcome predictions, probability transparency, model reasoning, selector diagnostics, warehouse readiness, and AI intelligence."
+        content="AISP2 Baseball Prediction Workbench for live MLB player outcome predictions, probability analysis, model reasoning, selector diagnostics, and production data transparency."
     >
 
     <meta
@@ -103,88 +132,86 @@
 
     <meta
         name="aisp2-phase"
-        content="phase_14_part_7_8_enterprise_prediction_workbench_restore"
+        content="phase_14_part_7_9_enterprise_prediction_workbench_polish"
     >
 
-    <title>
-        AISP2 Baseball | Prediction Workbench
-    </title>
+    <title>AISP2 Baseball | Prediction Workbench</title>
 
-    <link
-        rel="stylesheet"
-        href="/static/css/aisp2.css"
-    >
-
-    <link
-        rel="stylesheet"
-        href="/static/css/prediction.css"
-    >
+    <link rel="stylesheet" href="/static/css/aisp2.css">
+    <link rel="stylesheet" href="/static/css/prediction.css">
 
 
     <!-- ========================================================
-         SECTION 02 - AUTHORITATIVE PAGE-LOCAL STYLE SYSTEM
-         FILE: templates/prediction_workbench.html
-
-         NOTE:
-         This inline layer intentionally gives this template its own
-         stable cockpit layout so previous failed appended CSS does
-         not continue to distort the page.
+         SECTION 02 - PAGE-LOCAL ENTERPRISE POLISH SYSTEM
+         PURPOSE:
+         This style layer is scoped to the prediction workbench page.
+         It avoids global destruction and keeps runtime behavior intact.
          ======================================================== -->
 
     <style>
         /* ========================================================
-           SECTION 02.01 - TOKENS
+           SECTION 02.01 - ENTERPRISE DESIGN TOKENS
            ======================================================== */
 
         :root {
-            --pwb-bg-0: #020714;
-            --pwb-bg-1: #050d1b;
-            --pwb-bg-2: #08172b;
+            --pwb-bg-0: #020713;
+            --pwb-bg-1: #06101f;
+            --pwb-bg-2: #081a2f;
+            --pwb-bg-3: #0c243c;
 
-            --pwb-panel: rgba(7, 21, 40, 0.88);
-            --pwb-panel-strong: rgba(10, 31, 55, 0.92);
-            --pwb-panel-soft: rgba(255, 255, 255, 0.045);
+            --pwb-panel-0: rgba(4, 13, 27, 0.90);
+            --pwb-panel-1: rgba(7, 22, 42, 0.88);
+            --pwb-panel-2: rgba(12, 35, 61, 0.86);
+            --pwb-panel-3: rgba(255, 255, 255, 0.045);
 
-            --pwb-border: rgba(112, 217, 255, 0.18);
-            --pwb-border-strong: rgba(112, 217, 255, 0.34);
+            --pwb-border-0: rgba(106, 211, 255, 0.16);
+            --pwb-border-1: rgba(106, 211, 255, 0.26);
+            --pwb-border-2: rgba(143, 245, 189, 0.22);
             --pwb-border-soft: rgba(255, 255, 255, 0.075);
 
-            --pwb-text: rgba(247, 252, 255, 0.98);
-            --pwb-muted: rgba(218, 234, 248, 0.70);
-            --pwb-soft: rgba(218, 234, 248, 0.48);
+            --pwb-text-0: rgba(248, 252, 255, 0.99);
+            --pwb-text-1: rgba(226, 240, 251, 0.78);
+            --pwb-text-2: rgba(226, 240, 251, 0.56);
+            --pwb-text-3: rgba(226, 240, 251, 0.42);
 
             --pwb-blue: #71d9ff;
+            --pwb-blue-2: #38bdf8;
             --pwb-mint: #8ff5bd;
+            --pwb-mint-2: #48e6a6;
             --pwb-gold: #ffe29e;
             --pwb-red: #ff9f9f;
+            --pwb-purple: #bda4ff;
 
-            --pwb-shadow: 0 24px 80px rgba(0, 0, 0, 0.30);
-            --pwb-shadow-soft: 0 16px 44px rgba(0, 0, 0, 0.22);
+            --pwb-shadow-lg: 0 28px 90px rgba(0, 0, 0, 0.34);
+            --pwb-shadow-md: 0 20px 64px rgba(0, 0, 0, 0.26);
+            --pwb-shadow-sm: 0 12px 34px rgba(0, 0, 0, 0.22);
 
+            --pwb-radius-2xl: 34px;
             --pwb-radius-xl: 28px;
             --pwb-radius-lg: 22px;
             --pwb-radius-md: 16px;
             --pwb-radius-sm: 12px;
 
-            --pwb-nav-h: 64px;
-            --pwb-max: 1760px;
+            --pwb-max-width: 1840px;
+            --pwb-topbar-height: 64px;
+            --pwb-transition: 180ms ease;
         }
 
 
         /* ========================================================
-           SECTION 02.02 - HARD PAGE RESET
+           SECTION 02.02 - SAFE PAGE RESET
            ======================================================== */
 
         html {
             min-height: 100%;
             background: var(--pwb-bg-0);
-            scroll-behavior: auto !important;
+            scroll-behavior: smooth;
         }
 
         body.pwb-enterprise-body {
             min-height: 100%;
             margin: 0;
-            color: var(--pwb-text);
+            color: var(--pwb-text-0);
             background: var(--pwb-bg-0);
             font-family:
                 Inter,
@@ -201,69 +228,187 @@
             box-sizing: border-box;
         }
 
-        body.pwb-enterprise-body a {
-            color: inherit;
-        }
-
         body.pwb-enterprise-body button,
         body.pwb-enterprise-body select,
         body.pwb-enterprise-body input {
             font: inherit;
         }
 
-        body.pwb-enterprise-body .pwb-hidden-runtime-targets {
-            display: none !important;
+        body.pwb-enterprise-body a {
+            color: inherit;
         }
 
 
         /* ========================================================
-           SECTION 02.03 - APP SHELL
+           SECTION 02.03 - ANIMATION SYSTEM
+           ======================================================== */
+
+        @keyframes pwbAmbientDrift {
+            0% {
+                transform: translate3d(-1.5%, -1%, 0) scale(1);
+                opacity: 0.72;
+            }
+
+            50% {
+                transform: translate3d(1.5%, 1%, 0) scale(1.04);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate3d(-1.5%, -1%, 0) scale(1);
+                opacity: 0.72;
+            }
+        }
+
+        @keyframes pwbPulseDot {
+            0% {
+                box-shadow:
+                    0 0 0 0 rgba(143, 245, 189, 0.34),
+                    0 0 18px rgba(143, 245, 189, 0.58);
+            }
+
+            70% {
+                box-shadow:
+                    0 0 0 8px rgba(143, 245, 189, 0),
+                    0 0 22px rgba(143, 245, 189, 0.62);
+            }
+
+            100% {
+                box-shadow:
+                    0 0 0 0 rgba(143, 245, 189, 0),
+                    0 0 18px rgba(143, 245, 189, 0.58);
+            }
+        }
+
+        @keyframes pwbSweep {
+            0% {
+                transform: translateX(-120%);
+                opacity: 0;
+            }
+
+            22% {
+                opacity: 0.28;
+            }
+
+            56% {
+                opacity: 0.10;
+            }
+
+            100% {
+                transform: translateX(120%);
+                opacity: 0;
+            }
+        }
+
+        @keyframes pwbFloatUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: 0.001ms !important;
+            }
+        }
+
+
+        /* ========================================================
+           SECTION 02.04 - APPLICATION SHELL
            ======================================================== */
 
         .pwb-shell {
+            position: relative;
             min-height: 100svh;
+            overflow: hidden;
             background:
-                radial-gradient(circle at 12% 12%, rgba(113, 217, 255, 0.14), transparent 30%),
-                radial-gradient(circle at 86% 0%, rgba(143, 245, 189, 0.10), transparent 32%),
-                linear-gradient(180deg, var(--pwb-bg-0) 0%, var(--pwb-bg-1) 48%, #030812 100%);
+                radial-gradient(circle at 10% 12%, rgba(113, 217, 255, 0.13), transparent 26%),
+                radial-gradient(circle at 84% 2%, rgba(143, 245, 189, 0.10), transparent 31%),
+                radial-gradient(circle at 62% 70%, rgba(189, 164, 255, 0.055), transparent 38%),
+                linear-gradient(180deg, var(--pwb-bg-0) 0%, var(--pwb-bg-1) 46%, #030812 100%);
         }
 
+        .pwb-shell::before {
+            content: "";
+            position: fixed;
+            inset: -20%;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(circle at 24% 24%, rgba(113, 217, 255, 0.09), transparent 22%),
+                radial-gradient(circle at 82% 8%, rgba(143, 245, 189, 0.075), transparent 24%),
+                radial-gradient(circle at 62% 82%, rgba(56, 189, 248, 0.045), transparent 20%);
+            filter: blur(16px);
+            animation: pwbAmbientDrift 18s ease-in-out infinite;
+        }
+
+        .pwb-shell::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(rgba(113, 217, 255, 0.030) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(113, 217, 255, 0.026) 1px, transparent 1px);
+            background-size: 72px 72px;
+            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.62), transparent 78%);
+        }
+
+
+        /* ========================================================
+           SECTION 02.05 - TOPBAR
+           ======================================================== */
+
         .pwb-topbar {
-            min-height: var(--pwb-nav-h);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            min-height: var(--pwb-topbar-height);
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 24px;
-            padding: 0 clamp(18px, 3vw, 42px);
-            background: rgba(2, 8, 20, 0.86);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 0 clamp(18px, 3vw, 44px);
+            background: rgba(2, 8, 19, 0.86);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.065);
             backdrop-filter: blur(18px);
-            position: sticky;
-            top: 0;
-            z-index: 50;
         }
 
         .pwb-brand {
             display: inline-flex;
             align-items: center;
             gap: 11px;
-            color: var(--pwb-text);
             text-decoration: none;
+            color: var(--pwb-text-0);
             font-weight: 950;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.025em;
         }
 
         .pwb-brand-icon {
-            width: 32px;
-            height: 32px;
+            width: 34px;
+            height: 34px;
             display: grid;
             place-items: center;
-            border-radius: 12px;
-            background:
-                radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.20), transparent 40%),
-                rgba(113, 217, 255, 0.12);
+            border-radius: 13px;
             border: 1px solid rgba(113, 217, 255, 0.22);
-            box-shadow: 0 0 30px rgba(113, 217, 255, 0.10);
+            background:
+                radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.26), transparent 38%),
+                linear-gradient(135deg, rgba(113, 217, 255, 0.14), rgba(143, 245, 189, 0.09));
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.12),
+                0 0 32px rgba(113, 217, 255, 0.10);
         }
 
         .pwb-nav {
@@ -276,17 +421,19 @@
 
         .pwb-nav a {
             color: rgba(226, 238, 249, 0.74);
+            text-decoration: none;
             font-size: 0.82rem;
             font-weight: 850;
-            text-decoration: none;
             transition:
-                color 160ms ease,
-                opacity 160ms ease;
+                color var(--pwb-transition),
+                transform var(--pwb-transition),
+                opacity var(--pwb-transition);
         }
 
         .pwb-nav a:hover,
         .pwb-nav a[aria-current="page"] {
             color: var(--pwb-blue);
+            transform: translateY(-1px);
         }
 
         .pwb-nav a.pwb-nav-login {
@@ -294,54 +441,97 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0 12px;
+            padding: 0 13px;
             border-radius: 999px;
-            border: 1px solid rgba(113, 217, 255, 0.20);
+            border: 1px solid rgba(113, 217, 255, 0.22);
             background: rgba(113, 217, 255, 0.07);
-            color: var(--pwb-text);
+            color: var(--pwb-text-0);
         }
 
 
         /* ========================================================
-           SECTION 02.04 - MAIN WORKBENCH
+           SECTION 02.06 - MAIN STRUCTURE
            ======================================================== */
 
         .pwb-main {
-            width: min(var(--pwb-max), calc(100vw - 32px));
+            position: relative;
+            z-index: 1;
+            width: min(var(--pwb-max-width), calc(100vw - 34px));
             margin: 0 auto;
-            padding: 16px 0 28px;
+            padding: 18px 0 34px;
+            animation: pwbFloatUp 380ms ease both;
         }
 
-        .pwb-hero {
-            min-height: 138px;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(340px, 0.42fr);
-            align-items: center;
-            gap: 22px;
-            padding: clamp(20px, 2.4vw, 34px);
-            border: 1px solid var(--pwb-border);
-            border-radius: var(--pwb-radius-xl);
-            background:
-                linear-gradient(135deg, rgba(13, 35, 62, 0.88), rgba(3, 12, 28, 0.94)),
-                rgba(255, 255, 255, 0.02);
-            box-shadow: var(--pwb-shadow-soft);
+        .pwb-panel,
+        .pwb-hero,
+        .pwb-analysis-panel,
+        .pwb-runtime-status,
+        .pwb-error-panel {
+            position: relative;
             overflow: hidden;
+            border: 1px solid var(--pwb-border-0);
+            background:
+                linear-gradient(180deg, rgba(12, 35, 61, 0.84), rgba(5, 17, 34, 0.90));
+            box-shadow: var(--pwb-shadow-sm);
+        }
+
+        .pwb-panel::before,
+        .pwb-hero::before,
+        .pwb-analysis-panel::before,
+        .pwb-runtime-status::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.055) 42%, transparent 56%);
+            transform: translateX(-120%);
+            animation: pwbSweep 9s ease-in-out infinite;
+        }
+
+        .pwb-panel > *,
+        .pwb-hero > *,
+        .pwb-analysis-panel > *,
+        .pwb-runtime-status > *,
+        .pwb-error-panel > * {
+            position: relative;
+            z-index: 1;
+        }
+
+
+        /* ========================================================
+           SECTION 02.07 - HERO
+           ======================================================== */
+
+        .pwb-hero {
+            min-height: 152px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(380px, 0.42fr);
+            align-items: center;
+            gap: 24px;
+            padding: clamp(22px, 2.6vw, 36px);
+            border-radius: var(--pwb-radius-2xl);
+            background:
+                radial-gradient(circle at 0% 0%, rgba(113, 217, 255, 0.11), transparent 34%),
+                radial-gradient(circle at 100% 0%, rgba(143, 245, 189, 0.07), transparent 32%),
+                linear-gradient(135deg, rgba(12, 35, 61, 0.90), rgba(3, 12, 28, 0.95));
+            box-shadow: var(--pwb-shadow-md);
         }
 
         .pwb-kicker {
-            min-height: 26px;
+            min-height: 27px;
             display: inline-flex;
             align-items: center;
-            gap: 9px;
             width: fit-content;
+            gap: 9px;
             padding: 0 12px;
             border-radius: 999px;
-            border: 1px solid rgba(113, 217, 255, 0.22);
-            background: rgba(113, 217, 255, 0.08);
+            border: 1px solid rgba(113, 217, 255, 0.24);
+            background: rgba(113, 217, 255, 0.085);
             color: var(--pwb-blue);
             font-size: 0.70rem;
             font-weight: 950;
-            letter-spacing: 0.115em;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
         }
 
@@ -350,39 +540,40 @@
             height: 8px;
             border-radius: 999px;
             background: var(--pwb-mint);
-            box-shadow: 0 0 20px rgba(143, 245, 189, 0.70);
+            animation: pwbPulseDot 2.4s ease-out infinite;
         }
 
         .pwb-title {
-            margin: 10px 0 8px;
-            color: var(--pwb-text);
-            font-size: clamp(3.2rem, 6vw, 6.2rem);
+            margin: 11px 0 8px;
+            color: var(--pwb-text-0);
+            font-size: clamp(3.3rem, 6vw, 6.35rem);
             line-height: 0.86;
-            letter-spacing: -0.09em;
+            letter-spacing: -0.092em;
             font-weight: 950;
             text-wrap: balance;
         }
 
         .pwb-subtitle {
-            max-width: 1000px;
+            max-width: 1040px;
             margin: 0;
-            color: var(--pwb-muted);
+            color: var(--pwb-text-1);
             font-size: 0.98rem;
-            line-height: 1.5;
+            line-height: 1.55;
         }
 
         .pwb-hero-status {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 9px;
+            gap: 10px;
         }
 
         .pwb-status-card {
-            min-height: 56px;
+            min-height: 58px;
             padding: 10px 12px;
             border-radius: var(--pwb-radius-md);
-            border: 1px solid rgba(113, 217, 255, 0.13);
-            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(113, 217, 255, 0.14);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.028));
         }
 
         .pwb-status-card span,
@@ -391,52 +582,47 @@
         }
 
         .pwb-status-card span {
-            color: var(--pwb-soft);
+            color: var(--pwb-text-2);
             font-size: 0.60rem;
             font-weight: 950;
-            letter-spacing: 0.095em;
+            letter-spacing: 0.10em;
             text-transform: uppercase;
         }
 
         .pwb-status-card strong {
             margin-top: 6px;
-            color: var(--pwb-text);
+            color: var(--pwb-text-0);
             font-size: 0.84rem;
             line-height: 1.15;
         }
 
 
         /* ========================================================
-           SECTION 02.05 - PRIMARY THREE COLUMN COCKPIT
+           SECTION 02.08 - PRIMARY COCKPIT GRID
            ======================================================== */
 
         .pwb-cockpit-grid {
             display: grid;
             grid-template-columns:
-                minmax(292px, 0.76fr)
+                minmax(306px, 0.78fr)
                 minmax(620px, 1.74fr)
-                minmax(340px, 0.92fr);
-            gap: 14px;
-            margin-top: 14px;
+                minmax(352px, 0.94fr);
+            gap: 15px;
+            margin-top: 15px;
             align-items: stretch;
         }
 
         .pwb-panel {
-            border: 1px solid var(--pwb-border);
-            border-radius: var(--pwb-radius-lg);
-            background:
-                linear-gradient(180deg, var(--pwb-panel-strong), var(--pwb-panel));
-            box-shadow: var(--pwb-shadow-soft);
-            overflow: hidden;
+            border-radius: var(--pwb-radius-xl);
         }
 
         .pwb-controls,
         .pwb-intelligence {
-            padding: 16px;
+            padding: 17px;
         }
 
         .pwb-result {
-            padding: 22px;
+            padding: 23px;
         }
 
         .pwb-panel-head {
@@ -448,124 +634,153 @@
 
         .pwb-panel-title {
             margin: 0;
-            color: var(--pwb-text);
-            font-size: 1.26rem;
-            line-height: 1.05;
+            color: var(--pwb-text-0);
+            font-size: 1.28rem;
+            line-height: 1.04;
             letter-spacing: -0.045em;
-            font-weight: 900;
+            font-weight: 950;
         }
 
         .pwb-panel-copy {
             margin: 6px 0 0;
-            color: var(--pwb-muted);
-            font-size: 0.80rem;
-            line-height: 1.42;
+            color: var(--pwb-text-1);
+            font-size: 0.81rem;
+            line-height: 1.45;
         }
 
         .pwb-pill {
             flex: 0 0 auto;
-            min-height: 30px;
+            min-height: 42px;
+            min-width: 112px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0 12px;
-            border-radius: 999px;
-            border: 1px solid rgba(143, 245, 189, 0.22);
-            background: rgba(143, 245, 189, 0.08);
+            border-radius: var(--pwb-radius-md);
+            border: 1px solid rgba(143, 245, 189, 0.24);
+            background:
+                radial-gradient(circle at 20% 0%, rgba(143, 245, 189, 0.13), transparent 42%),
+                rgba(143, 245, 189, 0.08);
             color: var(--pwb-mint);
-            font-size: 0.76rem;
+            font-size: 0.90rem;
             font-weight: 950;
         }
 
 
         /* ========================================================
-           SECTION 02.06 - CONTROLS
+           SECTION 02.09 - CONTROL PANEL
            ======================================================== */
 
         .pwb-form-grid {
             display: grid;
-            gap: 12px;
+            gap: 13px;
             margin-top: 16px;
         }
 
         .pwb-field label {
             display: block;
             margin-bottom: 6px;
-            color: var(--pwb-soft);
+            color: var(--pwb-text-2);
             font-size: 0.64rem;
             font-weight: 950;
-            letter-spacing: 0.105em;
+            letter-spacing: 0.11em;
             text-transform: uppercase;
         }
 
         .pwb-field select,
         .pwb-field input {
             width: 100%;
-            min-height: 42px;
-            padding: 0 13px;
-            border-radius: 13px;
+            min-height: 44px;
+            padding: 0 14px;
+            border-radius: 14px;
             border: 1px solid rgba(113, 217, 255, 0.17);
-            background: rgba(1, 8, 19, 0.76);
-            color: var(--pwb-text);
+            background: rgba(1, 8, 19, 0.78);
+            color: var(--pwb-text-0);
             outline: none;
             font-size: 0.90rem;
-            font-weight: 780;
+            font-weight: 800;
+            transition:
+                border-color var(--pwb-transition),
+                box-shadow var(--pwb-transition),
+                background var(--pwb-transition);
+        }
+
+        .pwb-field select:hover,
+        .pwb-field input:hover {
+            border-color: rgba(113, 217, 255, 0.27);
+            background: rgba(3, 12, 26, 0.88);
         }
 
         .pwb-field select:focus,
         .pwb-field input:focus {
-            border-color: var(--pwb-border-strong);
-            box-shadow: 0 0 0 3px rgba(113, 217, 255, 0.08);
+            border-color: var(--pwb-border-1);
+            box-shadow:
+                0 0 0 3px rgba(113, 217, 255, 0.085),
+                0 0 26px rgba(113, 217, 255, 0.10);
         }
 
         .pwb-field-note,
         .field-note {
             margin-top: 6px;
-            color: var(--pwb-soft);
+            color: var(--pwb-text-2);
             font-size: 0.72rem;
-            line-height: 1.35;
+            line-height: 1.36;
         }
 
         .pwb-action-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 9px;
-            margin-top: 14px;
+            margin-top: 13px;
         }
 
         .pwb-button,
         .prediction-primary-button,
         .prediction-secondary-button {
-            min-height: 40px;
+            min-height: 41px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
-            padding: 0 14px;
+            padding: 0 13px;
             font-size: 0.78rem;
             font-weight: 950;
             text-decoration: none;
             cursor: pointer;
+            transition:
+                transform var(--pwb-transition),
+                border-color var(--pwb-transition),
+                background var(--pwb-transition),
+                color var(--pwb-transition),
+                box-shadow var(--pwb-transition);
+        }
+
+        .pwb-button:hover,
+        .prediction-primary-button:hover,
+        .prediction-secondary-button:hover {
+            transform: translateY(-1px);
         }
 
         .pwb-button-primary,
         .prediction-primary-button {
             border: 0;
-            background: linear-gradient(135deg, var(--pwb-blue), var(--pwb-mint));
+            background:
+                linear-gradient(135deg, var(--pwb-blue), var(--pwb-mint));
             color: #00111d;
+            box-shadow: 0 12px 34px rgba(113, 217, 255, 0.16);
         }
 
         .pwb-button-secondary,
         .prediction-secondary-button {
-            border: 1px solid rgba(113, 217, 255, 0.19);
+            border: 1px solid rgba(113, 217, 255, 0.20);
             background: rgba(255, 255, 255, 0.045);
-            color: var(--pwb-text);
+            color: var(--pwb-text-0);
         }
 
         .pwb-button-secondary:hover,
         .prediction-secondary-button:hover {
-            border-color: rgba(113, 217, 255, 0.34);
             color: var(--pwb-blue);
+            border-color: rgba(113, 217, 255, 0.38);
+            background: rgba(113, 217, 255, 0.075);
         }
 
         .pwb-diagnostic-grid {
@@ -576,11 +791,12 @@
         }
 
         .pwb-mini-card {
-            min-height: 44px;
-            padding: 9px 11px;
+            min-height: 46px;
+            padding: 10px 12px;
+            border-radius: 15px;
             border: 1px solid rgba(113, 217, 255, 0.13);
-            border-radius: 14px;
-            background: var(--pwb-panel-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.025));
         }
 
         .pwb-mini-card span,
@@ -589,7 +805,7 @@
         }
 
         .pwb-mini-card span {
-            color: var(--pwb-soft);
+            color: var(--pwb-text-2);
             font-size: 0.59rem;
             font-weight: 950;
             letter-spacing: 0.09em;
@@ -598,25 +814,27 @@
 
         .pwb-mini-card strong {
             margin-top: 5px;
-            color: var(--pwb-text);
-            font-size: 0.80rem;
+            color: var(--pwb-text-0);
+            font-size: 0.82rem;
             line-height: 1.15;
         }
 
         .pwb-selector-warning {
-            margin-top: 12px;
-            padding: 10px 11px;
-            border-radius: 14px;
+            margin-top: 13px;
+            padding: 10px 12px;
+            border-radius: 15px;
             border: 1px solid rgba(255, 226, 158, 0.18);
-            background: rgba(255, 226, 158, 0.055);
-            color: rgba(255, 241, 208, 0.82);
+            background:
+                radial-gradient(circle at 0% 0%, rgba(255, 226, 158, 0.10), transparent 34%),
+                rgba(255, 226, 158, 0.045);
+            color: rgba(255, 241, 208, 0.84);
             font-size: 0.74rem;
             line-height: 1.42;
         }
 
 
         /* ========================================================
-           SECTION 02.07 - RESULT PANEL
+           SECTION 02.10 - RESULT PANEL
            ======================================================== */
 
         .pwb-result-top {
@@ -627,6 +845,14 @@
         }
 
         .pwb-result-kicker {
+            min-height: 26px;
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 0 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(113, 217, 255, 0.24);
+            background: rgba(113, 217, 255, 0.08);
             color: var(--pwb-blue);
             font-size: 0.70rem;
             font-weight: 950;
@@ -636,11 +862,11 @@
 
         .pwb-player-name,
         .prediction-player-name {
-            margin: 10px 0 6px;
-            color: var(--pwb-text);
-            font-size: clamp(3.2rem, 5.8vw, 6rem);
+            margin: 12px 0 7px;
+            color: var(--pwb-text-0);
+            font-size: clamp(3.35rem, 5.8vw, 6.1rem);
             line-height: 0.84;
-            letter-spacing: -0.095em;
+            letter-spacing: -0.096em;
             font-weight: 950;
         }
 
@@ -649,66 +875,66 @@
             flex-wrap: wrap;
             align-items: center;
             gap: 8px;
-            color: var(--pwb-muted);
+            color: var(--pwb-text-1);
             font-size: 0.95rem;
             line-height: 1.25;
         }
 
         .pwb-source-pill {
-            max-width: 180px;
-            min-height: 32px;
+            max-width: 190px;
+            min-height: 36px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0 12px;
+            padding: 0 13px;
             border-radius: 999px;
-            border: 1px solid rgba(113, 217, 255, 0.20);
-            background: rgba(113, 217, 255, 0.075);
+            border: 1px solid rgba(113, 217, 255, 0.22);
+            background: rgba(113, 217, 255, 0.08);
             color: var(--pwb-blue);
-            font-size: 0.74rem;
+            font-size: 0.75rem;
             font-weight: 950;
             text-align: center;
         }
 
         .pwb-probability-row {
             display: grid;
-            grid-template-columns: minmax(210px, 0.82fr) minmax(0, 1.18fr);
-            gap: 14px;
+            grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
+            gap: 15px;
             margin-top: 22px;
             align-items: stretch;
         }
 
         .pwb-probability-card {
-            min-height: 188px;
+            min-height: 196px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             padding: 18px;
             border-radius: var(--pwb-radius-lg);
-            border: 1px solid rgba(113, 217, 255, 0.14);
+            border: 1px solid rgba(113, 217, 255, 0.15);
             background:
-                radial-gradient(circle at 22% 0%, rgba(113, 217, 255, 0.12), transparent 42%),
-                rgba(255, 255, 255, 0.035);
+                radial-gradient(circle at 18% 0%, rgba(113, 217, 255, 0.13), transparent 38%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
         }
 
         .pwb-big-number,
         .prediction-big-number {
-            color: var(--pwb-text);
-            font-size: clamp(2.3rem, 4vw, 4.25rem);
+            color: var(--pwb-text-0);
+            font-size: clamp(2.45rem, 4.1vw, 4.35rem);
             line-height: 0.88;
-            letter-spacing: -0.075em;
+            letter-spacing: -0.078em;
             font-weight: 950;
         }
 
         .pwb-confidence-row {
-            margin-top: 12px;
+            margin-top: 14px;
             display: grid;
             gap: 5px;
         }
 
         .pwb-inline-label,
         .result-inline-label {
-            color: var(--pwb-soft);
+            color: var(--pwb-text-2);
             font-size: 0.62rem;
             font-weight: 950;
             letter-spacing: 0.10em;
@@ -717,34 +943,47 @@
 
         .pwb-confidence-row strong {
             color: var(--pwb-mint);
-            font-size: 0.92rem;
+            font-size: 0.94rem;
         }
 
         .pwb-highlight-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 9px;
+            gap: 10px;
         }
 
         .pwb-metric-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 9px;
-            margin-top: 14px;
+            gap: 10px;
+            margin-top: 15px;
         }
 
         .pwb-stat-chip,
         .prediction-stat-chip {
-            min-height: 64px;
+            min-height: 66px;
             padding: 11px 12px;
-            border-radius: 15px;
+            border-radius: 16px;
             border: 1px solid rgba(113, 217, 255, 0.13);
-            background: var(--pwb-panel-soft);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.024));
+            transition:
+                transform var(--pwb-transition),
+                border-color var(--pwb-transition),
+                background var(--pwb-transition);
+        }
+
+        .pwb-stat-chip:hover,
+        .prediction-stat-chip:hover {
+            transform: translateY(-1px);
+            border-color: rgba(113, 217, 255, 0.23);
+            background:
+                linear-gradient(180deg, rgba(113, 217, 255, 0.075), rgba(255, 255, 255, 0.030));
         }
 
         .pwb-stat-chip.compact,
         .compact-chip {
-            min-height: 88px;
+            min-height: 92px;
         }
 
         .pwb-stat-chip span,
@@ -756,8 +995,8 @@
 
         .pwb-stat-chip span,
         .prediction-stat-chip span {
-            color: var(--pwb-soft);
-            font-size: 0.58rem;
+            color: var(--pwb-text-2);
+            font-size: 0.59rem;
             font-weight: 950;
             letter-spacing: 0.09em;
             text-transform: uppercase;
@@ -766,45 +1005,47 @@
         .pwb-stat-chip strong,
         .prediction-stat-chip strong {
             margin-top: 6px;
-            color: var(--pwb-text);
-            font-size: 0.82rem;
-            line-height: 1.15;
+            color: var(--pwb-text-0);
+            font-size: 0.83rem;
+            line-height: 1.16;
         }
 
         .pwb-reasoning-panel,
         .reasoning-panel,
         .stacked-subpanel {
             margin-top: 16px;
-            padding: 14px;
-            border-radius: var(--pwb-radius-md);
-            border: 1px solid rgba(255, 255, 255, 0.075);
-            background: rgba(0, 0, 0, 0.14);
+            padding: 15px;
+            border-radius: var(--pwb-radius-lg);
+            border: 1px solid rgba(255, 255, 255, 0.080);
+            background:
+                radial-gradient(circle at 0% 0%, rgba(113, 217, 255, 0.06), transparent 36%),
+                rgba(0, 0, 0, 0.15);
         }
 
         .pwb-subpanel-title,
         .subpanel-title {
             margin: 0 0 8px;
-            color: var(--pwb-text);
+            color: var(--pwb-text-0);
             font-size: 0.98rem;
             letter-spacing: -0.02em;
-            font-weight: 900;
+            font-weight: 950;
         }
 
         .pwb-explanation-text,
         .prediction-explanation-text {
             margin: 0;
-            color: var(--pwb-muted);
+            color: var(--pwb-text-1);
             font-size: 0.85rem;
             line-height: 1.48;
         }
 
 
         /* ========================================================
-           SECTION 02.08 - AI INTELLIGENCE
+           SECTION 02.11 - AI INTELLIGENCE PANEL
            ======================================================== */
 
         .pwb-intelligence .pwb-panel-title {
-            font-size: clamp(1.6rem, 2.1vw, 2.25rem);
+            font-size: clamp(1.7rem, 2.2vw, 2.34rem);
             line-height: 0.98;
             letter-spacing: -0.06em;
         }
@@ -812,7 +1053,7 @@
         .pwb-intelligence-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 9px;
+            gap: 10px;
             margin-top: 16px;
         }
 
@@ -820,9 +1061,9 @@
         .prediction-list {
             margin: 0;
             padding-left: 18px;
-            color: var(--pwb-muted);
+            color: var(--pwb-text-1);
             font-size: 0.82rem;
-            line-height: 1.42;
+            line-height: 1.44;
         }
 
         .pwb-list li,
@@ -832,56 +1073,53 @@
 
 
         /* ========================================================
-           SECTION 02.09 - SUPPORTING ANALYSIS
+           SECTION 02.12 - SUPPORTING ANALYSIS
            ======================================================== */
 
         .pwb-support-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 14px;
-            margin-top: 14px;
+            gap: 15px;
+            margin-top: 15px;
         }
 
         .pwb-analysis-panel {
-            padding: 16px;
-            border: 1px solid var(--pwb-border);
-            border-radius: var(--pwb-radius-lg);
-            background:
-                linear-gradient(180deg, rgba(10, 31, 55, 0.84), rgba(7, 21, 40, 0.88));
-            box-shadow: var(--pwb-shadow-soft);
+            padding: 18px;
+            border-radius: var(--pwb-radius-xl);
         }
 
         .pwb-analysis-title {
             margin: 0 0 8px;
-            color: var(--pwb-text);
-            font-size: 1.08rem;
-            line-height: 1.06;
-            letter-spacing: -0.035em;
-            font-weight: 900;
+            color: var(--pwb-text-0);
+            font-size: clamp(1.28rem, 2vw, 2rem);
+            line-height: 1.02;
+            letter-spacing: -0.055em;
+            font-weight: 950;
         }
 
         .pwb-analysis-copy {
             margin: 0;
-            color: var(--pwb-muted);
-            font-size: 0.78rem;
-            line-height: 1.42;
+            color: var(--pwb-text-1);
+            font-size: 0.82rem;
+            line-height: 1.48;
         }
 
         .pwb-bullet-grid,
         .bullet-metric-grid,
         .prop-grid {
             display: grid;
-            gap: 8px;
-            margin-top: 13px;
+            gap: 9px;
+            margin-top: 14px;
         }
 
         .pwb-bullet,
         .bullet-metric,
         .prop-card {
-            padding: 9px 10px;
-            border-radius: 13px;
-            border: 1px solid rgba(113, 217, 255, 0.12);
-            background: rgba(255, 255, 255, 0.035);
+            padding: 10px 12px;
+            border-radius: 15px;
+            border: 1px solid rgba(113, 217, 255, 0.13);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.024));
         }
 
         .pwb-bullet span,
@@ -894,7 +1132,7 @@
         .pwb-bullet span,
         .bullet-metric span,
         .prop-title {
-            color: var(--pwb-soft);
+            color: var(--pwb-text-2);
             font-size: 0.58rem;
             font-weight: 950;
             letter-spacing: 0.09em;
@@ -905,29 +1143,53 @@
         .bullet-metric strong,
         .prop-probability {
             margin-top: 5px;
-            color: var(--pwb-text);
-            font-size: 0.78rem;
-            font-weight: 900;
-            line-height: 1.15;
+            color: var(--pwb-text-0);
+            font-size: 0.80rem;
+            font-weight: 950;
+            line-height: 1.16;
         }
+
+        .prop-probability {
+            color: var(--pwb-mint);
+            font-size: 1.18rem;
+        }
+
+
+        /* ========================================================
+           SECTION 02.13 - RUNTIME STRIP
+           ======================================================== */
 
         .pwb-runtime-status {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 10px;
-            margin-top: 14px;
+            margin-top: 15px;
             padding: 12px;
-            border: 1px solid var(--pwb-border);
-            border-radius: var(--pwb-radius-lg);
-            background: rgba(255, 255, 255, 0.035);
+            border-radius: var(--pwb-radius-xl);
+        }
+
+
+        /* ========================================================
+           SECTION 02.14 - ACCOUNT AND ERROR PANELS
+           ======================================================== */
+
+        .pwb-account-action-bar {
+            display: none;
+            margin-top: 15px;
+            padding: 16px;
+            border-radius: var(--pwb-radius-xl);
+            border: 1px solid var(--pwb-border-0);
+            background: rgba(255, 255, 255, 0.040);
         }
 
         .pwb-error-panel {
-            margin-top: 14px;
-            padding: 16px;
-            border: 1px solid rgba(255, 159, 159, 0.22);
-            border-radius: var(--pwb-radius-lg);
-            background: rgba(255, 159, 159, 0.055);
+            margin-top: 15px;
+            padding: 18px;
+            border-radius: var(--pwb-radius-xl);
+            border-color: rgba(255, 159, 159, 0.23);
+            background:
+                radial-gradient(circle at 0% 0%, rgba(255, 159, 159, 0.10), transparent 36%),
+                rgba(255, 159, 159, 0.050);
         }
 
         .pwb-error-panel.is-hidden,
@@ -935,23 +1197,13 @@
             display: none !important;
         }
 
-
-        /* ========================================================
-           SECTION 02.10 - ACCOUNT ACTIONS
-           ======================================================== */
-
-        .pwb-account-action-bar {
-            display: none;
-            margin-top: 14px;
-            padding: 14px;
-            border-radius: var(--pwb-radius-lg);
-            border: 1px solid rgba(113, 217, 255, 0.16);
-            background: rgba(255, 255, 255, 0.035);
+        .pwb-hidden-runtime-targets {
+            display: none !important;
         }
 
 
         /* ========================================================
-           SECTION 02.11 - OLD PATCH NEUTRALIZATION
+           SECTION 02.15 - OLD VISUAL PATCH NEUTRALIZATION
            ======================================================== */
 
         body.pwb-enterprise-body.aisp2-prediction-cockpit-repair,
@@ -963,33 +1215,23 @@
         body.pwb-enterprise-body .prediction-final-shell,
         body.pwb-enterprise-body .prediction-final-cockpit,
         body.pwb-enterprise-body .prediction-final-grid,
-        body.pwb-enterprise-body .prediction-final-panel,
-        body.pwb-enterprise-body .prediction-workbench {
+        body.pwb-enterprise-body .prediction-final-panel {
             width: auto !important;
-            max-width: none;
-        }
-
-        .pwb-shell .prediction-workbench,
-        .pwb-shell .prediction-page,
-        .pwb-shell .prediction-shell,
-        .pwb-shell .prediction-workbench-page {
-            all: unset;
-        }
-
-        .pwb-shell .prediction-workbench {
-            display: block;
+            max-width: none !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
         }
 
 
         /* ========================================================
-           SECTION 02.12 - RESPONSIVE DESIGN
+           SECTION 02.16 - RESPONSIVE SYSTEM
            ======================================================== */
 
-        @media (max-width: 1440px) {
+        @media (max-width: 1500px) {
             .pwb-cockpit-grid {
                 grid-template-columns:
-                    minmax(280px, 0.78fr)
-                    minmax(520px, 1.58fr)
+                    minmax(292px, 0.78fr)
+                    minmax(540px, 1.58fr)
                     minmax(320px, 0.92fr);
             }
 
@@ -1041,6 +1283,7 @@
 
         @media (max-width: 900px) {
             .pwb-topbar {
+                min-height: auto;
                 align-items: flex-start;
                 flex-direction: column;
                 padding: 14px 18px;
@@ -1056,7 +1299,7 @@
             }
 
             .pwb-title {
-                font-size: clamp(2.6rem, 14vw, 4.5rem);
+                font-size: clamp(2.7rem, 14vw, 4.6rem);
             }
 
             .pwb-hero-status,
@@ -1079,48 +1322,12 @@
                 font-size: clamp(2.8rem, 16vw, 4.5rem);
             }
         }
-
-        @media (max-height: 760px) and (min-width: 1181px) {
-            .pwb-hero {
-                min-height: 112px;
-                padding: 18px 24px;
-            }
-
-            .pwb-title {
-                font-size: clamp(2.8rem, 5vw, 4.8rem);
-                margin: 8px 0 5px;
-            }
-
-            .pwb-subtitle {
-                font-size: 0.86rem;
-                line-height: 1.36;
-            }
-
-            .pwb-controls,
-            .pwb-intelligence {
-                padding: 13px;
-            }
-
-            .pwb-result {
-                padding: 18px;
-            }
-
-            .pwb-stat-chip,
-            .prediction-stat-chip {
-                min-height: 56px;
-                padding: 9px 10px;
-            }
-
-            .pwb-player-name,
-            .prediction-player-name {
-                font-size: clamp(2.7rem, 5.2vw, 4.8rem);
-            }
-        }
     </style>
 </head>
 
 
 <body class="pwb-enterprise-body prediction-workbench-page">
+
 <div
     class="pwb-shell app-shell"
     data-page="prediction-workbench"
@@ -1133,7 +1340,6 @@
 
     <!-- ========================================================
          SECTION 03 - TOP NAVIGATION
-         FILE: templates/prediction_workbench.html
          ======================================================== -->
 
     <header class="pwb-topbar topbar">
@@ -1157,14 +1363,12 @@
 
     <!-- ========================================================
          SECTION 04 - PAGE WORKBENCH
-         FILE: templates/prediction_workbench.html
          ======================================================== -->
 
     <main class="pwb-main prediction-workbench" data-prediction-workbench>
 
         <!-- ====================================================
              SECTION 04.01 - HERO
-             FILE: templates/prediction_workbench.html
              ==================================================== -->
 
         <section class="pwb-hero prediction-hero panel-glass">
@@ -1179,9 +1383,9 @@
                 </h1>
 
                 <p class="pwb-subtitle prediction-subtitle">
-                    Build database-backed player predictions, review model reasoning,
-                    inspect production truth states, track selector health, and surface
-                    exactly which information AISP2 used before generating a probability.
+                    A premium MLB intelligence cockpit for player outcome predictions,
+                    model reasoning, data-source transparency, warehouse readiness,
+                    and account-ready prediction history.
                 </p>
             </div>
 
@@ -1205,15 +1409,13 @@
 
 
         <!-- ====================================================
-             SECTION 05 - PRIMARY COCKPIT
-             FILE: templates/prediction_workbench.html
+             SECTION 05 - PRIMARY COCKPIT GRID
              ==================================================== -->
 
         <section class="pwb-cockpit-grid prediction-core-grid">
 
             <!-- ================================================
                  SECTION 05.01 - CONTROL CENTER
-                 FILE: templates/prediction_workbench.html
                  ================================================ -->
 
             <section class="pwb-panel pwb-controls prediction-controls-card prediction-selector-panel panel-glass">
@@ -1225,7 +1427,7 @@
 
                         <p class="pwb-panel-copy panel-copy">
                             Select a team, choose a player, pick an outcome, then run
-                            an AISP2 prediction request.
+                            a live AISP2 prediction request.
                         </p>
                     </div>
 
@@ -1330,7 +1532,6 @@
 
             <!-- ================================================
                  SECTION 05.02 - PRIMARY RESULT CARD
-                 FILE: templates/prediction_workbench.html
                  ================================================ -->
 
             <article class="pwb-panel pwb-result main-probability-card panel-glass" data-prediction-result>
@@ -1452,7 +1653,6 @@
 
             <!-- ================================================
                  SECTION 05.03 - AI INTELLIGENCE PANEL
-                 FILE: templates/prediction_workbench.html
                  ================================================ -->
 
             <aside class="pwb-panel pwb-intelligence prediction-explanation-panel panel-glass">
@@ -1541,7 +1741,6 @@
 
         <!-- ====================================================
              SECTION 06 - SUPPORTING ANALYSIS GRID
-             FILE: templates/prediction_workbench.html
              ==================================================== -->
 
         <section class="pwb-support-grid supporting-analysis-grid">
@@ -1693,7 +1892,6 @@
 
         <!-- ====================================================
              SECTION 07 - RUNTIME STATUS STRIP
-             FILE: templates/prediction_workbench.html
              ==================================================== -->
 
         <section class="pwb-runtime-status runtime-status-grid runtime-status-bottom" aria-label="Runtime system status">
@@ -1721,10 +1919,6 @@
 
         <!-- ====================================================
              SECTION 08 - ACCOUNT ACTION BAR
-             FILE: templates/prediction_workbench.html
-             NOTE:
-             Hidden by default visually but hooks remain present for the
-             Phase 14 account integration runtime.
              ==================================================== -->
 
         <section class="pwb-account-action-bar prediction-account-action-bar" data-prediction-account-action-bar>
@@ -1767,7 +1961,6 @@
 
         <!-- ====================================================
              SECTION 09 - ERROR PANEL
-             FILE: templates/prediction_workbench.html
              ==================================================== -->
 
         <section class="pwb-error-panel prediction-error-panel panel-glass is-hidden" data-prediction-error-panel>
@@ -1783,10 +1976,6 @@
 
         <!-- ====================================================
              SECTION 10 - HIDDEN RUNTIME TARGETS
-             FILE: templates/prediction_workbench.html
-             PURPOSE:
-             Preserve legacy and upcoming data hooks without cluttering
-             the restored enterprise layout.
              ==================================================== -->
 
         <section class="pwb-hidden-runtime-targets" aria-hidden="true">
@@ -1801,7 +1990,6 @@
 
 <!-- ============================================================
      SECTION 11 - SCRIPT LOADING
-     FILE: templates/prediction_workbench.html
      ============================================================ -->
 
 <script src="/static/js/aisp2.js"></script>
@@ -1809,18 +1997,16 @@
 
 
 <!-- ============================================================
-     SECTION 12 - PAGE-LOCAL STABILIZER
-     FILE: templates/prediction_workbench.html
-     PURPOSE:
-     Remove the classes introduced by failed layout experiments while
-     preserving all prediction runtime behavior.
+     SECTION 12 - PAGE STABILIZER AND MICRO-INTERACTIONS
      ============================================================ -->
 
 <script>
-    (function initializePredictionWorkbenchStabilizer() {
+    (function initializeAISP2PredictionWorkbenchPolish() {
         "use strict";
 
-        function stabilizePredictionWorkbench() {
+        const VERSION = "phase_14_part_7_9_enterprise_prediction_workbench_polish";
+
+        function stabilizeWorkbench() {
             try {
                 document.body.classList.remove("aisp2-prediction-cockpit-repair");
                 document.body.classList.remove("aisp2-disable-scroll-restore");
@@ -1829,7 +2015,7 @@
 
                 document
                     .querySelectorAll(".aisp2-prediction-fit-parent")
-                    .forEach(function removeFailedFitClass(node) {
+                    .forEach(function removeOldFitClass(node) {
                         node.classList.remove("aisp2-prediction-fit-parent");
                     });
 
@@ -1845,17 +2031,50 @@
             }
         }
 
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", stabilizePredictionWorkbench);
-        } else {
-            stabilizePredictionWorkbench();
+        function addPanelPointerLight() {
+            const panels = Array.from(
+                document.querySelectorAll(".pwb-panel, .pwb-analysis-panel, .pwb-hero")
+            );
+
+            panels.forEach(function attachPointerGlow(panel) {
+                if (panel.dataset.pwbPointerLightAttached === "true") {
+                    return;
+                }
+
+                panel.dataset.pwbPointerLightAttached = "true";
+
+                panel.addEventListener("pointermove", function handlePointerMove(event) {
+                    const rect = panel.getBoundingClientRect();
+                    const x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
+                    const y = ((event.clientY - rect.top) / Math.max(rect.height, 1)) * 100;
+
+                    panel.style.backgroundImage =
+                        "radial-gradient(circle at " + x + "% " + y + "%, rgba(113,217,255,0.10), transparent 30%), " +
+                        "linear-gradient(180deg, rgba(12,35,61,0.84), rgba(5,17,34,0.90))";
+                });
+
+                panel.addEventListener("pointerleave", function handlePointerLeave() {
+                    panel.style.backgroundImage = "";
+                });
+            });
         }
 
-        window.addEventListener("load", stabilizePredictionWorkbench);
+        function boot() {
+            stabilizeWorkbench();
+            addPanelPointerLight();
+        }
 
-        window.AISP2PredictionWorkbenchStabilizerPhase1478 = {
-            version: "phase_14_part_7_8_enterprise_prediction_workbench_restore",
-            refresh: stabilizePredictionWorkbench
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+
+        window.addEventListener("load", boot);
+
+        window.AISP2PredictionWorkbenchPolish = {
+            version: VERSION,
+            refresh: boot
         };
     }());
 </script>
