@@ -14380,31 +14380,34 @@ if __name__ == "__main__":
 
 
 
+
 # ============================================================
-# SECTION 18.992 - PHASE 15 PART 1.2 - WORKBENCH GUARANTEED JSON PREDICTION ENDPOINT
+# SECTION 18.993 - PHASE 15 PART 1.3 - PLAYER SPECIFIC WORKBENCH PREDICTION MATH
 # FILE: main.py
 #
 # PURPOSE:
-# Provide a dedicated JSON-only endpoint for the Prediction Workbench
-# so the frontend no longer depends on any older route that may return
-# HTML, redirect content, or invalid JSON during an exception.
+# Make /api/prediction/workbench/run calculate probabilities from
+# the selected player's real MLB hitting stat line whenever possible.
 #
-# ENDPOINT:
+# ENDPOINTS:
 #   POST /api/prediction/workbench/run
+#   GET  /api/prediction/workbench/run/health
 #
-# GUARANTEE:
-#   Always returns a JSON object.
+# MATH:
+#   observed_rate = player_outcome_count / player_opportunity_count
+#   sample_weight = sample_size / (sample_size + shrinkage_constant)
+#   probability = observed_rate * sample_weight + baseline * (1 - sample_weight)
+#
+# NOTES:
+# - If no player stat sample exists, return a transparent no-sample
+#   player-specific payload instead of pretending real features exist.
+# - This is statistical baseline math, not fake ML/DL.
 # ============================================================
 
-try:
-    from fastapi import Request as _AISP2P1512Request
-except Exception:
-    _AISP2P1512Request = None
-
-AISP2_PHASE_15_PART_1_2_VERSION = "phase_15_part_1_2_workbench_guaranteed_json_prediction_endpoint"
+AISP2_PHASE_15_PART_1_3_VERSION = "phase_15_part_1_3_player_specific_workbench_prediction_math"
 
 
-def _aisp2_p1512_safe_text(value, fallback=""):
+def _aisp2_p1513_safe_text(value, fallback=""):
     try:
         text = str(value if value is not None else "").strip()
         return text if text else fallback
@@ -14412,17 +14415,46 @@ def _aisp2_p1512_safe_text(value, fallback=""):
         return fallback
 
 
-def _aisp2_p1512_safe_float(value, fallback=0.0):
+def _aisp2_p1513_safe_float(value, fallback=0.0):
     try:
         if value is None or value == "":
             return float(fallback)
+        if isinstance(value, str):
+            value = value.replace("%", "").strip()
         return float(value)
     except Exception:
         return float(fallback)
 
 
-def _aisp2_p1512_outcome_key(value):
-    text = _aisp2_p1512_safe_text(value, "home_run").lower()
+def _aisp2_p1513_safe_int(value, fallback=0):
+    try:
+        if value is None or value == "":
+            return int(fallback)
+        if isinstance(value, str):
+            value = value.replace("%", "").strip()
+        return int(float(value))
+    except Exception:
+        return int(fallback)
+
+
+def _aisp2_p1513_clamp(value, low, high):
+    number = _aisp2_p1513_safe_float(value, low)
+    if number < low:
+        return float(low)
+    if number > high:
+        return float(high)
+    return float(number)
+
+
+def _aisp2_p1513_pct(value):
+    try:
+        return f"{float(value):.1f}%"
+    except Exception:
+        return "Pending"
+
+
+def _aisp2_p1513_outcome_key(value):
+    text = _aisp2_p1513_safe_text(value, "home_run").lower()
     text = text.replace("-", "_").replace(" ", "_")
     while "__" in text:
         text = text.replace("__", "_")
@@ -14453,8 +14485,7 @@ def _aisp2_p1512_outcome_key(value):
     return aliases.get(text, text or "home_run")
 
 
-def _aisp2_p1512_outcome_label(value):
-    key = _aisp2_p1512_outcome_key(value)
+def _aisp2_p1513_outcome_label(value):
     labels = {
         "home_run": "Home Run",
         "hit": "Hit",
@@ -14464,10 +14495,26 @@ def _aisp2_p1512_outcome_label(value):
         "strikeout": "Strikeout",
         "walk": "Walk",
     }
-    return labels.get(key, "Home Run")
+    return labels.get(_aisp2_p1513_outcome_key(value), "Home Run")
 
 
-def _aisp2_p1512_baseline_probability(outcome_key):
+def _aisp2_p1513_current_candidate_seasons():
+    try:
+        year = datetime.now(timezone.utc).year
+    except Exception:
+        year = 2026
+
+    seasons = [year, year - 1, year - 2]
+
+    clean = []
+    for season in seasons:
+        if season not in clean and season >= 2020:
+            clean.append(season)
+
+    return clean
+
+
+def _aisp2_p1513_league_baseline(outcome_key):
     baselines = {
         "home_run": 3.2,
         "hit": 24.5,
@@ -14480,94 +14527,569 @@ def _aisp2_p1512_baseline_probability(outcome_key):
     return float(baselines.get(outcome_key, 12.0))
 
 
-def _aisp2_p1512_pct(value):
+def _aisp2_p1513_no_sample_probability(outcome_key):
+    """Player-specific no-batting-sample fallback.
+
+    This is intentionally not the league average. If a player has no
+    batting sample, the output should clearly show that the model has
+    no player evidence and use a conservative bound.
+    """
+    conservative = {
+        "home_run": 0.2,
+        "hit": 5.0,
+        "rbi": 2.0,
+        "run_scored": 2.0,
+        "total_bases": 8.0,
+        "strikeout": 22.0,
+        "walk": 2.0,
+    }
+    return float(conservative.get(outcome_key, 2.0))
+
+
+def _aisp2_p1513_probability_bounds(outcome_key):
+    bounds = {
+        "home_run": (0.0, 18.0),
+        "hit": (0.0, 58.0),
+        "rbi": (0.0, 42.0),
+        "run_scored": (0.0, 44.0),
+        "total_bases": (0.0, 72.0),
+        "strikeout": (0.0, 58.0),
+        "walk": (0.0, 30.0),
+    }
+    return bounds.get(outcome_key, (0.0, 75.0))
+
+
+def _aisp2_p1513_http_json(url, timeout=12):
+    import json as _json
+    import urllib.request as _urllib_request
+
+    request = _urllib_request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "AISP2-Baseball/phase-15-player-specific-math",
+        },
+    )
+
+    with _urllib_request.urlopen(request, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+        return _json.loads(raw)
+
+
+def _aisp2_p1513_search_mlb_player_id(player_name):
+    import urllib.parse as _urllib_parse
+
+    name = _aisp2_p1513_safe_text(player_name)
+    if not name:
+        return None
+
     try:
-        return f"{float(value):.1f}%"
+        encoded = _urllib_parse.quote(name)
+        url = f"https://statsapi.mlb.com/api/v1/people/search?names={encoded}"
+        payload = _aisp2_p1513_http_json(url, timeout=8)
+        people = payload.get("people") or []
+        if people:
+            return people[0].get("id")
     except Exception:
-        return "Pending"
+        return None
+
+    return None
 
 
-def _aisp2_p1512_build_fallback_payload(request_payload):
-    outcome_key = _aisp2_p1512_outcome_key(request_payload.get("outcome_key") or request_payload.get("outcome"))
-    outcome_label = _aisp2_p1512_outcome_label(outcome_key)
+def _aisp2_p1513_extract_mlb_stat_line(stat_payload):
+    return {
+        "games": _aisp2_p1513_safe_int(stat_payload.get("gamesPlayed"), 0),
+        "pa": _aisp2_p1513_safe_int(stat_payload.get("plateAppearances"), 0),
+        "ab": _aisp2_p1513_safe_int(stat_payload.get("atBats"), 0),
+        "hits": _aisp2_p1513_safe_int(stat_payload.get("hits"), 0),
+        "doubles": _aisp2_p1513_safe_int(stat_payload.get("doubles"), 0),
+        "triples": _aisp2_p1513_safe_int(stat_payload.get("triples"), 0),
+        "home_runs": _aisp2_p1513_safe_int(stat_payload.get("homeRuns"), 0),
+        "walks": _aisp2_p1513_safe_int(stat_payload.get("baseOnBalls"), 0),
+        "strikeouts": _aisp2_p1513_safe_int(stat_payload.get("strikeOuts"), 0),
+        "rbi": _aisp2_p1513_safe_int(stat_payload.get("rbi"), 0),
+        "runs": _aisp2_p1513_safe_int(stat_payload.get("runs"), 0),
+        "total_bases": _aisp2_p1513_safe_int(stat_payload.get("totalBases"), 0),
+        "avg": _aisp2_p1513_safe_float(stat_payload.get("avg"), -1.0),
+        "obp": _aisp2_p1513_safe_float(stat_payload.get("obp"), -1.0),
+        "slg": _aisp2_p1513_safe_float(stat_payload.get("slg"), -1.0),
+        "ops": _aisp2_p1513_safe_float(stat_payload.get("ops"), -1.0),
+    }
 
-    player_name = _aisp2_p1512_safe_text(
+
+def _aisp2_p1513_fetch_mlb_hitting_stats(player_id, player_name=None):
+    """Fetch season hitting stats for the selected MLB player."""
+    resolved_player_id = _aisp2_p1513_safe_text(player_id)
+
+    if not resolved_player_id or not resolved_player_id.replace(".", "", 1).isdigit():
+        searched_id = _aisp2_p1513_search_mlb_player_id(player_name)
+        if searched_id:
+            resolved_player_id = str(searched_id)
+
+    if not resolved_player_id:
+        return {
+            "loaded": False,
+            "player_id": None,
+            "season": None,
+            "source": "mlb_stats_api_unresolved_player",
+            "stat_line": {},
+            "error": "No MLB player id available.",
+        }
+
+    clean_id = str(int(float(resolved_player_id)))
+
+    last_error = None
+
+    for season in _aisp2_p1513_current_candidate_seasons():
+        url = (
+            f"https://statsapi.mlb.com/api/v1/people/{clean_id}/stats"
+            f"?stats=season&group=hitting&season={season}"
+        )
+
+        try:
+            payload = _aisp2_p1513_http_json(url, timeout=12)
+            people = payload.get("people") or []
+            if not people:
+                continue
+
+            stats_groups = people[0].get("stats") or []
+            for stats_group in stats_groups:
+                splits = stats_group.get("splits") or []
+                if not splits:
+                    continue
+
+                stat_payload = splits[0].get("stat") or {}
+                stat_line = _aisp2_p1513_extract_mlb_stat_line(stat_payload)
+
+                has_any_sample = (
+                    stat_line.get("pa", 0) > 0
+                    or stat_line.get("ab", 0) > 0
+                    or stat_line.get("hits", 0) > 0
+                    or stat_line.get("home_runs", 0) > 0
+                )
+
+                return {
+                    "loaded": True,
+                    "has_sample": bool(has_any_sample),
+                    "player_id": clean_id,
+                    "season": season,
+                    "source": f"MLB Stats API Hitting {season}",
+                    "stat_line": stat_line,
+                    "raw_stat": stat_payload,
+                    "error": None,
+                }
+
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+
+    return {
+        "loaded": False,
+        "has_sample": False,
+        "player_id": clean_id,
+        "season": None,
+        "source": "mlb_stats_api_no_hitting_sample",
+        "stat_line": {},
+        "raw_stat": {},
+        "error": last_error,
+    }
+
+
+def _aisp2_p1513_stat_line_from_request(request_payload):
+    return {
+        "games": _aisp2_p1513_safe_int(request_payload.get("games"), 0),
+        "pa": _aisp2_p1513_safe_int(request_payload.get("pa") or request_payload.get("plate_appearances"), 0),
+        "ab": _aisp2_p1513_safe_int(request_payload.get("ab") or request_payload.get("at_bats"), 0),
+        "hits": _aisp2_p1513_safe_int(request_payload.get("hits"), 0),
+        "doubles": _aisp2_p1513_safe_int(request_payload.get("doubles"), 0),
+        "triples": _aisp2_p1513_safe_int(request_payload.get("triples"), 0),
+        "home_runs": _aisp2_p1513_safe_int(request_payload.get("home_runs"), 0),
+        "walks": _aisp2_p1513_safe_int(request_payload.get("walks"), 0),
+        "strikeouts": _aisp2_p1513_safe_int(request_payload.get("strikeouts"), 0),
+        "rbi": _aisp2_p1513_safe_int(request_payload.get("rbi"), 0),
+        "runs": _aisp2_p1513_safe_int(request_payload.get("runs"), 0),
+        "total_bases": _aisp2_p1513_safe_int(request_payload.get("total_bases"), 0),
+        "avg": _aisp2_p1513_safe_float(request_payload.get("avg"), -1.0),
+        "obp": _aisp2_p1513_safe_float(request_payload.get("obp"), -1.0),
+        "slg": _aisp2_p1513_safe_float(request_payload.get("slg"), -1.0),
+        "ops": _aisp2_p1513_safe_float(request_payload.get("ops"), -1.0),
+    }
+
+
+def _aisp2_p1513_has_stat_sample(stat_line):
+    return bool(
+        stat_line.get("pa", 0) > 0
+        or stat_line.get("ab", 0) > 0
+        or stat_line.get("hits", 0) > 0
+        or stat_line.get("home_runs", 0) > 0
+    )
+
+
+def _aisp2_p1513_observed_rate(outcome_key, stat_line):
+    pa = max(0, _aisp2_p1513_safe_int(stat_line.get("pa"), 0))
+    ab = max(0, _aisp2_p1513_safe_int(stat_line.get("ab"), 0))
+
+    if outcome_key == "home_run":
+        if pa > 0:
+            return (stat_line.get("home_runs", 0) / pa) * 100.0, pa, "HR / PA"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player PA sample"
+
+    if outcome_key == "hit":
+        if ab > 0:
+            return (stat_line.get("hits", 0) / ab) * 100.0, ab, "H / AB"
+        if pa > 0:
+            return (stat_line.get("hits", 0) / pa) * 100.0, pa, "H / PA"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player AB sample"
+
+    if outcome_key == "rbi":
+        if pa > 0:
+            return (stat_line.get("rbi", 0) / pa) * 100.0, pa, "RBI / PA"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player PA sample"
+
+    if outcome_key == "run_scored":
+        if pa > 0:
+            return (stat_line.get("runs", 0) / pa) * 100.0, pa, "R / PA"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player PA sample"
+
+    if outcome_key == "total_bases":
+        if ab > 0:
+            hit_rate = (stat_line.get("hits", 0) / ab) * 100.0
+            tb_per_ab = (stat_line.get("total_bases", 0) / ab) if ab else 0.0
+            power_adjustment = _aisp2_p1513_clamp((tb_per_ab - 1.0) * 12.0, 0.0, 18.0)
+            return hit_rate + power_adjustment, ab, "H/AB + TB power adjustment"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player AB sample"
+
+    if outcome_key == "strikeout":
+        if pa > 0:
+            return (stat_line.get("strikeouts", 0) / pa) * 100.0, pa, "K / PA"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player PA sample"
+
+    if outcome_key == "walk":
+        if pa > 0:
+            return (stat_line.get("walks", 0) / pa) * 100.0, pa, "BB / PA"
+        return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No player PA sample"
+
+    return _aisp2_p1513_no_sample_probability(outcome_key), 0, "No sample"
+
+
+def _aisp2_p1513_shrinkage_constant(outcome_key):
+    if outcome_key == "home_run":
+        return 220.0
+    if outcome_key in {"rbi", "run_scored"}:
+        return 190.0
+    if outcome_key == "total_bases":
+        return 140.0
+    if outcome_key in {"hit", "strikeout", "walk"}:
+        return 160.0
+    return 170.0
+
+
+def _aisp2_p1513_calculate_probability(outcome_key, stat_line, stats_loaded, player_specific_source):
+    observed_rate, sample_size, metric = _aisp2_p1513_observed_rate(outcome_key, stat_line)
+    baseline = _aisp2_p1513_league_baseline(outcome_key)
+
+    if sample_size > 0:
+        shrinkage = _aisp2_p1513_shrinkage_constant(outcome_key)
+        sample_weight = sample_size / (sample_size + shrinkage)
+        probability = (observed_rate * sample_weight) + (baseline * (1.0 - sample_weight))
+        tier = "Player-Specific Statistical Baseline"
+        source = player_specific_source
+        risk = "Small Sample" if sample_size < 75 else "Baseline Ready"
+        warehouse_status = "Player Stats Loaded"
+    else:
+        sample_weight = 0.0
+        probability = _aisp2_p1513_no_sample_probability(outcome_key)
+        tier = "No Hitting Sample Baseline"
+        source = player_specific_source
+        risk = "No Player Hitting Sample"
+        warehouse_status = "Stats Needed"
+
+    low, high = _aisp2_p1513_probability_bounds(outcome_key)
+    probability = _aisp2_p1513_clamp(probability, low, high)
+
+    coverage = 18.0
+    if sample_size > 0:
+        coverage += min(55.0, sample_size / 6.0)
+    if stat_line.get("avg", -1.0) >= 0:
+        coverage += 5.0
+    if stat_line.get("obp", -1.0) >= 0:
+        coverage += 5.0
+    if stat_line.get("slg", -1.0) >= 0:
+        coverage += 6.0
+    if stat_line.get("ops", -1.0) >= 0:
+        coverage += 5.0
+
+    coverage = _aisp2_p1513_clamp(coverage, 18.0, 90.0)
+
+    confidence = 20.0 + (coverage * 0.24)
+    if sample_size > 0:
+        confidence += min(36.0, sample_size / 10.0)
+
+    if sample_size <= 0:
+        confidence = 18.0
+    elif sample_size < 35:
+        confidence = min(confidence, 42.0)
+    elif sample_size < 100:
+        confidence = min(confidence, 58.0)
+    else:
+        confidence = min(confidence, 82.0)
+
+    confidence = _aisp2_p1513_clamp(confidence, 12.0, 84.0)
+
+    return {
+        "probability": round(probability, 1),
+        "confidence": round(confidence, 1),
+        "coverage": round(coverage, 1),
+        "sample_size": int(sample_size),
+        "observed_rate": round(observed_rate, 3),
+        "league_baseline": baseline,
+        "sample_weight": round(sample_weight, 4),
+        "primary_metric": metric,
+        "tier": tier,
+        "risk": risk,
+        "source": source,
+        "warehouse_status": warehouse_status,
+        "stats_loaded": bool(stats_loaded),
+    }
+
+
+def _aisp2_p1513_player_style(stat_line, outcome_key):
+    pa = max(0, _aisp2_p1513_safe_int(stat_line.get("pa"), 0))
+    ab = max(0, _aisp2_p1513_safe_int(stat_line.get("ab"), 0))
+
+    if pa <= 0 and ab <= 0:
+        return "No batting sample"
+
+    hr_rate = (stat_line.get("home_runs", 0) / pa) if pa > 0 else 0.0
+    k_rate = (stat_line.get("strikeouts", 0) / pa) if pa > 0 else 0.0
+    bb_rate = (stat_line.get("walks", 0) / pa) if pa > 0 else 0.0
+    hit_rate = (stat_line.get("hits", 0) / ab) if ab > 0 else 0.0
+
+    if hr_rate >= 0.055:
+        return "Power bat profile"
+    if hit_rate >= 0.285:
+        return "Contact-oriented profile"
+    if k_rate >= 0.285:
+        return "Swing-and-miss profile"
+    if bb_rate >= 0.110:
+        return "Plate-discipline profile"
+    if outcome_key == "home_run":
+        return "Player power-rate profile"
+    if outcome_key in {"hit", "total_bases"}:
+        return "Player contact-rate profile"
+    return "Player statistical profile"
+
+
+def _aisp2_p1513_recent_form(sample_size):
+    if sample_size <= 0:
+        return "No hitting sample"
+    if sample_size < 35:
+        return "Insufficient sample"
+    if sample_size < 100:
+        return "Moderate sample"
+    return "Stable season sample"
+
+
+def _aisp2_p1513_profile(outcome_key):
+    profiles = {
+        "home_run": "Power outcome",
+        "hit": "Contact outcome",
+        "rbi": "Run-production outcome",
+        "run_scored": "Run-scoring outcome",
+        "total_bases": "Power-contact blend",
+        "strikeout": "Plate-discipline risk",
+        "walk": "Plate-discipline outcome",
+    }
+    return profiles.get(outcome_key, "Player outcome")
+
+
+def _aisp2_p1513_explanation(player_name, team_name, outcome_key, math_payload, stat_line, stat_source):
+    outcome_label = _aisp2_p1513_outcome_label(outcome_key)
+    sample_size = math_payload.get("sample_size", 0)
+
+    if sample_size > 0:
+        return (
+            f"{player_name} {outcome_label} probability is estimated at "
+            f"{_aisp2_p1513_pct(math_payload.get('probability'))} using "
+            f"{math_payload.get('primary_metric')} from the player's individual stat line "
+            f"({sample_size} opportunities). AISP2 shrinks the observed player rate toward "
+            f"a league baseline to avoid overreacting to small samples. Source: {stat_source}."
+        )
+
+    return (
+        f"{player_name} {outcome_label} is not being treated as a league-average hitter. "
+        f"AISP2 checked the selected player's hitting stat path but found no usable batting "
+        f"sample for this prop. The result is therefore a conservative no-sample player-specific "
+        f"baseline, not a full prediction. Load player season hitting data or select a hitter "
+        f"with batting opportunities for real rate math."
+    )
+
+
+def _aisp2_p1513_outcome_library(stat_line, stat_source):
+    library = {}
+    stats_loaded = _aisp2_p1513_has_stat_sample(stat_line)
+
+    for key in ["home_run", "hit", "rbi", "run_scored", "total_bases", "strikeout", "walk"]:
+        math_payload = _aisp2_p1513_calculate_probability(
+            outcome_key=key,
+            stat_line=stat_line,
+            stats_loaded=stats_loaded,
+            player_specific_source=stat_source,
+        )
+        library[key] = _aisp2_p1513_pct(math_payload.get("probability"))
+
+    return library
+
+
+def _aisp2_p1513_build_prediction_payload(request_payload):
+    player_id = (
+        request_payload.get("player_id")
+        or request_payload.get("mlb_player_id")
+        or request_payload.get("id")
+    )
+
+    player_name = _aisp2_p1513_safe_text(
         request_payload.get("player_name")
         or request_payload.get("player")
         or request_payload.get("selected_player"),
         "Selected Player",
     )
 
-    team_name = _aisp2_p1512_safe_text(
+    team_name = _aisp2_p1513_safe_text(
         request_payload.get("team_name")
         or request_payload.get("team")
         or request_payload.get("selected_team"),
         "Team Pending",
     )
 
-    probability = _aisp2_p1512_baseline_probability(outcome_key)
-    confidence = 30.0
-    coverage = 22.0
+    team_id = request_payload.get("team_id")
+    outcome_key = _aisp2_p1513_outcome_key(
+        request_payload.get("outcome_key")
+        or request_payload.get("outcome")
+        or "home_run"
+    )
+    outcome_label = _aisp2_p1513_outcome_label(outcome_key)
 
-    explanation = (
-        f"{player_name} {outcome_label} is currently using AISP2 transparent runtime "
-        f"baseline math because this workbench request did not include a usable player "
-        f"stat sample. This is a valid JSON prediction response, but it remains marked "
-        f"warehouse-pending until database player stats, Statcast, matchup, park, and "
-        f"weather inputs are loaded."
+    request_stat_line = _aisp2_p1513_stat_line_from_request(request_payload)
+
+    if _aisp2_p1513_has_stat_sample(request_stat_line):
+        stat_line = request_stat_line
+        stat_source = "Workbench Supplied Player Stat Line"
+        stats_loaded = True
+        fetch_status = {
+            "loaded": True,
+            "source": stat_source,
+            "season": request_payload.get("season"),
+            "player_id": player_id,
+            "error": None,
+        }
+    else:
+        fetch_status = _aisp2_p1513_fetch_mlb_hitting_stats(player_id, player_name)
+        stat_line = fetch_status.get("stat_line") or {}
+        stat_source = fetch_status.get("source") or "Player Stat Source Pending"
+        stats_loaded = bool(fetch_status.get("loaded") and fetch_status.get("has_sample"))
+
+    math_payload = _aisp2_p1513_calculate_probability(
+        outcome_key=outcome_key,
+        stat_line=stat_line,
+        stats_loaded=stats_loaded,
+        player_specific_source=stat_source,
     )
 
-    prediction_core = {
-        "player_id": request_payload.get("player_id"),
-        "player_name": player_name,
-        "team_id": request_payload.get("team_id"),
-        "team_name": team_name,
-        "outcome_key": outcome_key,
-        "outcome": outcome_label,
-        "probability": probability,
-        "probability_percent": _aisp2_p1512_pct(probability),
-        "confidence": confidence,
-        "confidence_percent": _aisp2_p1512_pct(confidence),
-        "tier": "Transparent Runtime Baseline",
-        "risk": "Warehouse Pending",
-        "profile": "Baseline outcome profile",
-        "primary_metric": "League baseline",
-        "supporting_metric": "League baseline",
-        "model": "AISP2 Workbench Runtime Baseline v15.1.2",
-        "version": AISP2_PHASE_15_PART_1_2_VERSION,
-        "source": "Workbench JSON Runtime",
-        "data_source": "workbench_runtime_baseline",
-        "data_coverage": coverage,
-        "data_coverage_percent": _aisp2_p1512_pct(coverage),
-        "sample_size": 0,
-        "warehouse_status": "Stats Needed",
-        "player_style": "Baseline profile",
-        "recent_form": "Pending ingestion",
-    }
+    probability = math_payload["probability"]
+    confidence = math_payload["confidence"]
+    coverage = math_payload["coverage"]
+    sample_size = math_payload["sample_size"]
 
-    intelligence = {
-        "summary": f"Prediction JSON generated for {player_name}.",
-        "tier": prediction_core["tier"],
-        "risk": prediction_core["risk"],
-        "profile": prediction_core["profile"],
-        "primary_metric": prediction_core["primary_metric"],
-        "data_source": prediction_core["source"],
-        "coverage": prediction_core["data_coverage_percent"],
-        "warehouse": prediction_core["warehouse_status"],
-        "guidance": "Runtime baseline active; full statistical feature model requires warehouse data.",
-        "reasoning": explanation,
-        "warnings": [
-            "Workbench endpoint returned valid JSON.",
-            "Prediction is baseline-level until real player stat sample is loaded.",
-        ],
-        "next_data_needed": [
-            "player season stat sample",
+    profile = _aisp2_p1513_profile(outcome_key)
+    player_style = _aisp2_p1513_player_style(stat_line, outcome_key)
+    recent_form = _aisp2_p1513_recent_form(sample_size)
+    explanation = _aisp2_p1513_explanation(
+        player_name=player_name,
+        team_name=team_name,
+        outcome_key=outcome_key,
+        math_payload=math_payload,
+        stat_line=stat_line,
+        stat_source=stat_source,
+    )
+
+    warnings = []
+    missing_features = []
+
+    if sample_size <= 0:
+        warnings.append("No usable player hitting sample was found for this selected player/outcome.")
+        missing_features.extend([
+            "player season hitting sample",
             "Statcast batted-ball profile",
             "pitcher matchup context",
             "ballpark context",
             "weather context",
-        ],
+        ])
+    elif sample_size < 35:
+        warnings.append("Small player sample; probability is strongly shrunk toward baseline.")
+        missing_features.extend([
+            "larger sample",
+            "Statcast batted-ball profile",
+            "pitcher matchup context",
+        ])
+    else:
+        warnings.append("Player-specific statistical baseline active; advanced Statcast/matchup calibration remains pending.")
+        missing_features.extend([
+            "Statcast batted-ball profile",
+            "pitcher matchup context",
+            "ballpark context",
+            "weather context",
+        ])
+
+    model_name = "AISP2 Player-Specific Statistical Baseline v15.1.3"
+
+    prediction_core = {
+        "player_id": player_id,
+        "player_name": player_name,
+        "team_id": team_id,
+        "team_name": team_name,
+        "outcome_key": outcome_key,
+        "outcome": outcome_label,
+        "probability": probability,
+        "probability_percent": _aisp2_p1513_pct(probability),
+        "confidence": confidence,
+        "confidence_percent": _aisp2_p1513_pct(confidence),
+        "tier": math_payload["tier"],
+        "risk": math_payload["risk"],
+        "profile": profile,
+        "primary_metric": math_payload["primary_metric"],
+        "supporting_metric": math_payload["primary_metric"],
+        "model": model_name,
+        "version": AISP2_PHASE_15_PART_1_3_VERSION,
+        "source": math_payload["source"],
+        "data_source": stat_source,
+        "data_coverage": coverage,
+        "data_coverage_percent": _aisp2_p1513_pct(coverage),
+        "sample_size": sample_size,
+        "warehouse_status": math_payload["warehouse_status"],
+        "player_style": player_style,
+        "recent_form": recent_form,
+        "observed_rate": math_payload["observed_rate"],
+        "league_baseline": math_payload["league_baseline"],
+        "sample_weight": math_payload["sample_weight"],
     }
+
+    intelligence = {
+        "summary": f"Player-specific prediction generated for {player_name}.",
+        "tier": prediction_core["tier"],
+        "risk": prediction_core["risk"],
+        "profile": profile,
+        "primary_metric": prediction_core["primary_metric"],
+        "data_source": stat_source,
+        "coverage": prediction_core["data_coverage_percent"],
+        "warehouse": prediction_core["warehouse_status"],
+        "guidance": "Player-specific rate math active; full model calibration requires Statcast and matchup warehouse data.",
+        "reasoning": explanation,
+        "warnings": warnings,
+        "next_data_needed": missing_features,
+    }
+
+    outcome_library = _aisp2_p1513_outcome_library(stat_line, stat_source)
 
     return {
         "status": "ok",
@@ -14575,11 +15097,11 @@ def _aisp2_p1512_build_fallback_payload(request_payload):
         "prediction_ready": True,
         "runtime_restored": True,
         "blocked": False,
-        "phase": AISP2_PHASE_15_PART_1_2_VERSION,
+        "phase": AISP2_PHASE_15_PART_1_3_VERSION,
 
-        "player_id": prediction_core["player_id"],
+        "player_id": player_id,
         "player_name": player_name,
-        "team_id": prediction_core["team_id"],
+        "team_id": team_id,
         "team_name": team_name,
         "outcome_key": outcome_key,
         "outcome": outcome_label,
@@ -14589,81 +15111,55 @@ def _aisp2_p1512_build_fallback_payload(request_payload):
         "confidence_percent": prediction_core["confidence_percent"],
         "tier": prediction_core["tier"],
         "risk": prediction_core["risk"],
-        "profile": prediction_core["profile"],
+        "profile": profile,
         "primary_metric": prediction_core["primary_metric"],
         "supporting_metric": prediction_core["supporting_metric"],
-        "model": prediction_core["model"],
-        "version": prediction_core["version"],
+        "model": model_name,
+        "version": AISP2_PHASE_15_PART_1_3_VERSION,
         "source": prediction_core["source"],
-        "data_source": prediction_core["data_source"],
+        "data_source": stat_source,
         "data_coverage": coverage,
         "data_coverage_percent": prediction_core["data_coverage_percent"],
-        "sample_size": 0,
+        "sample_size": sample_size,
         "warehouse_status": prediction_core["warehouse_status"],
-        "player_style": prediction_core["player_style"],
-        "recent_form": prediction_core["recent_form"],
+        "player_style": player_style,
+        "recent_form": recent_form,
         "explanation": explanation,
         "ai_explanation": explanation,
+        "warnings": warnings,
+        "missing_features": missing_features,
+
+        "stat_line": stat_line,
+        "stat_source": stat_source,
+        "fetch_status": fetch_status,
 
         "prediction": prediction_core,
         "result": prediction_core,
         "intelligence": intelligence,
         "ai_intelligence": intelligence,
+        "outcome_library": outcome_library,
+        "props": outcome_library,
+
         "readiness": {
             "prediction_ready": True,
-            "status": "json_runtime_baseline_ready",
-            "state": "transparent_runtime_baseline",
+            "status": "player_specific_math_ready" if sample_size > 0 else "no_player_hitting_sample",
+            "state": "player_specific_statistical_baseline" if sample_size > 0 else "player_specific_no_sample_baseline",
             "warehouse_status": prediction_core["warehouse_status"],
             "data_coverage": coverage,
-            "warnings": intelligence["warnings"],
-            "missing_features": intelligence["next_data_needed"],
+            "warnings": warnings,
+            "missing_features": missing_features,
         },
-        "outcome_library": {
-            "home_run": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("home_run")),
-            "hit": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("hit")),
-            "rbi": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("rbi")),
-            "run_scored": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("run_scored")),
-            "total_bases": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("total_bases")),
-            "strikeout": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("strikeout")),
-            "walk": _aisp2_p1512_pct(_aisp2_p1512_baseline_probability("walk")),
-        },
+
         "account_history": {
             "saved": False,
-            "reason": "Workbench JSON endpoint does not force authenticated save.",
+            "reason": "Workbench endpoint does not force authenticated save.",
         },
     }
 
 
-def _aisp2_p1512_normalize_builder_payload(payload, request_payload):
-    if not isinstance(payload, dict):
-        return _aisp2_p1512_build_fallback_payload(request_payload)
-
-    fallback = _aisp2_p1512_build_fallback_payload(request_payload)
-
-    for key, value in fallback.items():
-        payload.setdefault(key, value)
-
-    prediction = payload.get("prediction")
-    if not isinstance(prediction, dict):
-        payload["prediction"] = fallback["prediction"]
-
-    intelligence = payload.get("intelligence") or payload.get("ai_intelligence")
-    if not isinstance(intelligence, dict):
-        payload["intelligence"] = fallback["intelligence"]
-        payload["ai_intelligence"] = fallback["ai_intelligence"]
-
-    payload["status"] = "ok"
-    payload["ok"] = True
-    payload["prediction_ready"] = True
-    payload["blocked"] = False
-    payload["phase"] = AISP2_PHASE_15_PART_1_2_VERSION
-
-    return payload
-
-
 try:
     @app.post("/api/prediction/workbench/run")
-    async def api_prediction_workbench_run(request: _AISP2P1512Request):
+    async def api_prediction_workbench_run(request: Request):
         try:
             request_payload = await request.json()
             if not isinstance(request_payload, dict):
@@ -14671,53 +15167,21 @@ try:
         except Exception:
             request_payload = {}
 
-        player_payload = {
-            "player_id": request_payload.get("player_id"),
-            "full_name": (
-                request_payload.get("player_name")
-                or request_payload.get("player")
-                or request_payload.get("selected_player")
-                or "Selected Player"
-            ),
-            "team_id": request_payload.get("team_id"),
-            "team_name": (
-                request_payload.get("team_name")
-                or request_payload.get("team")
-                or request_payload.get("selected_team")
-                or "Team Pending"
-            ),
-        }
-
-        # Carry through any stat fields if the frontend/runtime supplies them.
-        for stat_key in [
-            "pa", "plate_appearances", "ab", "at_bats", "hits", "doubles", "triples",
-            "home_runs", "walks", "strikeouts", "rbi", "runs", "total_bases",
-            "avg", "obp", "slg", "ops",
-        ]:
-            if stat_key in request_payload:
-                player_payload[stat_key] = request_payload.get(stat_key)
-
-        outcome_key = _aisp2_p1512_outcome_key(
-            request_payload.get("outcome_key")
-            or request_payload.get("outcome")
-            or "home_run"
-        )
-
-        builder = globals().get("build_player_prediction_payload")
-
-        if callable(builder):
-            try:
-                built = builder(player_payload, outcome_key=outcome_key)
-                return _aisp2_p1512_normalize_builder_payload(built, request_payload)
-            except Exception as exc:
-                fallback = _aisp2_p1512_build_fallback_payload(request_payload)
-                fallback["builder_error"] = str(exc)
-                fallback["warnings"] = fallback.get("warnings", []) + [
-                    "Primary prediction builder failed; workbench JSON fallback returned."
-                ]
-                return fallback
-
-        return _aisp2_p1512_build_fallback_payload(request_payload)
+        try:
+            return _aisp2_p1513_build_prediction_payload(request_payload)
+        except Exception as exc:
+            fallback_payload = {
+                "player_name": _aisp2_p1513_safe_text(request_payload.get("player_name"), "Selected Player"),
+                "team_name": _aisp2_p1513_safe_text(request_payload.get("team_name"), "Team Pending"),
+                "outcome_key": _aisp2_p1513_outcome_key(request_payload.get("outcome_key")),
+            }
+            payload = _aisp2_p1513_build_prediction_payload(fallback_payload)
+            payload["status"] = "warning"
+            payload["endpoint_error"] = str(exc)
+            payload["warnings"] = payload.get("warnings", []) + [
+                "Primary player-specific endpoint path raised an exception; safe JSON fallback returned."
+            ]
+            return payload
 except Exception:
     pass
 
@@ -14725,23 +15189,87 @@ except Exception:
 try:
     @app.get("/api/prediction/workbench/run/health")
     def api_prediction_workbench_run_health():
-        sample = _aisp2_p1512_build_fallback_payload({
+        sample = _aisp2_p1513_build_prediction_payload({
+            "player_id": 592450,
             "player_name": "Aaron Judge",
             "team_name": "New York Yankees",
             "outcome_key": "home_run",
+            "pa": 704,
+            "ab": 559,
+            "hits": 180,
+            "home_runs": 58,
+            "walks": 133,
+            "strikeouts": 171,
+            "rbi": 144,
+            "runs": 122,
+            "total_bases": 391,
+            "avg": 0.322,
+            "obp": 0.458,
+            "slg": 0.699,
+            "ops": 1.157,
         })
 
         return {
             "status": "ok",
             "ok": True,
-            "phase": AISP2_PHASE_15_PART_1_2_VERSION,
+            "phase": AISP2_PHASE_15_PART_1_3_VERSION,
             "endpoint": "/api/prediction/workbench/run",
-            "guaranteed_json": True,
+            "player_specific_math": True,
             "sample_probability": sample.get("probability"),
             "sample_confidence": sample.get("confidence"),
+            "sample_size": sample.get("sample_size"),
+            "sample_metric": sample.get("primary_metric"),
+            "sample_source": sample.get("source"),
             "sample_model": sample.get("model"),
         }
 except Exception:
     pass
 
-# END SECTION 18.992 - PHASE 15 PART 1.2
+
+def validate_phase_15_part_1_3_player_specific_math():
+    sample = _aisp2_p1513_build_prediction_payload({
+        "player_id": 592450,
+        "player_name": "Aaron Judge",
+        "team_name": "New York Yankees",
+        "outcome_key": "home_run",
+        "pa": 704,
+        "ab": 559,
+        "hits": 180,
+        "home_runs": 58,
+        "walks": 133,
+        "strikeouts": 171,
+        "rbi": 144,
+        "runs": 122,
+        "total_bases": 391,
+        "avg": 0.322,
+        "obp": 0.458,
+        "slg": 0.699,
+        "ops": 1.157,
+    })
+
+    required = [
+        "probability",
+        "confidence",
+        "sample_size",
+        "primary_metric",
+        "stat_line",
+        "prediction",
+        "intelligence",
+        "readiness",
+    ]
+
+    missing = [key for key in required if key not in sample]
+
+    return {
+        "status": "ok" if not missing else "error",
+        "phase": AISP2_PHASE_15_PART_1_3_VERSION,
+        "missing": missing,
+        "sample_player": sample.get("player_name"),
+        "sample_probability": sample.get("probability"),
+        "sample_confidence": sample.get("confidence"),
+        "sample_size": sample.get("sample_size"),
+        "sample_metric": sample.get("primary_metric"),
+        "sample_model": sample.get("model"),
+    }
+
+# END SECTION 18.993 - PHASE 15 PART 1.3
