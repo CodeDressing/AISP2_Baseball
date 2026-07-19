@@ -1,7 +1,7 @@
 ﻿<!-- ============================================================
      AISP2 BASEBALL INTELLIGENCE PLATFORM
      FILE: templates/prediction_workbench.html
-     PHASE: PHASE 14 PART 7.9
+     PHASE: PHASE 14 PART 7.16
      TITLE:
      Enterprise Prediction Workbench Polish Restoration
 
@@ -132,7 +132,7 @@
 
     <meta
         name="aisp2-phase"
-        content="phase_14_part_7_9_enterprise_prediction_workbench_polish"
+        content="phase_14_part_7_16_button_overlap_repair"
     >
 
     <title>AISP2 Baseball | Prediction Workbench</title>
@@ -1322,6 +1322,78 @@
                 font-size: clamp(2.8rem, 16vw, 4.5rem);
             }
         }
+
+
+        /* ========================================================
+           SECTION 02.17 - PHASE 14 PART 7.16
+           AUTHORITATIVE PREDICTION CONTROL LABEL REPAIR
+
+           External prediction.css rules previously painted duplicate
+           labels through pseudo-elements. These declarations are scoped
+           only to the four control actions and make the real DOM text the
+           single visual label source.
+           ======================================================== */
+
+        body.pwb-enterprise-body [data-prediction-submit],
+        body.pwb-enterprise-body [data-prediction-reset],
+        body.pwb-enterprise-body [data-selector-refresh],
+        body.pwb-enterprise-body .pwb-controls a[href="/players"] {
+            position: relative !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            min-height: 44px !important;
+            padding: 0 12px !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+            text-indent: 0 !important;
+            line-height: 1 !important;
+            font-size: 0.76rem !important;
+            font-weight: 950 !important;
+            letter-spacing: -0.012em !important;
+        }
+
+        body.pwb-enterprise-body [data-prediction-submit]::before,
+        body.pwb-enterprise-body [data-prediction-submit]::after,
+        body.pwb-enterprise-body [data-prediction-reset]::before,
+        body.pwb-enterprise-body [data-prediction-reset]::after,
+        body.pwb-enterprise-body [data-selector-refresh]::before,
+        body.pwb-enterprise-body [data-selector-refresh]::after,
+        body.pwb-enterprise-body .pwb-controls a[href="/players"]::before,
+        body.pwb-enterprise-body .pwb-controls a[href="/players"]::after {
+            content: none !important;
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+
+        body.pwb-enterprise-body .pwb-action-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            align-items: stretch !important;
+        }
+
+        body.pwb-enterprise-body .pwb-action-row > * {
+            min-width: 0 !important;
+        }
+
+        @media (max-width: 720px) {
+            body.pwb-enterprise-body .pwb-action-row {
+                grid-template-columns: 1fr !important;
+            }
+
+            body.pwb-enterprise-body [data-prediction-submit],
+            body.pwb-enterprise-body [data-prediction-reset],
+            body.pwb-enterprise-body [data-selector-refresh],
+            body.pwb-enterprise-body .pwb-controls a[href="/players"] {
+                min-height: 46px !important;
+                font-size: 0.84rem !important;
+            }
+        }
+
     </style>
 </head>
 
@@ -2078,6 +2150,340 @@
         };
     }());
 </script>
+
+
+
+<!-- ============================================================
+     SECTION 13 - PHASE 14 PART 7.16 CONTROL LABEL DOM GUARD
+     ============================================================ -->
+<script>
+    (function installPredictionControlLabelGuard() {
+        "use strict";
+
+        const LABELS = [
+            ["[data-prediction-submit]", "Run Prediction"],
+            ["[data-prediction-reset]", "Reset"],
+            ["[data-selector-refresh]", "Refresh"],
+            [".pwb-controls a[href='/players']", "Player Explorer"]
+        ];
+
+        let normalizing = false;
+
+        function normalizeControlLabels() {
+            if (normalizing) {
+                return;
+            }
+
+            normalizing = true;
+
+            try {
+                LABELS.forEach(function normalizeEntry(entry) {
+                    const node = document.querySelector(entry[0]);
+                    const expected = entry[1];
+
+                    if (!node) {
+                        return;
+                    }
+
+                    if (node.textContent.trim() !== expected || node.children.length > 0) {
+                        node.replaceChildren(document.createTextNode(expected));
+                    }
+
+                    node.setAttribute("aria-label", expected);
+                    node.setAttribute("title", expected);
+                    node.dataset.pwbLabelGuard = "phase-14-part-7-16";
+                });
+            } finally {
+                normalizing = false;
+            }
+        }
+
+        function bootLabelGuard() {
+            normalizeControlLabels();
+
+            const controlPanel = document.querySelector(".pwb-controls");
+            if (!controlPanel || controlPanel.dataset.pwbLabelObserver === "true") {
+                return;
+            }
+
+            controlPanel.dataset.pwbLabelObserver = "true";
+
+            const observer = new MutationObserver(function handleControlMutation() {
+                window.requestAnimationFrame(normalizeControlLabels);
+            });
+
+            observer.observe(controlPanel, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", bootLabelGuard, { once: true });
+        } else {
+            bootLabelGuard();
+        }
+
+        window.addEventListener("load", normalizeControlLabels, { once: true });
+
+        window.AISP2PredictionControlLabelGuard = {
+            version: "phase_14_part_7_16",
+            refresh: normalizeControlLabels
+        };
+    }());
+</script>
+
+
+<!-- PHASE 14 PART 7.15 FINAL BUTTON CONTROLLER START -->
+<style id="phase-14-part-7-15-final-button-controller">
+    /* =========================================================
+       PHASE 14 PART 7.15
+       FILE: templates/prediction_workbench.html
+
+       PURPOSE:
+       Final authoritative button-label repair for Prediction
+       Controls. This removes visual overlap caused by older
+       pseudo-label patches and keeps the controls stable across
+       fullscreen, medium, 50% zoom, and mobile widths.
+       ========================================================= */
+
+    .pwb-controls .pwb-action-row,
+    .pwb-controls .prediction-action-row,
+    .prediction-controls-card .pwb-action-row,
+    .prediction-controls-card .prediction-action-row {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+        width: 100% !important;
+        align-items: stretch !important;
+        margin-top: 12px !important;
+    }
+
+    .pwb-controls button,
+    .pwb-controls a.pwb-button,
+    .pwb-controls .prediction-primary-button,
+    .pwb-controls .prediction-secondary-button,
+    .prediction-controls-card button,
+    .prediction-controls-card a.pwb-button,
+    .prediction-controls-card .prediction-primary-button,
+    .prediction-controls-card .prediction-secondary-button {
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        min-height: 44px !important;
+        padding: 0 12px !important;
+        border-radius: 999px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        text-align: center !important;
+        line-height: 1 !important;
+        letter-spacing: -0.01em !important;
+        font-size: 0 !important;
+    }
+
+    .pwb-controls button::before,
+    .pwb-controls button::after,
+    .pwb-controls a.pwb-button::before,
+    .pwb-controls a.pwb-button::after,
+    .pwb-controls .prediction-primary-button::before,
+    .pwb-controls .prediction-primary-button::after,
+    .pwb-controls .prediction-secondary-button::before,
+    .pwb-controls .prediction-secondary-button::after,
+    .prediction-controls-card button::before,
+    .prediction-controls-card button::after,
+    .prediction-controls-card a.pwb-button::before,
+    .prediction-controls-card a.pwb-button::after,
+    .prediction-controls-card .prediction-primary-button::before,
+    .prediction-controls-card .prediction-primary-button::after,
+    .prediction-controls-card .prediction-secondary-button::before,
+    .prediction-controls-card .prediction-secondary-button::after {
+        content: none !important;
+        display: none !important;
+    }
+
+    .pwb-action-label {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        font-size: 0.78rem !important;
+        font-weight: 950 !important;
+        line-height: 1 !important;
+        letter-spacing: -0.012em !important;
+        color: inherit !important;
+        pointer-events: none !important;
+    }
+
+    .pwb-controls [data-prediction-submit] .pwb-action-label {
+        font-size: 0.76rem !important;
+    }
+
+    .pwb-controls [data-prediction-reset] .pwb-action-label,
+    .pwb-controls [data-selector-refresh] .pwb-action-label,
+    .pwb-controls a[href="/players"] .pwb-action-label {
+        font-size: 0.78rem !important;
+    }
+
+    .pwb-controls .pwb-field-note,
+    .pwb-controls .field-note,
+    .prediction-controls-card .pwb-field-note,
+    .prediction-controls-card .field-note {
+        overflow-wrap: anywhere !important;
+        line-height: 1.38 !important;
+    }
+
+    .pwb-controls [data-prediction-outcome],
+    .prediction-controls-card [data-prediction-outcome] {
+        color: var(--pwb-text-0) !important;
+        font-weight: 850 !important;
+    }
+
+    @media (max-width: 1180px) {
+        .pwb-controls .pwb-action-row,
+        .pwb-controls .prediction-action-row,
+        .prediction-controls-card .pwb-action-row,
+        .prediction-controls-card .prediction-action-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 9px !important;
+        }
+
+        .pwb-action-label {
+            font-size: 0.74rem !important;
+        }
+
+        .pwb-controls [data-prediction-submit] .pwb-action-label {
+            font-size: 0.72rem !important;
+        }
+    }
+
+    @media (max-width: 720px) {
+        .pwb-controls .pwb-action-row,
+        .pwb-controls .prediction-action-row,
+        .prediction-controls-card .pwb-action-row,
+        .prediction-controls-card .prediction-action-row {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+        }
+
+        .pwb-controls button,
+        .pwb-controls a.pwb-button,
+        .pwb-controls .prediction-primary-button,
+        .pwb-controls .prediction-secondary-button,
+        .prediction-controls-card button,
+        .prediction-controls-card a.pwb-button,
+        .prediction-controls-card .prediction-primary-button,
+        .prediction-controls-card .prediction-secondary-button {
+            min-height: 46px !important;
+        }
+
+        .pwb-action-label,
+        .pwb-controls [data-prediction-submit] .pwb-action-label {
+            font-size: 0.82rem !important;
+        }
+    }
+</style>
+
+<script id="phase-14-part-7-15-final-button-controller-script">
+    (function initializePredictionControlButtonController() {
+        "use strict";
+
+        const VERSION = "phase_14_part_7_15_final_button_controller";
+
+        function normalizeOne(selectorList, label) {
+            for (const selector of selectorList) {
+                const node = document.querySelector(selector);
+
+                if (!node) {
+                    continue;
+                }
+
+                node.textContent = "";
+
+                const span = document.createElement("span");
+                span.className = "pwb-action-label";
+                span.textContent = label;
+
+                node.appendChild(span);
+                node.setAttribute("aria-label", label);
+                node.setAttribute("title", label);
+                node.dataset.pwbButtonNormalized = "true";
+
+                return true;
+            }
+
+            return false;
+        }
+
+        function normalizePredictionControlButtons() {
+            normalizeOne(
+                [
+                    ".pwb-controls [data-prediction-submit]",
+                    ".prediction-controls-card [data-prediction-submit]",
+                    "[data-prediction-submit]"
+                ],
+                "Run Prediction"
+            );
+
+            normalizeOne(
+                [
+                    ".pwb-controls [data-prediction-reset]",
+                    ".prediction-controls-card [data-prediction-reset]",
+                    "[data-prediction-reset]"
+                ],
+                "Reset"
+            );
+
+            normalizeOne(
+                [
+                    ".pwb-controls [data-selector-refresh]",
+                    ".prediction-controls-card [data-selector-refresh]",
+                    "[data-selector-refresh]"
+                ],
+                "Refresh"
+            );
+
+            normalizeOne(
+                [
+                    ".pwb-controls a[href='/players']",
+                    '.pwb-controls a[href="/players"]',
+                    ".prediction-controls-card a[href='/players']",
+                    '.prediction-controls-card a[href="/players"]',
+                    "[data-player-explorer]",
+                    "[data-open-player-explorer]"
+                ],
+                "Explorer"
+            );
+        }
+
+        function boot() {
+            normalizePredictionControlButtons();
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+
+        window.addEventListener("load", boot);
+
+        window.AISP2PredictionControlButtonController = {
+            version: VERSION,
+            refresh: boot
+        };
+    }());
+</script>
+<!-- PHASE 14 PART 7.15 FINAL BUTTON CONTROLLER END -->
 
 </body>
 </html>
