@@ -6108,6 +6108,1057 @@ def verify_account_system_schema() -> dict[str, object]:
 
 
 # ============================================================
+# SECTION 22.13 - PHASE 16 PART 1.0 - PREDICTION SCHEMA COMPATIBILITY CONTRACT
+# FILE: 01_database/models.py
+#
+# PURPOSE:
+# Provide one stable schema contract for real prediction math.
+#
+# WHY THIS EXISTS:
+# The database stores baseball stats with explicit warehouse names:
+#   plate_appearances
+#   at_bats
+#   batting_average
+#   on_base_percentage
+#   slugging_percentage
+#   home_runs
+#
+# Prediction engines usually want compact names:
+#   pa
+#   ab
+#   avg
+#   obp
+#   slg
+#   hr
+#
+# This section prevents feature_builder.py and probability_engine.py
+# from guessing column names. It creates a clean, auditable contract
+# that turns PlayerSeasonStat rows into prediction-ready feature
+# dictionaries without changing the existing ORM schema.
+#
+# SAFETY:
+# This section is additive only.
+# It does not remove, rename, or mutate any mapped ORM class.
+# ============================================================
+
+
+PREDICTION_SCHEMA_CONTRACT_VERSION = (
+    "phase_16_part_1_0_prediction_schema_compatibility_contract"
+)
+
+
+# ============================================================
+# SECTION 22.13.01 - PREDICTION MODEL REQUIREMENTS
+# ============================================================
+
+PREDICTION_SCHEMA_REQUIRED_MODELS: list[str] = [
+    "Team",
+    "Player",
+    "RosterEntry",
+    "Game",
+    "PlayerSeasonStat",
+    "PlayerGameStat",
+    "PlayerSplitStat",
+    "PlayerStatcastMetric",
+    "PredictionResult",
+    "UserPredictionHistory",
+    "PredictionOutcomeResolution",
+    "ModelTrainingFeedbackEvent",
+]
+
+
+PREDICTION_SCHEMA_REQUIRED_TABLES: list[str] = [
+    "teams",
+    "players",
+    "roster_entries",
+    "games",
+    "player_season_stats",
+    "player_game_stats",
+    "player_split_stats",
+    "player_statcast_metrics",
+    "prediction_results",
+    "user_prediction_history",
+    "prediction_outcome_resolutions",
+    "model_training_feedback_events",
+]
+
+
+PREDICTION_SCHEMA_REQUIRED_PLAYER_COLUMNS: list[str] = [
+    "id",
+    "mlb_player_id",
+    "full_name",
+    "first_name",
+    "last_name",
+    "use_name",
+    "nick_name",
+    "current_team_id",
+    "position",
+    "position_code",
+    "position_abbreviation",
+    "bats",
+    "throws",
+    "active_status",
+    "mlb_debut_date",
+    "source_updated_at",
+]
+
+
+PREDICTION_SCHEMA_REQUIRED_TEAM_COLUMNS: list[str] = [
+    "id",
+    "mlb_team_id",
+    "name",
+    "abbreviation",
+    "league",
+    "division",
+    "venue",
+    "is_active",
+]
+
+
+PREDICTION_SCHEMA_REQUIRED_GAME_COLUMNS: list[str] = [
+    "id",
+    "game_pk",
+    "season",
+    "game_date",
+    "official_date",
+    "home_team_id",
+    "away_team_id",
+    "home_team_name",
+    "away_team_name",
+    "home_score",
+    "away_score",
+    "venue_name",
+    "status_description",
+    "is_final",
+    "is_completed",
+]
+
+
+PREDICTION_SCHEMA_REQUIRED_PLAYER_SEASON_STAT_COLUMNS: list[str] = [
+    "id",
+    "player_id",
+    "season",
+    "sport_id",
+    "team_id",
+    "stat_group",
+    "games_played",
+    "plate_appearances",
+    "at_bats",
+    "runs",
+    "hits",
+    "singles",
+    "doubles",
+    "triples",
+    "home_runs",
+    "rbi",
+    "walks",
+    "intentional_walks",
+    "hit_by_pitch",
+    "sacrifice_flies",
+    "strikeouts",
+    "stolen_bases",
+    "caught_stealing",
+    "batting_average",
+    "on_base_percentage",
+    "slugging_percentage",
+    "ops",
+    "isolated_power",
+    "babip",
+    "walk_rate",
+    "strikeout_rate",
+    "home_run_rate",
+    "woba",
+    "wrc_plus",
+    "source_name",
+    "source_updated_at",
+]
+
+
+PREDICTION_SCHEMA_REQUIRED_RELATIONSHIPS: dict[str, list[str]] = {
+    "Team": [
+        "players",
+        "roster_entries",
+        "team_stats",
+        "home_games",
+        "away_games",
+    ],
+    "Player": [
+        "team",
+        "roster_entries",
+        "season_stats",
+        "game_logs",
+        "split_stats",
+        "statcast_metrics",
+        "predictions",
+    ],
+    "Game": [
+        "home_team",
+        "away_team",
+        "player_game_logs",
+        "probable_pitchers",
+        "starting_lineups",
+    ],
+    "PlayerSeasonStat": [
+        "player",
+        "team",
+    ],
+    "PlayerSplitStat": [
+        "player",
+        "team",
+    ],
+    "PlayerStatcastMetric": [
+        "player",
+        "team",
+    ],
+    "PredictionResult": [
+        "player",
+        "team",
+        "game",
+    ],
+}
+
+
+# ============================================================
+# SECTION 22.13.02 - STAT ALIAS CONTRACT
+# ============================================================
+
+PLAYER_PREDICTION_STAT_COLUMN_ALIASES: dict[str, list[str]] = {
+    "games": [
+        "games_played",
+    ],
+    "games_played": [
+        "games_played",
+    ],
+
+    "pa": [
+        "plate_appearances",
+    ],
+    "plate_appearances": [
+        "plate_appearances",
+    ],
+
+    "ab": [
+        "at_bats",
+    ],
+    "at_bats": [
+        "at_bats",
+    ],
+
+    "runs": [
+        "runs",
+    ],
+    "r": [
+        "runs",
+    ],
+
+    "hits": [
+        "hits",
+    ],
+    "h": [
+        "hits",
+    ],
+
+    "singles": [
+        "singles",
+    ],
+
+    "doubles": [
+        "doubles",
+    ],
+    "two_b": [
+        "doubles",
+    ],
+
+    "triples": [
+        "triples",
+    ],
+    "three_b": [
+        "triples",
+    ],
+
+    "home_runs": [
+        "home_runs",
+    ],
+    "hr": [
+        "home_runs",
+    ],
+
+    "rbi": [
+        "rbi",
+    ],
+
+    "walks": [
+        "walks",
+    ],
+    "bb": [
+        "walks",
+    ],
+
+    "strikeouts": [
+        "strikeouts",
+    ],
+    "k": [
+        "strikeouts",
+    ],
+
+    "hit_by_pitch": [
+        "hit_by_pitch",
+    ],
+    "hbp": [
+        "hit_by_pitch",
+    ],
+
+    "sacrifice_flies": [
+        "sacrifice_flies",
+    ],
+    "sf": [
+        "sacrifice_flies",
+    ],
+
+    "stolen_bases": [
+        "stolen_bases",
+    ],
+
+    "caught_stealing": [
+        "caught_stealing",
+    ],
+
+    "avg": [
+        "batting_average",
+    ],
+    "batting_average": [
+        "batting_average",
+    ],
+
+    "obp": [
+        "on_base_percentage",
+    ],
+    "on_base_percentage": [
+        "on_base_percentage",
+    ],
+
+    "slg": [
+        "slugging_percentage",
+    ],
+    "slugging_percentage": [
+        "slugging_percentage",
+    ],
+
+    "ops": [
+        "ops",
+    ],
+
+    "iso": [
+        "isolated_power",
+    ],
+    "isolated_power": [
+        "isolated_power",
+    ],
+
+    "babip": [
+        "babip",
+    ],
+
+    "woba": [
+        "woba",
+    ],
+
+    "wrc_plus": [
+        "wrc_plus",
+    ],
+
+    "walk_rate": [
+        "walk_rate",
+    ],
+
+    "strikeout_rate": [
+        "strikeout_rate",
+    ],
+
+    "home_run_rate": [
+        "home_run_rate",
+    ],
+
+    # Derived prediction feature.
+    # PlayerSeasonStat does not currently store direct total_bases.
+    # The feature builder should derive it from hit components.
+    "total_bases": [
+        "__derived_total_bases__",
+    ],
+    "tb": [
+        "__derived_total_bases__",
+    ],
+}
+
+
+PLAYER_PREDICTION_FEATURE_KEYS: list[str] = [
+    "player_id",
+    "team_id",
+    "season",
+    "stat_group",
+    "games_played",
+    "plate_appearances",
+    "at_bats",
+    "runs",
+    "hits",
+    "singles",
+    "doubles",
+    "triples",
+    "home_runs",
+    "rbi",
+    "walks",
+    "intentional_walks",
+    "hit_by_pitch",
+    "sacrifice_flies",
+    "strikeouts",
+    "stolen_bases",
+    "caught_stealing",
+    "batting_average",
+    "on_base_percentage",
+    "slugging_percentage",
+    "ops",
+    "isolated_power",
+    "babip",
+    "walk_rate",
+    "strikeout_rate",
+    "home_run_rate",
+    "woba",
+    "wrc_plus",
+    "total_bases",
+    "pa",
+    "ab",
+    "avg",
+    "obp",
+    "slg",
+    "hr",
+    "bb",
+    "k",
+    "tb",
+    "has_hitting_sample",
+    "source_name",
+    "source_updated_at",
+    "prediction_schema_contract_version",
+]
+
+
+# ============================================================
+# SECTION 22.13.03 - SAFE READ HELPERS
+# ============================================================
+
+def _prediction_schema_model_exists(
+    model_name: str,
+) -> bool:
+    return globals().get(model_name) is not None
+
+
+def _prediction_schema_get_model(
+    model_name: str,
+):
+    return globals().get(model_name)
+
+
+def _prediction_schema_get_model_columns(
+    model_name: str,
+) -> list[str]:
+    model_class = _prediction_schema_get_model(
+        model_name,
+    )
+
+    if model_class is None:
+        return []
+
+    try:
+        return sorted(
+            model_class.__mapper__.columns.keys(),
+        )
+    except Exception:
+        return []
+
+
+def _prediction_schema_get_model_relationships(
+    model_name: str,
+) -> list[str]:
+    model_class = _prediction_schema_get_model(
+        model_name,
+    )
+
+    if model_class is None:
+        return []
+
+    try:
+        return sorted(
+            model_class.__mapper__.relationships.keys(),
+        )
+    except Exception:
+        return []
+
+
+def _prediction_schema_read_value(
+    record: object,
+    column_name: str,
+    default: object = None,
+) -> object:
+    if record is None:
+        return default
+
+    try:
+        if isinstance(record, dict):
+            value = record.get(column_name)
+            if value is not None:
+                return value
+    except Exception:
+        pass
+
+    try:
+        value = getattr(record, column_name)
+        if value is not None:
+            return value
+    except Exception:
+        pass
+
+    return default
+
+
+def _prediction_schema_to_int(
+    value: object,
+    default: int = 0,
+) -> int:
+    try:
+        if value is None or value == "":
+            return default
+        return int(float(value))
+    except Exception:
+        return default
+
+
+def _prediction_schema_to_float(
+    value: object,
+    default: float = 0.0,
+) -> float:
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+# ============================================================
+# SECTION 22.13.04 - ALIAS RESOLUTION HELPERS
+# ============================================================
+
+def get_player_prediction_stat_aliases() -> dict[str, list[str]]:
+    """
+    Return the canonical prediction-stat alias map.
+
+    Downstream files should call this instead of hard-coding
+    database column guesses.
+    """
+
+    return dict(
+        PLAYER_PREDICTION_STAT_COLUMN_ALIASES,
+    )
+
+
+def resolve_player_prediction_stat_column(
+    alias: str,
+) -> str | None:
+    """
+    Resolve a prediction alias to a PlayerSeasonStat mapped column.
+
+    Returns:
+        - a real mapped column name
+        - "__derived_total_bases__" when total bases must be derived
+        - None when the alias is unsupported
+    """
+
+    normalized_alias = str(alias or "").strip().lower()
+
+    candidate_columns = PLAYER_PREDICTION_STAT_COLUMN_ALIASES.get(
+        normalized_alias,
+        [],
+    )
+
+    player_season_columns = set(
+        _prediction_schema_get_model_columns(
+            "PlayerSeasonStat",
+        )
+    )
+
+    for candidate in candidate_columns:
+        if candidate == "__derived_total_bases__":
+            return candidate
+
+        if candidate in player_season_columns:
+            return candidate
+
+    return None
+
+
+def calculate_derived_total_bases_from_stat_record(
+    stat_record: object,
+) -> int:
+    """
+    Derive total bases safely from component hit columns.
+
+    Formula:
+        TB = singles + 2*doubles + 3*triples + 4*home_runs
+
+    If singles is unavailable but hits are available:
+        singles = hits - doubles - triples - home_runs
+    """
+
+    hits = _prediction_schema_to_int(
+        _prediction_schema_read_value(
+            stat_record,
+            "hits",
+            0,
+        ),
+        0,
+    )
+
+    singles = _prediction_schema_read_value(
+        stat_record,
+        "singles",
+        None,
+    )
+
+    doubles = _prediction_schema_to_int(
+        _prediction_schema_read_value(
+            stat_record,
+            "doubles",
+            0,
+        ),
+        0,
+    )
+
+    triples = _prediction_schema_to_int(
+        _prediction_schema_read_value(
+            stat_record,
+            "triples",
+            0,
+        ),
+        0,
+    )
+
+    home_runs = _prediction_schema_to_int(
+        _prediction_schema_read_value(
+            stat_record,
+            "home_runs",
+            0,
+        ),
+        0,
+    )
+
+    if singles is None:
+        singles_count = max(
+            0,
+            hits - doubles - triples - home_runs,
+        )
+    else:
+        singles_count = _prediction_schema_to_int(
+            singles,
+            0,
+        )
+
+    return int(
+        singles_count
+        + (2 * doubles)
+        + (3 * triples)
+        + (4 * home_runs)
+    )
+
+
+def build_player_stat_feature_dict_from_model(
+    stat_record: object,
+) -> dict[str, object]:
+    """
+    Convert a PlayerSeasonStat ORM row or dictionary into the
+    canonical prediction feature-stat dictionary.
+
+    This function is the bridge between the database schema and
+    the prediction math layer.
+    """
+
+    feature_dict: dict[str, object] = {}
+
+    direct_columns = [
+        "player_id",
+        "team_id",
+        "season",
+        "stat_group",
+        "games_played",
+        "plate_appearances",
+        "at_bats",
+        "runs",
+        "hits",
+        "singles",
+        "doubles",
+        "triples",
+        "home_runs",
+        "rbi",
+        "walks",
+        "intentional_walks",
+        "hit_by_pitch",
+        "sacrifice_flies",
+        "strikeouts",
+        "stolen_bases",
+        "caught_stealing",
+        "batting_average",
+        "on_base_percentage",
+        "slugging_percentage",
+        "ops",
+        "isolated_power",
+        "babip",
+        "walk_rate",
+        "strikeout_rate",
+        "home_run_rate",
+        "woba",
+        "wrc_plus",
+        "source_name",
+        "source_updated_at",
+    ]
+
+    for column_name in direct_columns:
+        feature_dict[column_name] = _prediction_schema_read_value(
+            stat_record,
+            column_name,
+            None,
+        )
+
+    total_bases = calculate_derived_total_bases_from_stat_record(
+        stat_record,
+    )
+
+    feature_dict["total_bases"] = total_bases
+    feature_dict["tb"] = total_bases
+
+    feature_dict["pa"] = feature_dict.get(
+        "plate_appearances",
+    )
+    feature_dict["ab"] = feature_dict.get(
+        "at_bats",
+    )
+    feature_dict["avg"] = feature_dict.get(
+        "batting_average",
+    )
+    feature_dict["obp"] = feature_dict.get(
+        "on_base_percentage",
+    )
+    feature_dict["slg"] = feature_dict.get(
+        "slugging_percentage",
+    )
+    feature_dict["hr"] = feature_dict.get(
+        "home_runs",
+    )
+    feature_dict["bb"] = feature_dict.get(
+        "walks",
+    )
+    feature_dict["k"] = feature_dict.get(
+        "strikeouts",
+    )
+
+    feature_dict["has_hitting_sample"] = bool(
+        _prediction_schema_to_int(
+            feature_dict.get("pa"),
+            0,
+        ) > 0
+        or _prediction_schema_to_int(
+            feature_dict.get("ab"),
+            0,
+        ) > 0
+        or _prediction_schema_to_int(
+            feature_dict.get("hits"),
+            0,
+        ) > 0
+        or _prediction_schema_to_int(
+            feature_dict.get("home_runs"),
+            0,
+        ) > 0
+    )
+
+    feature_dict["prediction_schema_contract_version"] = (
+        PREDICTION_SCHEMA_CONTRACT_VERSION
+    )
+
+    return feature_dict
+
+
+# ============================================================
+# SECTION 22.13.05 - PREDICTION COMPLETION GATE
+# ============================================================
+
+def validate_prediction_schema_contract() -> dict[str, object]:
+    """
+    Validate the exact schema contract required before rebuilding
+    feature_builder.py and probability_engine.py.
+    """
+
+    mapper_report = verify_sqlalchemy_mapper_configuration()
+
+    metadata_tables = set(
+        Base.metadata.tables.keys(),
+    )
+
+    missing_models = [
+        model_name
+        for model_name in PREDICTION_SCHEMA_REQUIRED_MODELS
+        if not _prediction_schema_model_exists(model_name)
+    ]
+
+    missing_tables = [
+        table_name
+        for table_name in PREDICTION_SCHEMA_REQUIRED_TABLES
+        if table_name not in metadata_tables
+    ]
+
+    model_column_requirements = {
+        "Team": PREDICTION_SCHEMA_REQUIRED_TEAM_COLUMNS,
+        "Player": PREDICTION_SCHEMA_REQUIRED_PLAYER_COLUMNS,
+        "Game": PREDICTION_SCHEMA_REQUIRED_GAME_COLUMNS,
+        "PlayerSeasonStat": PREDICTION_SCHEMA_REQUIRED_PLAYER_SEASON_STAT_COLUMNS,
+    }
+
+    column_reports: dict[str, dict[str, object]] = {}
+
+    for model_name, required_columns in model_column_requirements.items():
+        present_columns = _prediction_schema_get_model_columns(
+            model_name,
+        )
+
+        missing_columns = [
+            column_name
+            for column_name in required_columns
+            if column_name not in present_columns
+        ]
+
+        column_reports[model_name] = {
+            "model": model_name,
+            "present_columns": present_columns,
+            "required_columns": required_columns,
+            "missing_columns": missing_columns,
+            "valid": not missing_columns,
+        }
+
+    relationship_reports: dict[str, dict[str, object]] = {}
+
+    for model_name, required_relationships in PREDICTION_SCHEMA_REQUIRED_RELATIONSHIPS.items():
+        present_relationships = _prediction_schema_get_model_relationships(
+            model_name,
+        )
+
+        missing_relationships = [
+            relationship_name
+            for relationship_name in required_relationships
+            if relationship_name not in present_relationships
+        ]
+
+        relationship_reports[model_name] = {
+            "model": model_name,
+            "present_relationships": present_relationships,
+            "required_relationships": required_relationships,
+            "missing_relationships": missing_relationships,
+            "valid": not missing_relationships,
+        }
+
+    alias_report = {
+        alias: resolve_player_prediction_stat_column(alias)
+        for alias in sorted(
+            PLAYER_PREDICTION_STAT_COLUMN_ALIASES.keys(),
+        )
+    }
+
+    unresolved_aliases = [
+        alias
+        for alias, resolved in alias_report.items()
+        if resolved is None
+    ]
+
+    synthetic_stat_record = {
+        "player_id": 1,
+        "team_id": 1,
+        "season": 2026,
+        "stat_group": "hitting",
+        "games_played": 150,
+        "plate_appearances": 700,
+        "at_bats": 560,
+        "runs": 120,
+        "hits": 170,
+        "singles": 90,
+        "doubles": 35,
+        "triples": 2,
+        "home_runs": 43,
+        "rbi": 118,
+        "walks": 100,
+        "intentional_walks": 10,
+        "hit_by_pitch": 8,
+        "sacrifice_flies": 7,
+        "strikeouts": 150,
+        "stolen_bases": 8,
+        "caught_stealing": 2,
+        "batting_average": 0.304,
+        "on_base_percentage": 0.410,
+        "slugging_percentage": 0.604,
+        "ops": 1.014,
+        "isolated_power": 0.300,
+        "babip": 0.330,
+        "walk_rate": 0.143,
+        "strikeout_rate": 0.214,
+        "home_run_rate": 0.061,
+        "woba": 0.430,
+        "wrc_plus": 175,
+        "source_name": "schema_contract_synthetic_record",
+        "source_updated_at": utc_now(),
+    }
+
+    synthetic_feature_dict = build_player_stat_feature_dict_from_model(
+        synthetic_stat_record,
+    )
+
+    required_feature_keys_missing = [
+        key
+        for key in PLAYER_PREDICTION_FEATURE_KEYS
+        if key not in synthetic_feature_dict
+    ]
+
+    total_bases_expected = 338
+
+    total_bases_valid = (
+        synthetic_feature_dict.get("total_bases") == total_bases_expected
+        and synthetic_feature_dict.get("tb") == total_bases_expected
+    )
+
+    column_contract_valid = all(
+        report.get("valid")
+        for report in column_reports.values()
+    )
+
+    relationship_contract_valid = all(
+        report.get("valid")
+        for report in relationship_reports.values()
+    )
+
+    valid = (
+        bool(mapper_report.get("valid"))
+        and not missing_models
+        and not missing_tables
+        and column_contract_valid
+        and relationship_contract_valid
+        and not unresolved_aliases
+        and not required_feature_keys_missing
+        and total_bases_valid
+        and bool(synthetic_feature_dict.get("has_hitting_sample"))
+    )
+
+    return {
+        "status": "ok" if valid else "failed",
+        "valid": valid,
+        "phase": "Phase 16 Part 1.0",
+        "contract_version": PREDICTION_SCHEMA_CONTRACT_VERSION,
+        "checked_at": utc_now().isoformat(),
+        "mapper": mapper_report,
+        "required_models": PREDICTION_SCHEMA_REQUIRED_MODELS,
+        "missing_models": missing_models,
+        "required_tables": PREDICTION_SCHEMA_REQUIRED_TABLES,
+        "missing_tables": missing_tables,
+        "column_reports": column_reports,
+        "relationship_reports": relationship_reports,
+        "alias_report": alias_report,
+        "unresolved_aliases": unresolved_aliases,
+        "required_feature_keys": PLAYER_PREDICTION_FEATURE_KEYS,
+        "required_feature_keys_missing": required_feature_keys_missing,
+        "synthetic_feature_dict": synthetic_feature_dict,
+        "total_bases_expected": total_bases_expected,
+        "total_bases_valid": total_bases_valid,
+        "completion_gate": {
+            "core_models_exist": not missing_models,
+            "core_tables_mapped": not missing_tables,
+            "player_identity_columns_ready": column_reports.get(
+                "Player",
+                {},
+            ).get("valid", False),
+            "team_columns_ready": column_reports.get(
+                "Team",
+                {},
+            ).get("valid", False),
+            "game_columns_ready": column_reports.get(
+                "Game",
+                {},
+            ).get("valid", False),
+            "season_stat_columns_ready": column_reports.get(
+                "PlayerSeasonStat",
+                {},
+            ).get("valid", False),
+            "relationships_ready": relationship_contract_valid,
+            "stat_aliases_ready": not unresolved_aliases,
+            "feature_dict_ready": not required_feature_keys_missing,
+            "derived_total_bases_ready": total_bases_valid,
+            "prediction_math_ready_for_feature_builder": valid,
+        },
+        "next_required_action": (
+            "FILE 01 complete. Proceed to FILE 02 - 01_database/database.py."
+            if valid
+            else "Fix missing prediction schema models, tables, columns, relationships, aliases, or mapper errors before feature_builder.py."
+        ),
+    }
+
+
+def build_prediction_schema_contract_summary(
+    report: dict[str, object] | None = None,
+) -> str:
+    report = report or validate_prediction_schema_contract()
+
+    completion_gate = report.get(
+        "completion_gate",
+        {},
+    )
+
+    lines = [
+        "AISP2 Prediction Schema Contract",
+        "=" * 48,
+        f"Valid: {report.get('valid')}",
+        f"Phase: {report.get('phase')}",
+        f"Contract Version: {report.get('contract_version')}",
+        f"Missing Models: {report.get('missing_models')}",
+        f"Missing Tables: {report.get('missing_tables')}",
+        f"Unresolved Aliases: {report.get('unresolved_aliases')}",
+        f"Missing Feature Keys: {report.get('required_feature_keys_missing')}",
+        f"Total Bases Valid: {report.get('total_bases_valid')}",
+        "",
+        "Completion Gate",
+        "-" * 48,
+        f"Core Models Exist: {completion_gate.get('core_models_exist')}",
+        f"Core Tables Mapped: {completion_gate.get('core_tables_mapped')}",
+        f"Player Identity Columns Ready: {completion_gate.get('player_identity_columns_ready')}",
+        f"Team Columns Ready: {completion_gate.get('team_columns_ready')}",
+        f"Game Columns Ready: {completion_gate.get('game_columns_ready')}",
+        f"Season Stat Columns Ready: {completion_gate.get('season_stat_columns_ready')}",
+        f"Relationships Ready: {completion_gate.get('relationships_ready')}",
+        f"Stat Aliases Ready: {completion_gate.get('stat_aliases_ready')}",
+        f"Feature Dict Ready: {completion_gate.get('feature_dict_ready')}",
+        f"Derived Total Bases Ready: {completion_gate.get('derived_total_bases_ready')}",
+        f"Prediction Math Ready For Feature Builder: {completion_gate.get('prediction_math_ready_for_feature_builder')}",
+        "",
+        "Next Required Action",
+        "-" * 48,
+        str(report.get("next_required_action")),
+    ]
+
+    return "\n".join(lines)
+
+
+def print_prediction_schema_contract_report() -> dict[str, object]:
+    report = validate_prediction_schema_contract()
+
+    print(
+        build_prediction_schema_contract_summary(
+            report,
+        )
+    )
+
+    return report
+
+# ============================================================
 # SECTION 23 - LOCAL MODEL VERIFICATION ENTRYPOINT
 # FILE: 01_database/models.py
 # PURPOSE:
