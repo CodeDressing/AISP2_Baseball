@@ -2487,3 +2487,423 @@
 
 </body>
 </html>
+
+
+<!-- ============================================================
+     PHASE 14 PART 7.16 - FINAL MANUAL CONTROL ACTION DOCK
+     FILE: templates/prediction_workbench.html
+
+     PURPOSE:
+     Permanently fix overlapping Prediction Controls buttons by
+     hiding the damaged original action rows and inserting a clean,
+     responsive action dock that triggers the original runtime hooks.
+
+     FIXES:
+     - Run Prediction / Reset overlap
+     - Refresh / Player Explorer overlap
+     - full screen layout
+     - medium layout
+     - 50% zoom layout
+     - mobile layout
+
+     RUNTIME PRESERVED:
+     - data-prediction-submit
+     - data-prediction-reset
+     - data-selector-refresh
+     - /players link
+     ============================================================ -->
+
+<style id="phase-14-part-7-16-final-action-dock-style">
+    /* ========================================================
+       01 - HARD HIDE BROKEN ORIGINAL ACTION ROWS
+       ======================================================== */
+
+    .pwb-controls .pwb-action-row,
+    .pwb-controls .prediction-action-row,
+    .prediction-controls-card .pwb-action-row,
+    .prediction-controls-card .prediction-action-row {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        pointer-events: none !important;
+    }
+
+    /* Keep the original runtime controls callable by JS but invisible. */
+    .pwb-controls [data-prediction-submit],
+    .pwb-controls [data-prediction-reset],
+    .pwb-controls [data-selector-refresh],
+    .pwb-controls a[href="/players"],
+    .prediction-controls-card [data-prediction-submit],
+    .prediction-controls-card [data-prediction-reset],
+    .prediction-controls-card [data-selector-refresh],
+    .prediction-controls-card a[href="/players"] {
+        font-size: 0 !important;
+    }
+
+    .pwb-controls [data-prediction-submit]::before,
+    .pwb-controls [data-prediction-submit]::after,
+    .pwb-controls [data-prediction-reset]::before,
+    .pwb-controls [data-prediction-reset]::after,
+    .pwb-controls [data-selector-refresh]::before,
+    .pwb-controls [data-selector-refresh]::after,
+    .pwb-controls a[href="/players"]::before,
+    .pwb-controls a[href="/players"]::after,
+    .prediction-controls-card [data-prediction-submit]::before,
+    .prediction-controls-card [data-prediction-submit]::after,
+    .prediction-controls-card [data-prediction-reset]::before,
+    .prediction-controls-card [data-prediction-reset]::after,
+    .prediction-controls-card [data-selector-refresh]::before,
+    .prediction-controls-card [data-selector-refresh]::after,
+    .prediction-controls-card a[href="/players"]::before,
+    .prediction-controls-card a[href="/players"]::after {
+        content: none !important;
+        display: none !important;
+    }
+
+    /* ========================================================
+       02 - NEW CLEAN ACTION DOCK
+       ======================================================== */
+
+    .pwb-enterprise-action-dock {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+        margin-top: 16px;
+        margin-bottom: 14px;
+    }
+
+    .pwb-enterprise-action-button {
+        appearance: none;
+        -webkit-appearance: none;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-width: 0;
+        min-height: 46px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(113, 217, 255, 0.28);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.070), rgba(255, 255, 255, 0.035)),
+            rgba(10, 27, 48, 0.92);
+        color: rgba(248, 252, 255, 0.96);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 12px 28px rgba(0, 0, 0, 0.22);
+        cursor: pointer;
+        overflow: hidden;
+        text-decoration: none;
+        white-space: nowrap;
+        text-align: center;
+        transition:
+            transform 160ms ease,
+            border-color 160ms ease,
+            background 160ms ease,
+            box-shadow 160ms ease;
+    }
+
+    .pwb-enterprise-action-button::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(113, 217, 255, 0.15), transparent 48%);
+        opacity: 0.72;
+    }
+
+    .pwb-enterprise-action-button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(143, 245, 189, 0.42);
+        background:
+            linear-gradient(180deg, rgba(113, 217, 255, 0.120), rgba(255, 255, 255, 0.045)),
+            rgba(10, 27, 48, 0.96);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.11),
+            0 16px 34px rgba(0, 0, 0, 0.28),
+            0 0 24px rgba(113, 217, 255, 0.08);
+    }
+
+    .pwb-enterprise-action-button:active {
+        transform: translateY(0);
+    }
+
+    .pwb-enterprise-action-button.primary {
+        border-color: rgba(143, 245, 189, 0.42);
+        background:
+            linear-gradient(135deg, rgba(113, 217, 255, 0.92), rgba(143, 245, 189, 0.92));
+        color: #00111d;
+    }
+
+    .pwb-enterprise-action-button.primary::before {
+        background:
+            radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.30), transparent 48%);
+    }
+
+    .pwb-enterprise-action-label {
+        position: relative;
+        z-index: 1;
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: inherit;
+        font-size: 0.82rem;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -0.012em;
+        white-space: nowrap;
+        pointer-events: none;
+    }
+
+    .pwb-enterprise-action-button.primary .pwb-enterprise-action-label {
+        font-size: 0.80rem;
+    }
+
+    /* ========================================================
+       03 - RESPONSIVE GUARANTEES
+       ======================================================== */
+
+    @media (max-width: 1180px) {
+        .pwb-enterprise-action-dock {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 9px;
+        }
+
+        .pwb-enterprise-action-button {
+            min-height: 44px;
+            padding: 0 12px;
+        }
+
+        .pwb-enterprise-action-label,
+        .pwb-enterprise-action-button.primary .pwb-enterprise-action-label {
+            font-size: 0.76rem;
+        }
+    }
+
+    @media (max-width: 720px) {
+        .pwb-enterprise-action-dock {
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .pwb-enterprise-action-button {
+            min-height: 46px;
+        }
+
+        .pwb-enterprise-action-label,
+        .pwb-enterprise-action-button.primary .pwb-enterprise-action-label {
+            font-size: 0.86rem;
+        }
+    }
+</style>
+
+<script id="phase-14-part-7-16-final-action-dock-script">
+    (function initializeAISP2FinalPredictionActionDock() {
+        "use strict";
+
+        const VERSION = "phase_14_part_7_16_final_manual_action_dock";
+
+        function findControlsPanel() {
+            return (
+                document.querySelector(".pwb-controls.prediction-controls-card") ||
+                document.querySelector(".prediction-controls-card") ||
+                document.querySelector(".pwb-controls") ||
+                document.querySelector("[data-prediction-controls]")
+            );
+        }
+
+        function findOriginalSubmit() {
+            return (
+                document.querySelector(".pwb-controls [data-prediction-submit]") ||
+                document.querySelector(".prediction-controls-card [data-prediction-submit]") ||
+                document.querySelector("[data-prediction-submit]")
+            );
+        }
+
+        function findOriginalReset() {
+            return (
+                document.querySelector(".pwb-controls [data-prediction-reset]") ||
+                document.querySelector(".prediction-controls-card [data-prediction-reset]") ||
+                document.querySelector("[data-prediction-reset]")
+            );
+        }
+
+        function findOriginalRefresh() {
+            return (
+                document.querySelector(".pwb-controls [data-selector-refresh]") ||
+                document.querySelector(".prediction-controls-card [data-selector-refresh]") ||
+                document.querySelector("[data-selector-refresh]")
+            );
+        }
+
+        function findOriginalExplorer() {
+            return (
+                document.querySelector('.pwb-controls a[href="/players"]') ||
+                document.querySelector(".pwb-controls a[href='/players']") ||
+                document.querySelector('.prediction-controls-card a[href="/players"]') ||
+                document.querySelector(".prediction-controls-card a[href='/players']") ||
+                document.querySelector("[data-player-explorer]") ||
+                document.querySelector("[data-open-player-explorer]")
+            );
+        }
+
+        function clickOriginal(node) {
+            if (!node) {
+                return false;
+            }
+
+            try {
+                node.dispatchEvent(
+                    new MouseEvent("click", {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    })
+                );
+                return true;
+            } catch (error) {
+                try {
+                    node.click();
+                    return true;
+                } catch (innerError) {
+                    return false;
+                }
+            }
+        }
+
+        function createDockButton(label, kind, handler) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "pwb-enterprise-action-button " + kind;
+            button.setAttribute("aria-label", label);
+            button.setAttribute("title", label);
+            button.dataset.pwbEnterpriseAction = label.toLowerCase().replace(/\s+/g, "_");
+
+            const span = document.createElement("span");
+            span.className = "pwb-enterprise-action-label";
+            span.textContent = label;
+
+            button.appendChild(span);
+            button.addEventListener("click", handler);
+
+            return button;
+        }
+
+        function createActionDock() {
+            const controls = findControlsPanel();
+
+            if (!controls) {
+                return false;
+            }
+
+            const existing = controls.querySelector(".pwb-enterprise-action-dock");
+
+            if (existing) {
+                return true;
+            }
+
+            const dock = document.createElement("div");
+            dock.className = "pwb-enterprise-action-dock";
+            dock.dataset.phase = VERSION;
+
+            const submitButton = createDockButton("Run Prediction", "primary", function () {
+                const original = findOriginalSubmit();
+                clickOriginal(original);
+            });
+
+            const resetButton = createDockButton("Reset", "secondary", function () {
+                const original = findOriginalReset();
+                clickOriginal(original);
+            });
+
+            const refreshButton = createDockButton("Refresh", "secondary", function () {
+                const original = findOriginalRefresh();
+                clickOriginal(original);
+            });
+
+            const explorerButton = createDockButton("Explorer", "secondary", function () {
+                const original = findOriginalExplorer();
+
+                if (original && original.getAttribute("href")) {
+                    window.location.href = original.getAttribute("href");
+                    return;
+                }
+
+                window.location.href = "/players";
+            });
+
+            dock.appendChild(submitButton);
+            dock.appendChild(resetButton);
+            dock.appendChild(refreshButton);
+            dock.appendChild(explorerButton);
+
+            const outcomeField =
+                controls.querySelector("[data-prediction-outcome]") ||
+                controls.querySelector("#prediction-outcome");
+
+            const outcomeContainer = outcomeField
+                ? outcomeField.closest(".pwb-field, .prediction-field, label, div")
+                : null;
+
+            if (outcomeContainer && outcomeContainer.parentNode) {
+                outcomeContainer.insertAdjacentElement("afterend", dock);
+            } else {
+                controls.appendChild(dock);
+            }
+
+            return true;
+        }
+
+        function hideBrokenRows() {
+            const controls = findControlsPanel();
+
+            if (!controls) {
+                return;
+            }
+
+            const rows = controls.querySelectorAll(
+                ".pwb-action-row, .prediction-action-row, .prediction-actions, .controls-actions, .action-row, .button-row"
+            );
+
+            rows.forEach(function hideRow(row) {
+                if (row.classList.contains("pwb-enterprise-action-dock")) {
+                    return;
+                }
+
+                row.setAttribute("aria-hidden", "true");
+                row.dataset.pwbHiddenBrokenActionRow = "true";
+            });
+        }
+
+        function boot() {
+            hideBrokenRows();
+            createActionDock();
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+
+        window.addEventListener("load", boot);
+        window.addEventListener("resize", function resizeActionDock() {
+            window.clearTimeout(window.__aisp2FinalActionDockResizeTimer);
+            window.__aisp2FinalActionDockResizeTimer = window.setTimeout(boot, 80);
+        });
+
+        window.AISP2FinalPredictionActionDock = {
+            version: VERSION,
+            refresh: boot
+        };
+    }());
+</script>
