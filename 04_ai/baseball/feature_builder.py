@@ -1,24 +1,27 @@
 # ============================================================
 # AISP2 BASEBALL INTELLIGENCE PLATFORM
 # FILE: 04_ai/baseball/feature_builder.py
-# PHASE: Phase 16 Part 3A
+# PHASE: Phase 16 Part 3D
 # PURPOSE:
-#   Live player-specific baseball feature builder for the
+#   Enterprise live player-specific feature builder for the
 #   Prediction Workbench.
 #
-# CORE RESPONSIBILITY:
-#   selected player/team/outcome
-#   -> resolve player
-#   -> resolve team
-#   -> find best season stat row
-#   -> derive player-specific technical rates
-#   -> return one stable feature packet for probability_engine.py
+# CORE FIX:
+#   The Workbench must stop returning 0.2% for every player.
+#   This module resolves:
+#
+#       clean frontend payload
+#       -> internal player id
+#       -> MLB player id
+#       -> database PlayerSeasonStat row
+#       -> live MLB Stats API season hitting fallback
+#       -> player-specific observed rate
+#       -> sample-size shrunk probability seed
 #
 # IMPORTANT:
-#   This file is intentionally focused on live prediction feature
-#   construction. It is not a model trainer. Training dataset builders
-#   can exist elsewhere, but the Workbench needs a deterministic,
-#   source-backed player feature packet first.
+#   This is not a trained neural network yet. It is the corrected
+#   player-specific statistical baseline layer. ML/DL training comes
+#   after the data path is provably correct.
 # ============================================================
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ from decimal import Decimal, InvalidOperation
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Final, Iterable, Mapping, MutableMapping, Sequence
+from typing import Any, Final, Iterable, Mapping, Sequence
 import difflib
 import json
 import logging
@@ -51,10 +54,9 @@ import urllib.request
 
 MODULE_NAME: Final[str] = "baseball_live_feature_builder"
 MODULE_PATH: Final[str] = "04_ai/baseball/feature_builder.py"
-MODULE_VERSION: Final[str] = "16.3A.0"
-MODULE_PHASE: Final[str] = "Phase 16 Part 3A"
-MODULE_STATUS: Final[str] = "live_player_prediction_feature_ready"
-MODULE_ASSISTANT: Final[str] = "Alfred"
+MODULE_VERSION: Final[str] = "16.3D.0"
+MODULE_PHASE: Final[str] = "Phase 16 Part 3D"
+MODULE_STATUS: Final[str] = "player_specific_stat_resolution_hardened"
 UTC: Final[timezone] = timezone.utc
 
 LOGGER = logging.getLogger(__name__)
@@ -75,7 +77,7 @@ for _candidate_path in (_PROJECT_ROOT, _DATABASE_DIR):
 
 
 # ============================================================
-# SECTION 04 - OPTIONAL DATABASE IMPORTS
+# SECTION 04 - OPTIONAL LOCAL IMPORTS
 # ============================================================
 
 _DATABASE_IMPORT_ERROR: str | None = None
@@ -99,23 +101,19 @@ except Exception as exc:  # pragma: no cover
 # ============================================================
 
 class FeatureBuilderError(RuntimeError):
-    """Base exception for live feature construction failures."""
+    """Base exception for feature builder failures."""
 
 
 class PlayerResolutionError(FeatureBuilderError):
-    """Raised when the selected player cannot be resolved."""
+    """Raised when a player cannot be resolved."""
 
 
 class StatResolutionError(FeatureBuilderError):
-    """Raised when player stat resolution fails unexpectedly."""
-
-
-class FeatureSchemaError(FeatureBuilderError):
-    """Raised when expected schema objects are unavailable."""
+    """Raised when stat resolution fails."""
 
 
 # ============================================================
-# SECTION 06 - ENUMERATIONS
+# SECTION 06 - ENUMS
 # ============================================================
 
 class FeatureSourceStatus(str, Enum):
@@ -132,6 +130,7 @@ class SampleQuality(str, Enum):
     STRONG = "strong"
     MODERATE = "moderate"
     WEAK = "weak"
+    TINY = "tiny"
     NO_SAMPLE = "no_sample"
 
 
@@ -148,32 +147,19 @@ class PredictionFamily(str, Enum):
 
 PLAYER_NAME_FIELDS: Final[tuple[str, ...]] = (
     "player_name",
+    "player",
     "full_name",
     "name",
     "display_name",
     "selected_player",
 )
 
-PLAYER_ID_FIELDS: Final[tuple[str, ...]] = (
-    "player_id",
-    "mlb_player_id",
-    "selected_player_id",
-    "person_id",
-    "id",
-)
-
 TEAM_NAME_FIELDS: Final[tuple[str, ...]] = (
     "team_name",
+    "team",
     "selected_team",
     "current_team_name",
     "club_name",
-)
-
-TEAM_ID_FIELDS: Final[tuple[str, ...]] = (
-    "team_id",
-    "mlb_team_id",
-    "selected_team_id",
-    "current_team_id",
 )
 
 OUTCOME_FIELDS: Final[tuple[str, ...]] = (
@@ -183,59 +169,33 @@ OUTCOME_FIELDS: Final[tuple[str, ...]] = (
     "prediction_type",
 )
 
-COUNT_FIELDS: Final[tuple[str, ...]] = (
-    "games_played",
-    "plate_appearances",
-    "at_bats",
-    "runs",
-    "hits",
-    "singles",
-    "doubles",
-    "triples",
-    "home_runs",
-    "rbi",
-    "walks",
-    "intentional_walks",
-    "hit_by_pitch",
-    "sacrifice_flies",
-    "strikeouts",
-    "stolen_bases",
-    "caught_stealing",
-)
-
-RATE_FIELDS: Final[tuple[str, ...]] = (
-    "batting_average",
-    "on_base_percentage",
-    "slugging_percentage",
-    "ops",
-    "isolated_power",
-    "babip",
-    "walk_rate",
-    "strikeout_rate",
-    "home_run_rate",
-    "woba",
-    "wrc_plus",
-)
-
 PREDICTION_OUTCOME_ALIASES: Final[dict[str, str]] = {
     "home_run": "home_run",
     "home runs": "home_run",
+    "home_runs": "home_run",
     "hr": "home_run",
     "homer": "home_run",
     "hit": "hit",
     "hits": "hit",
     "single": "single",
+    "singles": "single",
     "double": "double",
+    "doubles": "double",
     "triple": "triple",
+    "triples": "triple",
     "walk": "walk",
+    "walks": "walk",
     "bb": "walk",
     "strikeout": "strikeout",
+    "strikeouts": "strikeout",
     "k": "strikeout",
+    "ks": "strikeout",
     "rbi": "rbi",
     "run": "run_scored",
     "runs": "run_scored",
     "run_scored": "run_scored",
     "total_bases": "total_bases",
+    "total base": "total_bases",
     "tb": "total_bases",
 }
 
@@ -265,7 +225,7 @@ LEAGUE_BASELINE_RATES: Final[dict[str, float]] = {
     "total_bases": 0.360,
 }
 
-NO_SAMPLE_FALLBACK_PROBABILITY: Final[dict[str, float]] = {
+NO_SAMPLE_FALLBACK_RATES: Final[dict[str, float]] = {
     "home_run": 0.002,
     "hit": 0.050,
     "single": 0.035,
@@ -291,15 +251,29 @@ TECHNICAL_RATE_KEYS: Final[tuple[str, ...]] = (
     "tb_per_ab",
     "xbh_per_pa",
     "times_on_base_per_pa",
+    "avg",
+    "obp",
+    "slg",
+    "ops",
+    "iso",
+    "babip",
+    "woba",
+    "wrc_plus",
 )
+
+MLB_STATS_BASE_URL: Final[str] = "https://statsapi.mlb.com/api/v1"
 
 
 # ============================================================
-# SECTION 08 - LOW-LEVEL UTILITY FUNCTIONS
+# SECTION 08 - LOW-LEVEL UTILITIES
 # ============================================================
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def normalize_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())
 
 
 def normalize_key(value: Any) -> str:
@@ -307,10 +281,6 @@ def normalize_key(value: Any) -> str:
     text = text.replace("&", " and ")
     text = re.sub(r"[^a-z0-9]+", "_", text)
     return re.sub(r"_+", "_", text).strip("_")
-
-
-def normalize_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip())
 
 
 def normalize_name_for_match(value: Any) -> str:
@@ -325,8 +295,8 @@ def to_float(value: Any, default: float = 0.0) -> float:
 
     if isinstance(value, (int, float, Decimal)):
         try:
-            numeric = float(value)
-            return numeric if math.isfinite(numeric) else float(default)
+            number = float(value)
+            return number if math.isfinite(number) else float(default)
         except Exception:
             return float(default)
 
@@ -334,15 +304,17 @@ def to_float(value: Any, default: float = 0.0) -> float:
         cleaned = value.strip().replace(",", "")
         if not cleaned:
             return float(default)
+
         if cleaned.endswith("%"):
             cleaned = cleaned[:-1]
             try:
                 return float(cleaned) / 100.0
             except Exception:
                 return float(default)
+
         try:
-            numeric = float(Decimal(cleaned))
-            return numeric if math.isfinite(numeric) else float(default)
+            number = float(Decimal(cleaned))
+            return number if math.isfinite(number) else float(default)
         except (InvalidOperation, ValueError, OverflowError):
             return float(default)
 
@@ -353,7 +325,7 @@ def to_int(value: Any, default: int = 0) -> int:
     try:
         return int(round(to_float(value, float(default))))
     except Exception:
-        return default
+        return int(default)
 
 
 def safe_divide(
@@ -365,19 +337,17 @@ def safe_divide(
 ) -> float:
     n = to_float(numerator)
     d = to_float(denominator)
+
     if not math.isfinite(n) or not math.isfinite(d) or abs(d) <= epsilon:
         return float(default)
+
     result = n / d
     return result if math.isfinite(result) else float(default)
 
 
-def clamp(value: Any, minimum: float, maximum: float, default: float = 0.0) -> float:
-    numeric = to_float(value, default)
-    return min(max(numeric, minimum), maximum)
-
-
-def pct(value: Any, digits: int = 1) -> float:
-    return round(to_float(value) * 100.0, digits)
+def clamp(value: Any, low: float, high: float, default: float = 0.0) -> float:
+    number = to_float(value, default)
+    return min(max(number, low), high)
 
 
 def object_to_dict(value: Any) -> dict[str, Any]:
@@ -431,24 +401,53 @@ def first_present(
     return default
 
 
+def read_attr(value: Any, names: Sequence[str] | str, default: Any = None) -> Any:
+    candidates = (names,) if isinstance(names, str) else tuple(names)
+
+    if isinstance(value, Mapping):
+        for name in candidates:
+            if name in value and value.get(name) not in (None, ""):
+                return value.get(name)
+
+        normalized = {
+            normalize_key(key): item
+            for key, item in value.items()
+        }
+
+        for name in candidates:
+            key = normalize_key(name)
+            if key in normalized and normalized.get(key) not in (None, ""):
+                return normalized.get(key)
+
+    for name in candidates:
+        try:
+            item = getattr(value, name)
+            if item not in (None, ""):
+                return item
+        except Exception:
+            continue
+
+    return default
+
+
 def parse_outcome(value: Any) -> str:
     raw = str(value or "").strip()
     if not raw:
         return "home_run"
 
-    normalized = normalize_key(raw).replace("_", " ")
-    compact = normalize_key(raw)
+    normalized_space = normalize_key(raw).replace("_", " ")
+    normalized_key = normalize_key(raw)
 
     if raw in PREDICTION_OUTCOME_ALIASES:
         return PREDICTION_OUTCOME_ALIASES[raw]
 
-    if normalized in PREDICTION_OUTCOME_ALIASES:
-        return PREDICTION_OUTCOME_ALIASES[normalized]
+    if normalized_space in PREDICTION_OUTCOME_ALIASES:
+        return PREDICTION_OUTCOME_ALIASES[normalized_space]
 
-    if compact in PREDICTION_OUTCOME_ALIASES:
-        return PREDICTION_OUTCOME_ALIASES[compact]
+    if normalized_key in PREDICTION_OUTCOME_ALIASES:
+        return PREDICTION_OUTCOME_ALIASES[normalized_key]
 
-    return compact or "home_run"
+    return normalized_key or "home_run"
 
 
 def stable_fingerprint(value: Any) -> str:
@@ -472,42 +471,6 @@ def stable_fingerprint(value: Any) -> str:
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
-def parse_datetime(value: Any) -> datetime | None:
-    if value is None:
-        return None
-
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=UTC)
-
-    if isinstance(value, date):
-        return datetime(value.year, value.month, value.day, tzinfo=UTC)
-
-    if isinstance(value, (int, float)):
-        try:
-            return datetime.fromtimestamp(float(value), tz=UTC)
-        except Exception:
-            return None
-
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-
-        try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
-        except Exception:
-            pass
-
-        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
-            try:
-                return datetime.strptime(text, fmt).replace(tzinfo=UTC)
-            except Exception:
-                continue
-
-    return None
-
-
 def model_has_column(model_class: Any, column_name: str) -> bool:
     try:
         return column_name in model_class.__mapper__.columns.keys()
@@ -515,46 +478,23 @@ def model_has_column(model_class: Any, column_name: str) -> bool:
         return False
 
 
-def model_has_relationship(model_class: Any, relationship_name: str) -> bool:
-    try:
-        return relationship_name in model_class.__mapper__.relationships.keys()
-    except Exception:
-        return False
-
-
-def read_attr(value: Any, names: Sequence[str] | str, default: Any = None) -> Any:
-    candidates = (names,) if isinstance(names, str) else tuple(names)
-
-    if isinstance(value, Mapping):
-        for name in candidates:
-            if name in value and value.get(name) not in (None, ""):
-                return value.get(name)
-        normalized = {normalize_key(k): v for k, v in value.items()}
-        for name in candidates:
-            key = normalize_key(name)
-            if key in normalized and normalized.get(key) not in (None, ""):
-                return normalized.get(key)
-
-    for name in candidates:
-        try:
-            item = getattr(value, name)
-            if item not in (None, ""):
-                return item
-        except Exception:
-            continue
-
-    return default
+def get_model_class(name: str) -> Any:
+    if _models_module is None:
+        return None
+    return getattr(_models_module, name, None)
 
 
 # ============================================================
-# SECTION 09 - DATA CONTRACTS
+# SECTION 09 - REQUEST CONTRACT
 # ============================================================
 
 @dataclass(slots=True)
 class SelectedPredictionRequest:
     player_id: int | None = None
+    mlb_player_id: int | None = None
     player_name: str | None = None
     team_id: int | None = None
+    mlb_team_id: int | None = None
     team_name: str | None = None
     outcome_key: str = "home_run"
     season: int | None = None
@@ -566,26 +506,78 @@ class SelectedPredictionRequest:
     def from_payload(cls, payload: Any) -> "SelectedPredictionRequest":
         data = object_to_dict(payload)
 
-        player_id_raw = first_present(data, PLAYER_ID_FIELDS)
-        team_id_raw = first_present(data, TEAM_ID_FIELDS)
+        player_id = to_int(
+            first_present(
+                data,
+                ("player_id", "selected_player_id", "internal_player_id", "database_player_id"),
+                0,
+            ),
+            0,
+        ) or None
 
-        outcome_key = parse_outcome(
-            first_present(data, OUTCOME_FIELDS, "home_run")
-        )
+        mlb_player_id = to_int(
+            first_present(
+                data,
+                ("mlb_player_id", "mlbPlayerId", "person_id", "personId"),
+                0,
+            ),
+            0,
+        ) or None
 
-        season_raw = first_present(data, ("season", "selected_season"))
+        # Some old payloads put the MLB id into player_id.
+        if not mlb_player_id and player_id and player_id >= 100000:
+            mlb_player_id = player_id
+
+        team_id = to_int(
+            first_present(
+                data,
+                ("team_id", "selected_team_id", "internal_team_id", "database_team_id"),
+                0,
+            ),
+            0,
+        ) or None
+
+        mlb_team_id = to_int(
+            first_present(
+                data,
+                ("mlb_team_id", "mlbTeamId"),
+                0,
+            ),
+            0,
+        ) or None
+
+        if not mlb_team_id and team_id and team_id >= 100:
+            mlb_team_id = team_id
 
         return cls(
-            player_id=to_int(player_id_raw, 0) or None,
+            player_id=player_id,
+            mlb_player_id=mlb_player_id,
             player_name=normalize_text(first_present(data, PLAYER_NAME_FIELDS, "")) or None,
-            team_id=to_int(team_id_raw, 0) or None,
+            team_id=team_id,
+            mlb_team_id=mlb_team_id,
             team_name=normalize_text(first_present(data, TEAM_NAME_FIELDS, "")) or None,
-            outcome_key=outcome_key,
-            season=to_int(season_raw, 0) or None,
-            game_id=to_int(first_present(data, ("game_id", "game_pk"), 0), 0) or None,
+            outcome_key=parse_outcome(first_present(data, OUTCOME_FIELDS, "home_run")),
+            season=to_int(first_present(data, ("season", "selected_season"), 0), 0) or None,
+            game_id=to_int(first_present(data, ("game_id", "game_pk", "gamePk"), 0), 0) or None,
             game_date=normalize_text(first_present(data, ("game_date", "date", "official_date"), "")) or None,
             raw_payload=data,
         )
+
+
+# ============================================================
+# SECTION 10 - DATA CONTRACTS
+# ============================================================
+
+@dataclass(slots=True)
+class ResolvedTeam:
+    resolved: bool
+    source: str
+    internal_team_id: int | None = None
+    mlb_team_id: int | None = None
+    name: str | None = None
+    abbreviation: str | None = None
+    warnings: list[str] = field(default_factory=list)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -609,18 +601,6 @@ class ResolvedPlayer:
 
 
 @dataclass(slots=True)
-class ResolvedTeam:
-    resolved: bool
-    source: str
-    internal_team_id: int | None = None
-    mlb_team_id: int | None = None
-    name: str | None = None
-    abbreviation: str | None = None
-    warnings: list[str] = field(default_factory=list)
-    raw: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
 class PlayerSeasonStatLine:
     found: bool
     source_status: FeatureSourceStatus
@@ -629,6 +609,7 @@ class PlayerSeasonStatLine:
     stat_group: str = "hitting"
     team_id: int | None = None
     team_name: str | None = None
+
     games_played: int = 0
     plate_appearances: int = 0
     at_bats: int = 0
@@ -643,9 +624,11 @@ class PlayerSeasonStatLine:
     intentional_walks: int = 0
     hit_by_pitch: int = 0
     sacrifice_flies: int = 0
+    sacrifice_bunts: int = 0
     strikeouts: int = 0
     stolen_bases: int = 0
     caught_stealing: int = 0
+
     batting_average: float = 0.0
     on_base_percentage: float = 0.0
     slugging_percentage: float = 0.0
@@ -657,6 +640,7 @@ class PlayerSeasonStatLine:
     home_run_rate: float = 0.0
     woba: float = 0.0
     wrc_plus: float = 0.0
+
     total_bases: int = 0
     extra_base_hits: int = 0
     times_on_base: int = 0
@@ -712,28 +696,35 @@ class PlayerFeaturePacket:
     feature_fingerprint: str
 
     def to_dict(self) -> dict[str, Any]:
+        requested = asdict(self.requested)
+        resolved_player = asdict(self.resolved_player)
+        resolved_team = asdict(self.resolved_team)
+        stat_line = self.stat_line.to_dict()
+        profile = self.technical_profile.to_dict()
+
         return {
             "status": self.status,
             "valid": self.valid,
             "phase": self.phase,
             "module_version": self.module_version,
-            "requested": asdict(self.requested),
-            "resolved_player": asdict(self.resolved_player),
-            "resolved_team": asdict(self.resolved_team),
-            "stat_line": self.stat_line.to_dict(),
+            "requested": requested,
+            "resolved_player": resolved_player,
+            "resolved_team": resolved_team,
+            "stat_line": stat_line,
             "rates": self.rates,
             "probability_inputs": self.probability_inputs,
-            "technical_profile": self.technical_profile.to_dict(),
+            "technical_profile": profile,
             "missing_features": self.missing_features,
             "debug": self.debug,
             "created_at": self.created_at,
             "feature_fingerprint": self.feature_fingerprint,
 
-            # Workbench-friendly aliases.
+            # Workbench aliases expected by main.py and prediction.js.
             "player_id": self.resolved_player.internal_player_id,
-            "mlb_player_id": self.resolved_player.mlb_player_id,
+            "mlb_player_id": self.resolved_player.mlb_player_id or self.requested.mlb_player_id,
             "player_name": self.resolved_player.full_name or self.requested.player_name,
             "team_id": self.resolved_team.internal_team_id or self.resolved_player.current_team_id,
+            "mlb_team_id": self.resolved_team.mlb_team_id or self.requested.mlb_team_id,
             "team_name": self.resolved_team.name or self.resolved_player.current_team_name or self.requested.team_name,
             "outcome_key": self.requested.outcome_key,
             "sample_size": self.stat_line.sample_size,
@@ -747,7 +738,7 @@ class PlayerFeaturePacket:
 
 
 # ============================================================
-# SECTION 10 - DATABASE SESSION HELPERS
+# SECTION 11 - DATABASE SESSION HELPERS
 # ============================================================
 
 @contextmanager
@@ -787,56 +778,119 @@ def managed_feature_session(existing_session: Any = None):
                 pass
 
 
-def get_model_class(name: str) -> Any:
-    if _models_module is None:
-        return None
-    return getattr(_models_module, name, None)
-
-
 # ============================================================
-# SECTION 11 - REQUEST-SUPPLIED STAT LINE SUPPORT
+# SECTION 12 - MLB HTTP HELPERS
 # ============================================================
 
-def stat_line_from_payload(
-    request: SelectedPredictionRequest,
-) -> PlayerSeasonStatLine | None:
-    payload = request.raw_payload
-
-    if not payload:
-        return None
-
-    direct_keys = {
-        "plate_appearances",
-        "at_bats",
-        "hits",
-        "home_runs",
-        "walks",
-        "strikeouts",
-        "rbi",
-        "runs",
-    }
-
-    if not any(key in payload for key in direct_keys):
-        nested = payload.get("stat_line") or payload.get("stats") or payload.get("player_stats")
-        if isinstance(nested, Mapping):
-            payload = dict(nested)
-        else:
-            return None
-
-    line = normalize_stat_mapping(
-        payload,
-        source_status=FeatureSourceStatus.REQUEST_SUPPLIED_STAT_LINE,
-        source_name="request_supplied_stat_line",
+def http_json(url: str, timeout: float = 12.0) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "AISP2-Baseball/16.3D",
+            "Accept": "application/json",
+        },
     )
 
-    if line.sample_size <= 0:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        payload = response.read().decode("utf-8", errors="replace")
+        return json.loads(payload)
+
+
+def build_mlb_url(path: str, params: Mapping[str, Any] | None = None) -> str:
+    clean_path = path if path.startswith("/") else f"/{path}"
+    url = MLB_STATS_BASE_URL + clean_path
+
+    if params:
+        query = urllib.parse.urlencode(
+            {
+                str(key): str(value)
+                for key, value in params.items()
+                if value is not None and value != ""
+            }
+        )
+        if query:
+            url = f"{url}?{query}"
+
+    return url
+
+
+def candidate_seasons(requested_season: int | None = None) -> list[int]:
+    current_year = utc_now().year
+    raw = [
+        requested_season,
+        current_year,
+        current_year - 1,
+        current_year - 2,
+        current_year - 3,
+        2025,
+        2024,
+        2023,
+    ]
+
+    output: list[int] = []
+
+    for item in raw:
+        year = to_int(item, 0)
+        if year and year not in output:
+            output.append(year)
+
+    return output
+
+
+def search_mlb_player_id_by_name(player_name: str) -> int | None:
+    name = normalize_text(player_name)
+    if not name:
         return None
 
-    return line
+    search_urls = [
+        build_mlb_url("/people/search", {"names": name}),
+        build_mlb_url("/sports/1/players", {"season": utc_now().year}),
+        build_mlb_url("/sports/1/players", {"season": utc_now().year - 1}),
+    ]
+
+    target = normalize_name_for_match(name)
+
+    for url in search_urls:
+        try:
+            data = http_json(url)
+        except Exception:
+            continue
+
+        people = data.get("people") or data.get("players") or []
+
+        best_score = 0.0
+        best_id: int | None = None
+
+        for person in people:
+            person_name = normalize_name_for_match(
+                person.get("fullName")
+                or person.get("full_name")
+                or person.get("name")
+                or ""
+            )
+
+            if not person_name:
+                continue
+
+            score = difflib.SequenceMatcher(None, target, person_name).ratio()
+
+            if target == person_name:
+                score = 1.0
+            elif target in person_name or person_name in target:
+                score = max(score, 0.90)
+
+            if score > best_score:
+                best_score = score
+                best_id = to_int(person.get("id"), 0) or None
+
+        if best_score >= 0.86 and best_id:
+            return best_id
+
+    return None
 
 
 # ============================================================
-# SECTION 12 - STAT NORMALIZATION
+# SECTION 13 - STAT NORMALIZATION
 # ============================================================
 
 def normalize_stat_mapping(
@@ -853,25 +907,27 @@ def normalize_stat_mapping(
     hits = to_int(pick("hits", "h"))
     doubles = to_int(pick("doubles", "double", "2b", "two_b"))
     triples = to_int(pick("triples", "triple", "3b", "three_b"))
-    home_runs = to_int(pick("home_runs", "homeRuns", "hr"))
-    singles = to_int(pick("singles", "single"), -1)
+    home_runs = to_int(pick("home_runs", "homeRuns", "home_runs_total", "hr"))
+    walks = to_int(pick("walks", "baseOnBalls", "bb"))
+    hit_by_pitch = to_int(pick("hit_by_pitch", "hitByPitch", "hbp"))
+    sacrifice_flies = to_int(pick("sacrifice_flies", "sacFlies", "sf"))
+    sacrifice_bunts = to_int(pick("sacrifice_bunts", "sacBunts", "sac", "sbunt"))
+    strikeouts = to_int(pick("strikeouts", "strikeOuts", "so", "k"))
+    runs = to_int(pick("runs", "r"))
+    rbi = to_int(pick("rbi", "runsBattedIn"))
+    at_bats = to_int(pick("at_bats", "atBats", "ab"))
+    plate_appearances = to_int(pick("plate_appearances", "plateAppearances", "pa"))
 
+    if plate_appearances <= 0 and at_bats > 0:
+        plate_appearances = at_bats + walks + hit_by_pitch + sacrifice_flies + sacrifice_bunts
+
+    singles = to_int(pick("singles", "single"), -1)
     if singles < 0:
         singles = max(0, hits - doubles - triples - home_runs)
 
     total_bases = to_int(pick("total_bases", "totalBases", "tb"), -1)
     if total_bases < 0:
         total_bases = singles + (2 * doubles) + (3 * triples) + (4 * home_runs)
-
-    walks = to_int(pick("walks", "baseOnBalls", "bb"))
-    hit_by_pitch = to_int(pick("hit_by_pitch", "hitByPitch", "hbp"))
-    plate_appearances = to_int(pick("plate_appearances", "plateAppearances", "pa"))
-    at_bats = to_int(pick("at_bats", "atBats", "ab"))
-
-    if plate_appearances <= 0 and at_bats > 0:
-        plate_appearances = at_bats + walks + hit_by_pitch + to_int(
-            pick("sacrifice_flies", "sacFlies", "sf")
-        )
 
     batting_average = to_float(pick("batting_average", "avg", default=0.0))
     on_base_percentage = to_float(pick("on_base_percentage", "obp", default=0.0))
@@ -880,8 +936,6 @@ def normalize_stat_mapping(
 
     if batting_average <= 0 and at_bats > 0:
         batting_average = safe_divide(hits, at_bats)
-
-    sacrifice_flies = to_int(pick("sacrifice_flies", "sacFlies", "sf"))
 
     if on_base_percentage <= 0:
         on_base_percentage = safe_divide(
@@ -895,10 +949,9 @@ def normalize_stat_mapping(
     if ops <= 0:
         ops = on_base_percentage + slugging_percentage
 
-    strikeouts = to_int(pick("strikeouts", "strikeOuts", "so", "k"))
-    runs = to_int(pick("runs", "r"))
-    rbi = to_int(pick("rbi", "runsBattedIn"))
-    intentional_walks = to_int(pick("intentional_walks", "intentionalWalks", "ibb"))
+    isolated_power = to_float(
+        pick("isolated_power", "iso", default=slugging_percentage - batting_average)
+    )
 
     line = PlayerSeasonStatLine(
         found=True,
@@ -919,17 +972,18 @@ def normalize_stat_mapping(
         home_runs=home_runs,
         rbi=rbi,
         walks=walks,
-        intentional_walks=intentional_walks,
+        intentional_walks=to_int(pick("intentional_walks", "intentionalWalks", "ibb")),
         hit_by_pitch=hit_by_pitch,
         sacrifice_flies=sacrifice_flies,
+        sacrifice_bunts=sacrifice_bunts,
         strikeouts=strikeouts,
-        stolen_bases=to_int(pick("stolen_bases", "stolenBases", "sb")),
+        stolen_bases=to_int(pick("stolen_bases", "stolenBases", "stolen_base", "sb")),
         caught_stealing=to_int(pick("caught_stealing", "caughtStealing", "cs")),
         batting_average=batting_average,
         on_base_percentage=on_base_percentage,
         slugging_percentage=slugging_percentage,
         ops=ops,
-        isolated_power=to_float(pick("isolated_power", "iso", default=slugging_percentage - batting_average)),
+        isolated_power=isolated_power,
         babip=to_float(pick("babip", default=0.0)),
         walk_rate=to_float(pick("walk_rate", default=safe_divide(walks, plate_appearances))),
         strikeout_rate=to_float(pick("strikeout_rate", default=safe_divide(strikeouts, plate_appearances))),
@@ -952,23 +1006,7 @@ def normalize_stat_mapping(
     return line
 
 
-def stat_line_from_orm_row(
-    row: Any,
-    *,
-    source_name: str = "database_player_season_stats",
-) -> PlayerSeasonStatLine:
-    return normalize_stat_mapping(
-        object_to_dict(row),
-        source_status=FeatureSourceStatus.DATABASE_PLAYER_SEASON_STATS,
-        source_name=source_name,
-    )
-
-
-def no_sample_stat_line(
-    *,
-    source_name: str,
-    warning: str,
-) -> PlayerSeasonStatLine:
+def no_sample_stat_line(*, source_name: str, warning: str) -> PlayerSeasonStatLine:
     return PlayerSeasonStatLine(
         found=False,
         source_status=FeatureSourceStatus.NO_HITTING_SAMPLE,
@@ -977,8 +1015,47 @@ def no_sample_stat_line(
     )
 
 
+def stat_line_from_payload(request: SelectedPredictionRequest) -> PlayerSeasonStatLine | None:
+    payload = request.raw_payload
+
+    if not payload:
+        return None
+
+    nested = payload.get("stat_line") or payload.get("stats") or payload.get("player_stats")
+
+    if isinstance(nested, Mapping):
+        payload = dict(nested)
+
+    direct_keys = {
+        "plate_appearances",
+        "plateAppearances",
+        "at_bats",
+        "atBats",
+        "hits",
+        "home_runs",
+        "homeRuns",
+        "walks",
+        "strikeouts",
+        "ops",
+    }
+
+    if not any(key in payload for key in direct_keys):
+        return None
+
+    line = normalize_stat_mapping(
+        payload,
+        source_status=FeatureSourceStatus.REQUEST_SUPPLIED_STAT_LINE,
+        source_name="request_supplied_stat_line",
+    )
+
+    if line.sample_size <= 0:
+        return None
+
+    return line
+
+
 # ============================================================
-# SECTION 13 - TEAM RESOLUTION
+# SECTION 14 - TEAM RESOLUTION
 # ============================================================
 
 def resolve_team(
@@ -990,62 +1067,68 @@ def resolve_team(
 
     if session is None or Team is None:
         return ResolvedTeam(
-            resolved=False,
-            source="unavailable",
-            name=request.team_name,
+            resolved=bool(request.team_id or request.mlb_team_id or request.team_name),
+            source="request_payload",
             internal_team_id=request.team_id,
-            warnings=["Team model or database session unavailable."],
+            mlb_team_id=request.mlb_team_id,
+            name=request.team_name,
+            warnings=["Team database model or session unavailable; using request team values."],
         )
 
     try:
         query = session.query(Team)
+        candidates: list[tuple[float, str, Any]] = []
 
-        candidates: list[Any] = []
+        if request.team_id and model_has_column(Team, "id"):
+            row = query.filter(getattr(Team, "id") == request.team_id).first()
+            if row is not None:
+                candidates.append((1.00, "database_internal_team_id", row))
 
-        if request.team_id:
-            for column_name in ("id", "mlb_team_id"):
-                if model_has_column(Team, column_name):
-                    item = query.filter(getattr(Team, column_name) == request.team_id).first()
-                    if item is not None:
-                        candidates.append(item)
+        if request.mlb_team_id and model_has_column(Team, "mlb_team_id"):
+            row = query.filter(getattr(Team, "mlb_team_id") == request.mlb_team_id).first()
+            if row is not None:
+                candidates.append((0.99, "database_mlb_team_id", row))
 
         if request.team_name:
-            name = request.team_name
             for column_name in ("name", "team_name", "abbreviation"):
                 if model_has_column(Team, column_name):
-                    item = query.filter(getattr(Team, column_name) == name).first()
-                    if item is not None:
-                        candidates.append(item)
+                    row = query.filter(getattr(Team, column_name) == request.team_name).first()
+                    if row is not None:
+                        candidates.append((0.94, f"database_exact_{column_name}", row))
 
-            if not candidates and model_has_column(Team, "name"):
-                normalized_target = normalize_name_for_match(name)
-                all_teams = query.limit(100).all()
-                scored: list[tuple[float, Any]] = []
-                for team in all_teams:
-                    candidate_name = normalize_name_for_match(read_attr(team, ("name", "abbreviation"), ""))
-                    score = difflib.SequenceMatcher(None, normalized_target, candidate_name).ratio()
-                    scored.append((score, team))
-                scored.sort(key=lambda pair: pair[0], reverse=True)
-                if scored and scored[0][0] >= 0.72:
-                    candidates.append(scored[0][1])
+        if request.team_name and not candidates and model_has_column(Team, "name"):
+            target = normalize_name_for_match(request.team_name)
+            for row in query.limit(100).all():
+                candidate_name = normalize_name_for_match(
+                    read_attr(row, ("name", "team_name", "abbreviation"), "")
+                )
+                if not candidate_name:
+                    continue
+                score = difflib.SequenceMatcher(None, target, candidate_name).ratio()
+                if target in candidate_name or candidate_name in target:
+                    score = max(score, 0.88)
+                if score >= 0.72:
+                    candidates.append((score, "database_fuzzy_team_name", row))
 
         if not candidates:
             return ResolvedTeam(
-                resolved=False,
-                source="not_found",
-                name=request.team_name,
+                resolved=bool(request.team_id or request.mlb_team_id or request.team_name),
+                source="request_payload_not_database",
                 internal_team_id=request.team_id,
-                warnings=["No matching team row found."],
+                mlb_team_id=request.mlb_team_id,
+                name=request.team_name,
+                warnings=["No matching database team row found; using request team values."],
             )
 
-        team = candidates[0]
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        score, source, team = candidates[0]
         raw = object_to_dict(team)
 
         return ResolvedTeam(
             resolved=True,
-            source="database",
-            internal_team_id=to_int(read_attr(team, "id"), 0) or None,
-            mlb_team_id=to_int(read_attr(team, "mlb_team_id"), 0) or None,
+            source=source,
+            internal_team_id=to_int(read_attr(team, "id"), 0) or request.team_id,
+            mlb_team_id=to_int(read_attr(team, "mlb_team_id"), 0) or request.mlb_team_id,
             name=normalize_text(read_attr(team, ("name", "team_name"), request.team_name)),
             abbreviation=normalize_text(read_attr(team, ("abbreviation", "abbr"), "")) or None,
             raw=raw,
@@ -1053,16 +1136,17 @@ def resolve_team(
 
     except Exception as exc:
         return ResolvedTeam(
-            resolved=False,
-            source="error",
-            name=request.team_name,
+            resolved=bool(request.team_id or request.mlb_team_id or request.team_name),
+            source="team_resolution_error_request_payload",
             internal_team_id=request.team_id,
+            mlb_team_id=request.mlb_team_id,
+            name=request.team_name,
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
 
 
 # ============================================================
-# SECTION 14 - PLAYER RESOLUTION
+# SECTION 15 - PLAYER RESOLUTION
 # ============================================================
 
 def resolve_player(
@@ -1073,115 +1157,115 @@ def resolve_player(
 ) -> ResolvedPlayer:
     Player = get_model_class("Player")
 
-    if session is None or Player is None:
-        return ResolvedPlayer(
-            resolved=False,
-            source="unavailable",
-            internal_player_id=request.player_id,
-            full_name=request.player_name,
-            warnings=["Player model or database session unavailable."],
-        )
+    fallback = ResolvedPlayer(
+        resolved=bool(request.player_id or request.mlb_player_id or request.player_name),
+        source="request_payload",
+        internal_player_id=request.player_id,
+        mlb_player_id=request.mlb_player_id,
+        full_name=request.player_name,
+        current_team_id=request.team_id,
+        current_team_name=request.team_name,
+        warnings=["Player database model or session unavailable; using request player values."],
+    )
 
-    warnings: list[str] = []
-    candidates: list[tuple[float, str, Any]] = []
+    if session is None or Player is None:
+        return fallback
 
     try:
         query = session.query(Player)
+        candidates: list[tuple[float, str, Any]] = []
 
-        if request.player_id:
-            if model_has_column(Player, "mlb_player_id") and request.player_id >= 100000:
-                player = query.filter(Player.mlb_player_id == request.player_id).first()
-                if player is not None:
-                    candidates.append((1.0, "database_mlb_player_id", player))
+        if request.player_id and model_has_column(Player, "id"):
+            row = query.filter(getattr(Player, "id") == request.player_id).first()
+            if row is not None:
+                candidates.append((1.00, "database_internal_player_id", row))
 
-            if model_has_column(Player, "id"):
-                player = query.filter(Player.id == request.player_id).first()
-                if player is not None:
-                    candidates.append((0.98, "database_internal_player_id", player))
+        if request.mlb_player_id and model_has_column(Player, "mlb_player_id"):
+            row = query.filter(getattr(Player, "mlb_player_id") == request.mlb_player_id).first()
+            if row is not None:
+                candidates.append((0.995, "database_mlb_player_id", row))
 
-            if model_has_column(Player, "mlb_player_id"):
-                player = query.filter(Player.mlb_player_id == request.player_id).first()
-                if player is not None:
-                    candidates.append((0.97, "database_mlb_player_id_secondary", player))
+        if request.player_id and request.player_id >= 100000 and model_has_column(Player, "mlb_player_id"):
+            row = query.filter(getattr(Player, "mlb_player_id") == request.player_id).first()
+            if row is not None:
+                candidates.append((0.990, "database_player_id_as_mlb_id", row))
 
         if request.player_name:
-            exact_name = request.player_name
-
             for column_name in ("full_name", "name", "use_name"):
                 if model_has_column(Player, column_name):
-                    player = query.filter(getattr(Player, column_name) == exact_name).first()
-                    if player is not None:
-                        candidates.append((0.94, f"database_exact_{column_name}", player))
+                    row = query.filter(getattr(Player, column_name) == request.player_name).first()
+                    if row is not None:
+                        candidates.append((0.940, f"database_exact_{column_name}", row))
 
-            normalized_target = normalize_name_for_match(request.player_name)
+        if request.player_name and not candidates and model_has_column(Player, "full_name"):
+            target = normalize_name_for_match(request.player_name)
+            possible_rows = query.limit(8000).all()
 
-            if not candidates and model_has_column(Player, "full_name"):
-                possible_rows = query.limit(5000).all()
-                scored: list[tuple[float, str, Any]] = []
+            for row in possible_rows:
+                candidate_names = [
+                    read_attr(row, "full_name", ""),
+                    read_attr(row, "use_name", ""),
+                    read_attr(row, "last_name", ""),
+                ]
 
-                for player in possible_rows:
-                    candidate_names = [
-                        read_attr(player, "full_name", ""),
-                        read_attr(player, "use_name", ""),
-                        read_attr(player, "last_name", ""),
-                    ]
-                    best = 0.0
-                    for candidate_name in candidate_names:
-                        candidate_norm = normalize_name_for_match(candidate_name)
-                        if not candidate_norm:
-                            continue
-                        score = difflib.SequenceMatcher(None, normalized_target, candidate_norm).ratio()
-                        if normalized_target and normalized_target in candidate_norm:
-                            score = max(score, 0.90)
-                        best = max(best, score)
-                    if best >= 0.72:
-                        scored.append((best, "database_fuzzy_name", player))
+                best = 0.0
 
-                scored.sort(key=lambda item: item[0], reverse=True)
-                candidates.extend(scored[:5])
+                for candidate_name in candidate_names:
+                    candidate_norm = normalize_name_for_match(candidate_name)
+                    if not candidate_norm:
+                        continue
+
+                    score = difflib.SequenceMatcher(None, target, candidate_norm).ratio()
+
+                    if target == candidate_norm:
+                        score = 1.0
+                    elif target in candidate_norm or candidate_norm in target:
+                        score = max(score, 0.90)
+
+                    best = max(best, score)
+
+                if best >= 0.76:
+                    candidates.append((best, "database_fuzzy_player_name", row))
 
         if not candidates:
             return ResolvedPlayer(
-                resolved=False,
-                source="not_found",
+                resolved=bool(request.player_id or request.mlb_player_id or request.player_name),
+                source="request_payload_not_database",
                 internal_player_id=request.player_id,
+                mlb_player_id=request.mlb_player_id,
                 full_name=request.player_name,
-                warnings=["No matching player row found from request payload."],
+                current_team_id=request.team_id,
+                current_team_name=request.team_name,
+                warnings=["No matching database player row found; using request MLB id/name for live fallback."],
             )
 
         candidates.sort(key=lambda item: item[0], reverse=True)
-
-        if len(candidates) > 1 and candidates[0][0] - candidates[1][0] < 0.03:
-            warnings.append(
-                "Player resolution was close between multiple candidates; using highest score."
-            )
-
         score, source, player = candidates[0]
         raw = object_to_dict(player)
 
         current_team_id = to_int(
             read_attr(player, ("current_team_id", "team_id"), 0),
             0,
-        ) or None
+        ) or request.team_id
 
-        current_team_name = None
+        current_team_name = request.team_name
+
         try:
             if hasattr(player, "team") and player.team is not None:
                 current_team_name = normalize_text(
-                    read_attr(player.team, ("name", "team_name"), "")
-                ) or None
+                    read_attr(player.team, ("name", "team_name"), request.team_name)
+                ) or request.team_name
         except Exception:
-            current_team_name = None
+            current_team_name = request.team_name
 
-        if current_team_name is None and resolved_team and resolved_team.resolved:
-            if current_team_id is None or current_team_id == resolved_team.internal_team_id:
-                current_team_name = resolved_team.name
+        if not current_team_name and resolved_team and resolved_team.name:
+            current_team_name = resolved_team.name
 
         return ResolvedPlayer(
             resolved=True,
             source=source,
-            internal_player_id=to_int(read_attr(player, "id"), 0) or None,
-            mlb_player_id=to_int(read_attr(player, "mlb_player_id"), 0) or None,
+            internal_player_id=to_int(read_attr(player, "id"), 0) or request.player_id,
+            mlb_player_id=to_int(read_attr(player, "mlb_player_id"), 0) or request.mlb_player_id,
             full_name=normalize_text(read_attr(player, "full_name", request.player_name)),
             current_team_id=current_team_id,
             current_team_name=current_team_name,
@@ -1192,23 +1276,33 @@ def resolve_player(
             throws=normalize_text(read_attr(player, "throws", "")) or None,
             active_status=normalize_text(read_attr(player, "active_status", "")) or None,
             match_score=round(score, 4),
-            warnings=warnings,
             raw=raw,
         )
 
     except Exception as exc:
         return ResolvedPlayer(
-            resolved=False,
-            source="error",
+            resolved=bool(request.player_id or request.mlb_player_id or request.player_name),
+            source="player_resolution_error_request_payload",
             internal_player_id=request.player_id,
+            mlb_player_id=request.mlb_player_id,
             full_name=request.player_name,
+            current_team_id=request.team_id,
+            current_team_name=request.team_name,
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
 
 
 # ============================================================
-# SECTION 15 - DATABASE STAT RESOLUTION
+# SECTION 16 - DATABASE STAT RESOLUTION
 # ============================================================
+
+def stat_line_from_orm_row(row: Any, *, source_name: str = "database_player_season_stats") -> PlayerSeasonStatLine:
+    return normalize_stat_mapping(
+        object_to_dict(row),
+        source_status=FeatureSourceStatus.DATABASE_PLAYER_SEASON_STATS,
+        source_name=source_name,
+    )
+
 
 def find_database_season_stat_line(
     resolved_player: ResolvedPlayer,
@@ -1224,22 +1318,22 @@ def find_database_season_stat_line(
             warning="PlayerSeasonStat model or database session unavailable.",
         )
 
-    if not resolved_player.resolved or not resolved_player.internal_player_id:
+    if not resolved_player.internal_player_id:
         return no_sample_stat_line(
-            source_name="player_not_resolved",
-            warning="Player was not resolved to an internal database id.",
+            source_name="database_player_not_resolved_to_internal_id",
+            warning="Player was not resolved to an internal database player id.",
         )
 
     try:
-        query = session.query(PlayerSeasonStat)
-
         if not model_has_column(PlayerSeasonStat, "player_id"):
             return no_sample_stat_line(
-                source_name="player_season_stats_missing_player_id",
-                warning="PlayerSeasonStat is missing player_id column.",
+                source_name="player_season_stats_missing_player_id_column",
+                warning="PlayerSeasonStat model is missing player_id column.",
             )
 
-        query = query.filter(PlayerSeasonStat.player_id == resolved_player.internal_player_id)
+        query = session.query(PlayerSeasonStat).filter(
+            getattr(PlayerSeasonStat, "player_id") == resolved_player.internal_player_id
+        )
 
         rows = query.all()
 
@@ -1249,32 +1343,30 @@ def find_database_season_stat_line(
                 warning="No PlayerSeasonStat rows found for resolved player.",
             )
 
-        filtered_rows = []
+        hitter_rows = []
 
         for row in rows:
-            stat_group = str(read_attr(row, "stat_group", "hitting") or "hitting").lower()
-            if "hit" not in stat_group and stat_group not in {"batting", "hitting", ""}:
+            stat_group = str(read_attr(row, ("stat_group", "group"), "hitting") or "hitting").lower()
+
+            if stat_group and "pitch" in stat_group and "hit" not in stat_group:
                 continue
 
-            if request.season:
-                season = to_int(read_attr(row, "season"), 0)
-                if season != request.season:
-                    continue
+            hitter_rows.append(row)
 
-            filtered_rows.append(row)
+        if not hitter_rows:
+            hitter_rows = rows
 
-        if not filtered_rows:
-            filtered_rows = rows
-
-        def row_score(row: Any) -> tuple[int, int, int]:
+        def row_score(row: Any) -> tuple[int, int, int, int]:
             season = to_int(read_attr(row, "season"), 0)
-            pa = to_int(read_attr(row, "plate_appearances"), 0)
-            ab = to_int(read_attr(row, "at_bats"), 0)
-            return (season, max(pa, ab), to_int(read_attr(row, "games_played"), 0))
+            pa = to_int(read_attr(row, ("plate_appearances", "pa"), 0), 0)
+            ab = to_int(read_attr(row, ("at_bats", "ab"), 0), 0)
+            hits = to_int(read_attr(row, "hits", 0), 0)
+            requested_bonus = 10000 if request.season and season == request.season else 0
+            return (requested_bonus + season, max(pa, ab), hits, to_int(read_attr(row, "games_played", 0), 0))
 
-        filtered_rows.sort(key=row_score, reverse=True)
+        hitter_rows.sort(key=row_score, reverse=True)
 
-        best_row = filtered_rows[0]
+        best_row = hitter_rows[0]
         line = stat_line_from_orm_row(best_row)
 
         if line.sample_size <= 0:
@@ -1282,7 +1374,7 @@ def find_database_season_stat_line(
             line.source_status = FeatureSourceStatus.NO_HITTING_SAMPLE
             line.source_name = "database_stat_row_without_hitting_sample"
             line.warnings.append(
-                "A PlayerSeasonStat row exists, but PA/AB/H/HR values do not form a usable hitting sample."
+                "Database PlayerSeasonStat row exists, but PA/AB fields are not usable."
             )
 
         return line
@@ -1297,57 +1389,20 @@ def find_database_season_stat_line(
 
 
 # ============================================================
-# SECTION 16 - LIVE MLB API FALLBACK
+# SECTION 17 - LIVE MLB STATS API FALLBACK
 # ============================================================
-
-def http_json(url: str, timeout: float = 12.0) -> dict[str, Any]:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "AISP2-Baseball/16.3A",
-            "Accept": "application/json",
-        },
-    )
-
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        payload = response.read().decode("utf-8", errors="replace")
-        return json.loads(payload)
-
-
-def current_candidate_seasons() -> list[int]:
-    year = utc_now().year
-    return [year, year - 1, year - 2]
-
-
-def search_mlb_player_id_by_name(player_name: str) -> int | None:
-    name = normalize_text(player_name)
-    if not name:
-        return None
-
-    url = (
-        "https://statsapi.mlb.com/api/v1/people/search?"
-        + urllib.parse.urlencode({"names": name})
-    )
-
-    try:
-        data = http_json(url)
-        people = data.get("people") or []
-        if people:
-            return to_int(people[0].get("id"), 0) or None
-    except Exception:
-        return None
-
-    return None
-
 
 def fetch_live_mlb_hitting_stat_line(
     resolved_player: ResolvedPlayer,
     request: SelectedPredictionRequest,
 ) -> PlayerSeasonStatLine:
-    mlb_player_id = resolved_player.mlb_player_id
+    mlb_player_id = (
+        resolved_player.mlb_player_id
+        or request.mlb_player_id
+        or (request.player_id if request.player_id and request.player_id >= 100000 else None)
+    )
 
-    if not mlb_player_id and request.player_id and request.player_id >= 100000:
-        mlb_player_id = request.player_id
+    live_warnings: list[str] = []
 
     if not mlb_player_id and request.player_name:
         mlb_player_id = search_mlb_player_id_by_name(request.player_name)
@@ -1355,44 +1410,42 @@ def fetch_live_mlb_hitting_stat_line(
     if not mlb_player_id:
         return no_sample_stat_line(
             source_name="mlb_stats_api_no_player_id",
-            warning="No MLB player id available for live MLB Stats API fallback.",
+            warning="No MLB player id available for live MLB Stats API hitting fallback.",
         )
 
-    seasons = [request.season] if request.season else current_candidate_seasons()
-    seasons = [season for season in seasons if season]
-
-    warnings: list[str] = []
-
-    for season in seasons:
-        url = (
-            f"https://statsapi.mlb.com/api/v1/people/{mlb_player_id}/stats?"
-            + urllib.parse.urlencode(
-                {
-                    "stats": "season",
-                    "group": "hitting",
-                    "season": str(season),
-                }
-            )
+    for season in candidate_seasons(request.season):
+        url = build_mlb_url(
+            f"/people/{mlb_player_id}/stats",
+            {
+                "stats": "season",
+                "group": "hitting",
+                "season": season,
+            },
         )
 
         try:
             data = http_json(url)
         except Exception as exc:
-            warnings.append(f"{season}: {type(exc).__name__}: {exc}")
+            live_warnings.append(f"season {season}: {type(exc).__name__}: {exc}")
             continue
 
         stats_blocks = data.get("stats") or []
 
         for block in stats_blocks:
             splits = block.get("splits") or []
+
             for split in splits:
                 stat = dict(split.get("stat") or {})
+
                 if not stat:
                     continue
 
                 stat["season"] = season
-                stat["team_name"] = (split.get("team") or {}).get("name")
-                stat["team_id"] = (split.get("team") or {}).get("id")
+                stat["mlb_player_id"] = mlb_player_id
+
+                if isinstance(split.get("team"), Mapping):
+                    stat["team_id"] = split["team"].get("id")
+                    stat["team_name"] = split["team"].get("name")
 
                 line = normalize_stat_mapping(
                     stat,
@@ -1403,12 +1456,12 @@ def fetch_live_mlb_hitting_stat_line(
                 line.raw = {
                     "mlb_player_id": mlb_player_id,
                     "season": season,
-                    "split": split,
                     "url": url,
+                    "split": split,
                 }
 
-                if warnings:
-                    line.warnings.extend(warnings)
+                if live_warnings:
+                    line.warnings.extend(live_warnings)
 
                 if line.sample_size > 0:
                     return line
@@ -1416,13 +1469,14 @@ def fetch_live_mlb_hitting_stat_line(
     return no_sample_stat_line(
         source_name="mlb_stats_api_no_hitting_sample",
         warning=(
-            "MLB Stats API fallback was checked, but no usable season hitting sample was found."
+            "MLB Stats API was checked across candidate seasons, but no usable "
+            "season hitting sample was found. This is correct for many pitchers."
         ),
     )
 
 
 # ============================================================
-# SECTION 17 - RATE ENGINE
+# SECTION 18 - RATE ENGINE
 # ============================================================
 
 def calculate_rates(stat_line: PlayerSeasonStatLine) -> dict[str, float]:
@@ -1453,7 +1507,7 @@ def calculate_rates(stat_line: PlayerSeasonStatLine) -> dict[str, float]:
     }
 
     return {
-        key: round(value, 6)
+        key: round(to_float(value), 6)
         for key, value in rates.items()
     }
 
@@ -1465,41 +1519,25 @@ def observed_rate_for_outcome(
 ) -> tuple[str, float]:
     outcome = parse_outcome(outcome_key)
 
-    if outcome == "home_run":
-        return "HR / PA", to_float(rates.get("hr_per_pa"))
+    mapping = {
+        "home_run": ("HR / PA", rates.get("hr_per_pa")),
+        "hit": ("H / AB", rates.get("hit_per_ab")),
+        "single": ("1B / AB", rates.get("single_per_ab")),
+        "double": ("2B / AB", rates.get("double_per_ab")),
+        "triple": ("3B / AB", rates.get("triple_per_ab")),
+        "walk": ("BB / PA", rates.get("bb_per_pa")),
+        "strikeout": ("K / PA", rates.get("k_per_pa")),
+        "rbi": ("RBI / PA", rates.get("rbi_per_pa")),
+        "run_scored": ("R / PA", rates.get("run_per_pa")),
+        "total_bases": ("TB / AB", rates.get("tb_per_ab")),
+    }
 
-    if outcome == "hit":
-        return "H / AB", to_float(rates.get("hit_per_ab"))
-
-    if outcome == "single":
-        return "1B / AB", to_float(rates.get("single_per_ab"))
-
-    if outcome == "double":
-        return "2B / AB", to_float(rates.get("double_per_ab"))
-
-    if outcome == "triple":
-        return "3B / AB", to_float(rates.get("triple_per_ab"))
-
-    if outcome == "walk":
-        return "BB / PA", to_float(rates.get("bb_per_pa"))
-
-    if outcome == "strikeout":
-        return "K / PA", to_float(rates.get("k_per_pa"))
-
-    if outcome == "rbi":
-        return "RBI / PA", to_float(rates.get("rbi_per_pa"))
-
-    if outcome == "run_scored":
-        return "R / PA", to_float(rates.get("run_per_pa"))
-
-    if outcome == "total_bases":
-        return "TB / AB", to_float(rates.get("tb_per_ab"))
-
-    return "HR / PA", to_float(rates.get("hr_per_pa"))
+    metric, value = mapping.get(outcome, ("HR / PA", rates.get("hr_per_pa")))
+    return metric, to_float(value)
 
 
 # ============================================================
-# SECTION 18 - TECHNICAL PROFILE ENGINE
+# SECTION 19 - TECHNICAL PROFILE ENGINE
 # ============================================================
 
 def sample_quality_from_size(sample_size: int) -> SampleQuality:
@@ -1507,8 +1545,10 @@ def sample_quality_from_size(sample_size: int) -> SampleQuality:
         return SampleQuality.STRONG
     if sample_size >= 150:
         return SampleQuality.MODERATE
-    if sample_size >= 25:
+    if sample_size >= 50:
         return SampleQuality.WEAK
+    if sample_size > 0:
+        return SampleQuality.TINY
     return SampleQuality.NO_SAMPLE
 
 
@@ -1530,8 +1570,6 @@ def build_technical_profile(
 ) -> PlayerTechnicalProfile:
     sample_quality = sample_quality_from_size(stat_line.sample_size)
 
-    warnings: list[str] = []
-
     if sample_quality == SampleQuality.NO_SAMPLE:
         return PlayerTechnicalProfile(
             sample_quality=sample_quality,
@@ -1546,8 +1584,8 @@ def build_technical_profile(
             primary_strength="Unavailable",
             primary_risk="No usable hitting sample",
             model_guidance=(
-                "Do not treat this player as a league-average hitter. "
-                "The selected player has no usable PA/AB sample for this prop."
+                "AISP2 correctly refused to fabricate a player-specific hitter projection "
+                "because no PA/AB sample was found."
             ),
             warnings=["No usable hitting sample was found."],
         )
@@ -1605,6 +1643,7 @@ def build_technical_profile(
         strikeout_profile = "Low strikeout profile"
 
     production_value = max(rbi_rate, run_rate)
+
     run_production_profile = tier_by_thresholds(
         production_value,
         (
@@ -1638,32 +1677,34 @@ def build_technical_profile(
     )
 
     strengths = {
-        "power": hr_rate / max(LEAGUE_BASELINE_RATES["home_run"], 0.0001),
-        "contact": hit_rate / max(LEAGUE_BASELINE_RATES["hit"], 0.0001),
-        "discipline": walk_rate / max(LEAGUE_BASELINE_RATES["walk"], 0.0001),
-        "run_production": production_value / max(LEAGUE_BASELINE_RATES["rbi"], 0.0001),
-        "total_bases": tb_rate / max(LEAGUE_BASELINE_RATES["total_bases"], 0.0001),
+        "Power": hr_rate / max(LEAGUE_BASELINE_RATES["home_run"], 0.0001),
+        "Contact": hit_rate / max(LEAGUE_BASELINE_RATES["hit"], 0.0001),
+        "Plate Discipline": walk_rate / max(LEAGUE_BASELINE_RATES["walk"], 0.0001),
+        "Run Production": production_value / max(LEAGUE_BASELINE_RATES["rbi"], 0.0001),
+        "Total Bases": tb_rate / max(LEAGUE_BASELINE_RATES["total_bases"], 0.0001),
     }
 
-    primary_strength = max(strengths.items(), key=lambda item: item[1])[0].replace("_", " ").title()
+    primary_strength = max(strengths.items(), key=lambda item: item[1])[0]
 
     risks = {
-        "small sample": 1.0 if sample_quality == SampleQuality.WEAK else 0.0,
-        "strikeout rate": strikeout_rate / 0.22,
-        "low contact": 0.245 / max(hit_rate, 0.001),
-        "low power": 0.032 / max(hr_rate, 0.001),
+        "Small Sample": 1.0 if sample_quality in {SampleQuality.WEAK, SampleQuality.TINY} else 0.0,
+        "Strikeout Rate": strikeout_rate / 0.22,
+        "Low Contact": 0.245 / max(hit_rate, 0.001),
+        "Low Power": 0.032 / max(hr_rate, 0.001),
     }
 
-    primary_risk = max(risks.items(), key=lambda item: item[1])[0].title()
+    primary_risk = max(risks.items(), key=lambda item: item[1])[0]
 
-    if sample_quality == SampleQuality.WEAK:
-        warnings.append("Weak sample: probability engine must apply heavier baseline shrinkage.")
+    warnings: list[str] = []
+
+    if sample_quality in {SampleQuality.WEAK, SampleQuality.TINY}:
+        warnings.append("Small sample: probability engine must apply heavier baseline shrinkage.")
 
     model_guidance = (
         f"Use {sample_quality.value} sample weighting. "
         f"Primary observed strength: {primary_strength}. "
         f"Primary risk signal: {primary_risk}. "
-        f"Do not use league fallback unless sample_size is zero."
+        f"Use player-specific observed rates; do not use no-sample fallback."
     )
 
     return PlayerTechnicalProfile(
@@ -1684,8 +1725,22 @@ def build_technical_profile(
 
 
 # ============================================================
-# SECTION 19 - PROBABILITY INPUT CONTRACT
+# SECTION 20 - PROBABILITY INPUT CONTRACT
 # ============================================================
+
+def sample_weight_from_size(sample_size: int) -> float:
+    if sample_size >= 500:
+        return 0.88
+    if sample_size >= 350:
+        return 0.82
+    if sample_size >= 150:
+        return 0.68
+    if sample_size >= 50:
+        return 0.45
+    if sample_size > 0:
+        return 0.25
+    return 0.0
+
 
 def build_probability_inputs(
     request: SelectedPredictionRequest,
@@ -1697,38 +1752,33 @@ def build_probability_inputs(
     primary_metric, observed_rate = observed_rate_for_outcome(outcome, stat_line, rates)
 
     baseline = LEAGUE_BASELINE_RATES.get(outcome, LEAGUE_BASELINE_RATES["home_run"])
-    no_sample_fallback = NO_SAMPLE_FALLBACK_PROBABILITY.get(
-        outcome,
-        NO_SAMPLE_FALLBACK_PROBABILITY["home_run"],
-    )
+    fallback = NO_SAMPLE_FALLBACK_RATES.get(outcome, NO_SAMPLE_FALLBACK_RATES["home_run"])
+    sample_weight = sample_weight_from_size(stat_line.sample_size)
 
-    sample_size = stat_line.sample_size
-
-    if sample_size >= 350:
-        sample_weight = 0.82
-    elif sample_size >= 150:
-        sample_weight = 0.68
-    elif sample_size >= 50:
-        sample_weight = 0.45
-    elif sample_size > 0:
-        sample_weight = 0.25
-    else:
-        sample_weight = 0.0
-
-    if sample_size > 0:
+    if stat_line.sample_size > 0:
         feature_probability_seed = (
             observed_rate * sample_weight
             + baseline * (1.0 - sample_weight)
         )
     else:
-        feature_probability_seed = no_sample_fallback
+        feature_probability_seed = fallback
 
-    coverage = 0.0
-    required = ["plate_appearances", "at_bats", "hits", "home_runs", "walks", "strikeouts", "ops"]
+    required = [
+        "plate_appearances",
+        "at_bats",
+        "hits",
+        "home_runs",
+        "walks",
+        "strikeouts",
+        "ops",
+    ]
+
     observed = 0
+
     for key in required:
         if to_float(read_attr(stat_line, key, 0), 0.0) > 0:
             observed += 1
+
     coverage = safe_divide(observed, len(required))
 
     return {
@@ -1737,21 +1787,24 @@ def build_probability_inputs(
         "primary_metric": primary_metric,
         "observed_rate": round(observed_rate, 6),
         "league_baseline_rate": round(baseline, 6),
-        "no_sample_fallback_rate": round(no_sample_fallback, 6),
+        "no_sample_fallback_rate": round(fallback, 6),
         "sample_weight": round(sample_weight, 4),
         "feature_probability_seed": round(feature_probability_seed, 6),
-        "sample_size": sample_size,
+        "probability_percent_seed": round(feature_probability_seed * 100.0, 2),
+        "sample_size": stat_line.sample_size,
         "sample_quality": profile.sample_quality.value,
         "coverage": round(coverage, 4),
-        "has_hitting_sample": sample_size > 0,
-        "requires_no_sample_fallback": sample_size <= 0,
+        "coverage_percent": round(coverage * 100.0, 1),
+        "has_hitting_sample": stat_line.sample_size > 0,
+        "requires_no_sample_fallback": stat_line.sample_size <= 0,
         "source_status": stat_line.source_status.value,
         "source_name": stat_line.source_name,
+        "math_formula": "observed_rate * sample_weight + league_baseline_rate * (1 - sample_weight)",
     }
 
 
 # ============================================================
-# SECTION 20 - MISSING FEATURE REPORT
+# SECTION 21 - MISSING FEATURE REPORT
 # ============================================================
 
 def missing_features_for_packet(
@@ -1775,7 +1828,7 @@ def missing_features_for_packet(
 
 
 # ============================================================
-# SECTION 21 - MAIN LIVE FEATURE BUILDER
+# SECTION 22 - MAIN FEATURE BUILDER
 # ============================================================
 
 def build_player_prediction_features(
@@ -1790,9 +1843,18 @@ def build_player_prediction_features(
         "module": MODULE_NAME,
         "module_path": MODULE_PATH,
         "module_version": MODULE_VERSION,
+        "phase": MODULE_PHASE,
         "database_import_error": _DATABASE_IMPORT_ERROR,
         "models_import_error": _MODELS_IMPORT_ERROR,
         "raw_payload_keys": sorted(object_to_dict(payload).keys()),
+        "requested_player_id": request.player_id,
+        "requested_mlb_player_id": request.mlb_player_id,
+        "requested_player_name": request.player_name,
+        "requested_team_id": request.team_id,
+        "requested_mlb_team_id": request.mlb_team_id,
+        "requested_team_name": request.team_name,
+        "requested_season": request.season,
+        "requested_outcome": request.outcome_key,
     }
 
     with managed_feature_session(db_session) as session:
@@ -1803,7 +1865,15 @@ def build_player_prediction_features(
             resolved_team=resolved_team,
         )
 
+        debug["resolved_team_source"] = resolved_team.source
+        debug["resolved_player_source"] = resolved_player.source
+        debug["resolved_internal_player_id"] = resolved_player.internal_player_id
+        debug["resolved_mlb_player_id"] = resolved_player.mlb_player_id
+
         stat_line = stat_line_from_payload(request)
+
+        if stat_line is not None:
+            debug["stat_resolution_path"] = "request_supplied_stat_line"
 
         if stat_line is None:
             stat_line = find_database_season_stat_line(
@@ -1811,18 +1881,28 @@ def build_player_prediction_features(
                 request,
                 session=session,
             )
+            debug["stat_resolution_path"] = stat_line.source_name
 
         if (
             stat_line.sample_size <= 0
             and allow_live_mlb_fallback
-            and resolved_player.resolved
+            and (
+                resolved_player.mlb_player_id
+                or request.mlb_player_id
+                or request.player_name
+            )
         ):
             live_line = fetch_live_mlb_hitting_stat_line(
                 resolved_player,
                 request,
             )
+
+            debug["live_mlb_fallback_checked"] = True
+            debug["live_mlb_fallback_source"] = live_line.source_name
+
             if live_line.sample_size > 0:
                 stat_line = live_line
+                debug["stat_resolution_path"] = live_line.source_name
             else:
                 stat_line.warnings.extend(live_line.warnings)
                 stat_line.source_name = live_line.source_name
@@ -1830,18 +1910,6 @@ def build_player_prediction_features(
 
     if stat_line.sample_size <= 0:
         rates = {key: 0.0 for key in TECHNICAL_RATE_KEYS}
-        rates.update(
-            {
-                "avg": 0.0,
-                "obp": 0.0,
-                "slg": 0.0,
-                "ops": 0.0,
-                "iso": 0.0,
-                "babip": 0.0,
-                "woba": 0.0,
-                "wrc_plus": 0.0,
-            }
-        )
     else:
         rates = calculate_rates(stat_line)
 
@@ -1863,16 +1931,30 @@ def build_player_prediction_features(
         rates,
     )
 
-    valid = bool(
-        resolved_player.resolved
-        and stat_line.sample_size > 0
-        and probability_inputs.get("observed_rate") is not None
-    )
-
+    valid = bool(stat_line.sample_size > 0)
     status = "ok" if valid else "no_hitting_sample"
 
     if not resolved_player.resolved:
         status = "player_not_resolved"
+
+    debug.update(
+        {
+            "final_status": status,
+            "stat_line_found": stat_line.found,
+            "final_source_status": stat_line.source_status.value,
+            "final_source_name": stat_line.source_name,
+            "final_sample_size": stat_line.sample_size,
+            "final_primary_metric": probability_inputs.get("primary_metric"),
+            "final_observed_rate": probability_inputs.get("observed_rate"),
+            "final_feature_probability_seed": probability_inputs.get("feature_probability_seed"),
+            "warnings": [
+                *resolved_team.warnings,
+                *resolved_player.warnings,
+                *stat_line.warnings,
+                *technical_profile.warnings,
+            ],
+        }
+    )
 
     packet_payload_for_hash = {
         "request": asdict(request),
@@ -1921,8 +2003,10 @@ def build_workbench_player_features(
 def build_live_player_feature_packet(
     *,
     player_id: int | None = None,
+    mlb_player_id: int | None = None,
     player_name: str | None = None,
     team_id: int | None = None,
+    mlb_team_id: int | None = None,
     team_name: str | None = None,
     outcome_key: str = "home_run",
     season: int | None = None,
@@ -1931,8 +2015,10 @@ def build_live_player_feature_packet(
     return build_player_prediction_features(
         {
             "player_id": player_id,
+            "mlb_player_id": mlb_player_id,
             "player_name": player_name,
             "team_id": team_id,
+            "mlb_team_id": mlb_team_id,
             "team_name": team_name,
             "outcome_key": outcome_key,
             "season": season,
@@ -1943,7 +2029,7 @@ def build_live_player_feature_packet(
 
 
 # ============================================================
-# SECTION 22 - LEGACY COMPATIBILITY CLASSES
+# SECTION 23 - LEGACY COMPATIBILITY
 # ============================================================
 
 @dataclass(slots=True)
@@ -1984,10 +2070,9 @@ class FeatureVector:
 
 class FeatureBuilder:
     """
-    Compatibility wrapper.
+    Compatibility wrapper for older code.
 
-    Older code can still call FeatureBuilder().build(current=..., history=...).
-    New Workbench code should call build_player_prediction_features().
+    New Workbench code should call build_workbench_player_features().
     """
 
     def build(
@@ -2001,44 +2086,36 @@ class FeatureBuilder:
         **_: Any,
     ) -> FeatureVector:
         current_record = object_to_dict(current)
-        values: dict[str, Any] = {}
-
-        normalized_current = normalize_stat_mapping(
+        line = normalize_stat_mapping(
             current_record,
             source_status=FeatureSourceStatus.REQUEST_SUPPLIED_STAT_LINE,
             source_name="legacy_current_record",
         )
+        rates = calculate_rates(line)
 
-        rates = calculate_rates(normalized_current)
-
-        values.update(
-            {
-                "player_id": first_present(current_record, PLAYER_ID_FIELDS),
-                "team_id": first_present(current_record, TEAM_ID_FIELDS),
-                "season": first_present(current_record, ("season",), utc_now().year),
-                "sample_size": normalized_current.sample_size,
-                **rates,
-            }
-        )
+        values = {
+            "sample_size": line.sample_size,
+            **rates,
+        }
 
         return FeatureVector(
             values=values,
-            as_of=parse_datetime(as_of) or utc_now(),
-            entity_id=values.get("player_id"),
+            as_of=utc_now(),
+            entity_id=first_present(current_record, ("player_id", "mlb_player_id", "id")),
             labels=object_to_dict(labels),
         ).finalize()
 
 
 class PlayerFeatureBuilder(FeatureBuilder):
-    """Compatibility alias for older imports."""
+    """Compatibility alias."""
 
 
 class MatchupFeatureBuilder(FeatureBuilder):
-    """Compatibility alias for older imports."""
+    """Compatibility alias."""
 
 
 class TeamFeatureBuilder(FeatureBuilder):
-    """Compatibility alias for older imports."""
+    """Compatibility alias."""
 
 
 def build_feature_vector(
@@ -2081,7 +2158,7 @@ def build_feature_rows(
 
 
 # ============================================================
-# SECTION 23 - HEALTH AND VALIDATION
+# SECTION 24 - HEALTH AND VALIDATION
 # ============================================================
 
 def feature_builder_health() -> dict[str, Any]:
@@ -2097,17 +2174,18 @@ def feature_builder_health() -> dict[str, Any]:
         "database_import_error": _DATABASE_IMPORT_ERROR,
         "models_import_error": _MODELS_IMPORT_ERROR,
         "capabilities": {
-            "live_player_resolution": True,
-            "team_resolution": True,
+            "separate_internal_and_mlb_player_ids": True,
+            "request_payload_player_fallback": True,
+            "database_player_resolution": True,
             "database_player_season_stats": True,
-            "live_mlb_stats_api_fallback": True,
+            "live_mlb_stats_api_fallback_without_database_player": True,
+            "multi_season_live_fallback": True,
             "player_specific_rates": True,
+            "sample_size_shrinkage": True,
             "technical_profile": True,
-            "probability_input_contract": True,
             "workbench_debug_payload": True,
-            "legacy_feature_vector_wrapper": True,
         },
-        "supported_outcomes": sorted(PREDICTION_OUTCOME_ALIASES.values()),
+        "supported_outcomes": sorted(set(PREDICTION_OUTCOME_ALIASES.values())),
         "checked_at": utc_now().isoformat(),
     }
 
@@ -2115,11 +2193,12 @@ def feature_builder_health() -> dict[str, Any]:
 def validate_feature_builder() -> dict[str, Any]:
     synthetic_payload = {
         "player_id": 592450,
+        "mlb_player_id": 592450,
         "player_name": "Aaron Judge",
         "team_name": "New York Yankees",
         "outcome_key": "home_run",
         "stat_line": {
-            "season": 2026,
+            "season": 2025,
             "plate_appearances": 704,
             "at_bats": 559,
             "hits": 180,
@@ -2150,6 +2229,7 @@ def validate_feature_builder() -> dict[str, Any]:
         "hr_rate_positive": to_float(packet.get("rates", {}).get("hr_per_pa")) > 0,
         "primary_metric_present": bool(packet.get("primary_metric")),
         "probability_seed_present": packet.get("probability_inputs", {}).get("feature_probability_seed") is not None,
+        "probability_not_no_sample_for_synthetic": to_float(packet.get("probability_inputs", {}).get("feature_probability_seed")) > 0.002,
         "technical_profile_present": bool(packet.get("technical_profile")),
         "source_status_present": bool(packet.get("source_status")),
         "legacy_vector_available": isinstance(
@@ -2180,8 +2260,44 @@ def validate_feature_builder() -> dict[str, Any]:
             "primary_metric": packet.get("primary_metric"),
             "observed_rate": packet.get("observed_rate"),
             "feature_probability_seed": packet.get("probability_inputs", {}).get("feature_probability_seed"),
+            "probability_percent_seed": packet.get("probability_inputs", {}).get("probability_percent_seed"),
             "power_profile": packet.get("technical_profile", {}).get("power_profile"),
         },
+    }
+
+
+def validate_live_mlb_feature_builder_probe() -> dict[str, Any]:
+    """
+    Optional live probe.
+
+    This can fail on a machine with no internet, but it should work on Render
+    when outbound HTTPS to statsapi.mlb.com is available.
+    """
+
+    payload = {
+        "mlb_player_id": 592450,
+        "player_name": "Aaron Judge",
+        "team_name": "New York Yankees",
+        "outcome_key": "home_run",
+    }
+
+    packet = build_player_prediction_features(
+        payload,
+        db_session=None,
+        allow_live_mlb_fallback=True,
+    )
+
+    return {
+        "status": "ok" if to_int(packet.get("sample_size"), 0) > 0 else "no_sample_or_network_failed",
+        "phase": MODULE_PHASE,
+        "player_name": packet.get("player_name"),
+        "sample_size": packet.get("sample_size"),
+        "source_status": packet.get("source_status"),
+        "source_name": packet.get("source_name"),
+        "primary_metric": packet.get("primary_metric"),
+        "observed_rate": packet.get("observed_rate"),
+        "probability_inputs": packet.get("probability_inputs"),
+        "debug": packet.get("debug"),
     }
 
 
@@ -2192,6 +2308,7 @@ def validate_feature_builder_enterprise() -> dict[str, Any]:
 def feature_builder_enterprise_health() -> dict[str, Any]:
     validation = validate_feature_builder()
     health = feature_builder_health()
+
     return {
         **health,
         "validation": validation,
@@ -2200,7 +2317,7 @@ def feature_builder_enterprise_health() -> dict[str, Any]:
 
 
 # ============================================================
-# SECTION 24 - PUBLIC EXPORTS
+# SECTION 25 - PUBLIC EXPORTS
 # ============================================================
 
 __all__ = [
@@ -2212,7 +2329,6 @@ __all__ = [
     "FeatureBuilderError",
     "PlayerResolutionError",
     "StatResolutionError",
-    "FeatureSchemaError",
     "FeatureSourceStatus",
     "SampleQuality",
     "PredictionFamily",
@@ -2235,6 +2351,7 @@ __all__ = [
     "feature_builder_health",
     "validate_feature_builder",
     "validate_feature_builder_enterprise",
+    "validate_live_mlb_feature_builder_probe",
     "feature_builder_enterprise_health",
     "safe_divide",
     "to_float",
@@ -2246,11 +2363,12 @@ __all__ = [
 
 
 # ============================================================
-# SECTION 25 - LOCAL VALIDATION ENTRYPOINT
+# SECTION 26 - LOCAL VALIDATION ENTRYPOINT
 # ============================================================
 
 if __name__ == "__main__":
     report = validate_feature_builder()
     print(json.dumps(report, indent=2, sort_keys=True, default=str))
+
     if report.get("status") != "ok":
         raise SystemExit(1)
