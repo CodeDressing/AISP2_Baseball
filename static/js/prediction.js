@@ -1,18 +1,29 @@
 ﻿/* ============================================================
-   AISP2 BASEBALL
+   AISP2 BASEBALL INTELLIGENCE PLATFORM
    FILE: static/js/prediction.js
-   PHASE: PHASE 12 PART 5.9
+   PHASE: PHASE 16 PART 3C
    PURPOSE:
-   Clean enterprise Prediction Workbench runtime.
+   Prediction Workbench frontend runtime.
 
-   RESPONSIBILITIES:
-   - Load teams and players from Python bootstrap endpoints.
-   - Populate Team and Player selectors.
-   - Keep selector diagnostics synchronized.
-   - Call POST /predict/player.
-   - Fill every runtime section with real response values.
-   - Label unavailable datasets honestly as Pending Ingestion.
-   - Avoid old demo-only prediction logic.
+   CORE FIX:
+   - Stop sending incomplete player/team payloads.
+   - Stop rendering JavaScript objects as [object Object].
+   - Send clean scalar values:
+       team_id
+       mlb_team_id
+       team_name
+       player_id
+       mlb_player_id
+       player_name
+       outcome_key
+       outcome_label
+       season
+   - Use /api/prediction/workbench/run as the primary runtime endpoint.
+   - Render backend-resolved player, source, sample size, and math proof.
+
+   COMPLETION GATE:
+   Browser DevTools Network payload must show clean scalar values.
+   No [object Object] should appear anywhere on the Workbench.
    ============================================================ */
 
 
@@ -29,7 +40,8 @@ const AISP2_PREDICTION_STATE = {
     endpoints: {
         bootstrapPrimary: "/api/player-explorer/bootstrap",
         bootstrapV2: "/api/v2/player-explorer/bootstrap",
-        prediction: "/predict/player"
+        prediction: "/api/prediction/workbench/run",
+        legacyPrediction: "/predict/player"
     },
 
     teams: [],
@@ -42,6 +54,7 @@ const AISP2_PREDICTION_STATE = {
     warnings: [],
     diagnostics: {},
 
+    lastPayload: null,
     lastPrediction: null,
     lastError: null
 };
@@ -94,7 +107,17 @@ function hydrateEndpointsFromTemplate() {
             shell.dataset.v2BootstrapEndpoint;
     }
 
-    if (shell.dataset.predictionEndpoint) {
+    /*
+       Important:
+       Older templates may still declare /predict/player.
+       Phase 16 Part 3C intentionally routes the Workbench through
+       /api/prediction/workbench/run because that endpoint carries the
+       feature-builder debug contract.
+    */
+    if (
+        shell.dataset.predictionEndpoint &&
+        shell.dataset.predictionEndpoint.indexOf("/api/prediction/workbench/run") >= 0
+    ) {
         AISP2_PREDICTION_STATE.endpoints.prediction =
             shell.dataset.predictionEndpoint;
     }
@@ -158,13 +181,41 @@ function selectedOption(selectElement) {
 }
 
 
-function setText(selector, value) {
-    const text =
-        value === null ||
-        value === undefined ||
-        value === ""
-            ? "Pending"
-            : String(value);
+function safeDisplay(value, fallback) {
+    if (value === null || value === undefined || value === "") {
+        return fallback || "Pending";
+    }
+
+    if (typeof value === "object") {
+        if (value.name) {
+            return String(value.name);
+        }
+
+        if (value.label) {
+            return String(value.label);
+        }
+
+        if (value.full_name) {
+            return String(value.full_name);
+        }
+
+        if (value.player_name) {
+            return String(value.player_name);
+        }
+
+        if (value.team_name) {
+            return String(value.team_name);
+        }
+
+        return fallback || "Pending";
+    }
+
+    return String(value);
+}
+
+
+function setText(selector, value, fallback) {
+    const text = safeDisplay(value, fallback);
 
     qsa(selector).forEach(function(element) {
         element.textContent = text;
@@ -183,19 +234,12 @@ function setList(selector, values) {
 
         items.forEach(function(item) {
             const li = document.createElement("li");
-
-            if (typeof item === "string") {
-                li.textContent = item;
-            } else if (item && typeof item === "object") {
-                li.textContent =
-                    item.message ||
-                    item.detail ||
-                    item.error ||
-                    JSON.stringify(item);
-            } else {
-                li.textContent = String(item);
-            }
-
+            li.textContent = safeDisplay(
+                item && typeof item === "object"
+                    ? item.message || item.detail || item.error || JSON.stringify(item)
+                    : item,
+                "Pending"
+            );
             element.appendChild(li);
         });
     });
@@ -276,6 +320,10 @@ function safeNumber(value) {
         return null;
     }
 
+    if (typeof value === "string") {
+        value = value.replace("%", "").replace(",", "").trim();
+    }
+
     const number = Number(value);
 
     if (Number.isNaN(number) || !Number.isFinite(number)) {
@@ -286,6 +334,65 @@ function safeNumber(value) {
 }
 
 
+function scalarId(value) {
+    if (value === null || value === undefined || value === "") {
+        return "";
+    }
+
+    const text = String(value).trim();
+
+    if (!text || text === "[object Object]") {
+        return "";
+    }
+
+    return text;
+}
+
+
+function scalarNumberOrText(value) {
+    const text = scalarId(value);
+
+    if (!text) {
+        return "";
+    }
+
+    if (/^\d+$/.test(text)) {
+        return Number(text);
+    }
+
+    return text;
+}
+
+
+function normalizeOutcomeKey(value) {
+    const raw = String(value || "home_run")
+        .trim()
+        .toLowerCase()
+        .replace(/-/g, "_")
+        .replace(/\s+/g, "_");
+
+    const aliases = {
+        hr: "home_run",
+        homer: "home_run",
+        home_runs: "home_run",
+        hits: "hit",
+        singles: "single",
+        doubles: "double",
+        triples: "triple",
+        walks: "walk",
+        bb: "walk",
+        strikeouts: "strikeout",
+        k: "strikeout",
+        ks: "strikeout",
+        runs: "run_scored",
+        run: "run_scored",
+        tb: "total_bases"
+    };
+
+    return aliases[raw] || raw || "home_run";
+}
+
+
 function formatPercent(value, fallback) {
     const number = safeNumber(value);
 
@@ -293,7 +400,7 @@ function formatPercent(value, fallback) {
         return fallback || "Pending";
     }
 
-    return String(number) + "%";
+    return String(Number(number.toFixed(1))) + "%";
 }
 
 
@@ -309,8 +416,10 @@ function formatCount(value, fallback) {
 
 
 function formatSource(value) {
+    const source = safeDisplay(value, "Runtime");
+
     return titleCase(
-        String(value || "Runtime")
+        source
             .replace(/api/gi, "API")
             .replace(/mlb/gi, "MLB")
     );
@@ -326,7 +435,8 @@ function isInvalidSelectorValue(value) {
         text.includes("pending") ||
         text.includes("unavailable") ||
         text.includes("select a") ||
-        text.includes("no players")
+        text.includes("no players") ||
+        text.includes("object object")
     );
 }
 
@@ -417,8 +527,7 @@ async function handleTeamChange() {
     const teamSelector = getTeamSelector();
     const team = resolveTeam(teamSelector ? teamSelector.value : "");
 
-    await renderPlayersForTeam(team);
-
+    renderPlayersForTeam(team);
     updateSelectedContextPreview();
 }
 
@@ -431,8 +540,9 @@ async function fetchJson(endpoint) {
     const response = await fetch(endpoint, {
         method: "GET",
         headers: {
-            "Accept": "application/json"
-        }
+            Accept: "application/json"
+        },
+        credentials: "same-origin"
     });
 
     let payload = null;
@@ -453,6 +563,38 @@ async function fetchJson(endpoint) {
     }
 
     return payload;
+}
+
+
+async function postJson(endpoint, payload) {
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+        },
+        credentials: "same-origin",
+        body: JSON.stringify(payload)
+    });
+
+    let result = null;
+
+    try {
+        result = await response.json();
+    } catch (error) {
+        throw new Error(endpoint + " returned invalid JSON.");
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            result.detail ||
+            result.message ||
+            result.error ||
+            "Prediction request failed."
+        );
+    }
+
+    return result;
 }
 
 
@@ -488,7 +630,6 @@ function buildEmergencyBootstrap(primaryError, v2Error) {
     return {
         status: "partial",
         bootstrap_source: "emergency_static_fallback",
-        selector_status: "emergency_static_fallback",
         team_count: 3,
         player_count: 3,
         teams: [
@@ -564,12 +705,20 @@ function buildEmergencyBootstrap(primaryError, v2Error) {
 
 function normalizeBootstrapPayload(payload) {
     const teams = normalizeTeams(payload.teams || []);
-    const playersByTeam = normalizePlayersByTeam(
+
+    let playersByTeam = normalizePlayersByTeam(
         payload.players_by_team ||
         payload.playersByTeam ||
         {}
     );
 
+    /*
+       Some v2 bootstrap payloads provide teams only.
+       In that case selectors still load teams, but player lists
+       may require a team-specific endpoint later. This file keeps
+       the primary /api/player-explorer/bootstrap route preferred
+       because it usually includes players_by_team.
+    */
     const source =
         payload.bootstrap_source ||
         payload.selector_source ||
@@ -656,15 +805,17 @@ function normalizeTeam(team) {
         "";
 
     return {
-        id: String(id),
-        mlb_team_id: mlbTeamId !== null && mlbTeamId !== undefined ? String(mlbTeamId) : "",
+        id: scalarId(id),
+        team_id: scalarId(team.team_id || team.id || id),
+        database_id: scalarId(team.database_id || team.id || id),
+        mlb_team_id: scalarId(mlbTeamId),
         name: String(name),
         team_name: String(name),
-        abbreviation: team.abbreviation || "",
-        club_name: team.club_name || team.clubName || "",
-        short_name: team.short_name || team.shortName || "",
-        location_name: team.location_name || team.locationName || "",
-        source: team.source || "bootstrap"
+        abbreviation: scalarId(team.abbreviation),
+        club_name: scalarId(team.club_name || team.clubName),
+        short_name: scalarId(team.short_name || team.shortName),
+        location_name: scalarId(team.location_name || team.locationName),
+        source: scalarId(team.source || "bootstrap")
     };
 }
 
@@ -731,14 +882,17 @@ function normalizePlayersArray(players) {
             seen.add(dedupeKey);
 
             return {
-                id: String(id),
-                mlb_player_id: mlbPlayerId !== null && mlbPlayerId !== undefined ? String(mlbPlayerId) : "",
+                id: scalarId(id),
+                database_id: scalarId(player.database_id || player.id || id),
+                player_id: scalarId(player.player_id || player.id || id),
+                mlb_player_id: scalarId(mlbPlayerId),
                 full_name: String(fullName),
                 name: String(fullName),
-                position: player.position || player.position_name || "",
-                position_code: player.position_code || player.positionCode || "",
-                team_id: player.team_id || player.current_team_id || "",
-                source: player.source || "bootstrap"
+                player_name: String(fullName),
+                position: scalarId(player.position || player.position_name),
+                position_code: scalarId(player.position_code || player.positionCode),
+                team_id: scalarId(player.team_id || player.current_team_id),
+                source: scalarId(player.source || "bootstrap")
             };
         })
         .filter(Boolean)
@@ -781,6 +935,7 @@ function countUniquePlayers(playersByTeam) {
             seen.add(
                 String(
                     player.mlb_player_id ||
+                    player.player_id ||
                     player.id ||
                     player.full_name ||
                     player.name
@@ -803,13 +958,14 @@ function buildTeamIndex(teams) {
     teams.forEach(function(team) {
         const keys = [
             team.id,
+            team.team_id,
+            team.database_id,
             team.mlb_team_id,
             team.name,
             team.team_name,
             team.abbreviation,
             team.club_name,
             team.short_name,
-            team.location_name,
             normalizeText(team.name),
             compactText(team.name),
             normalizeText(team.abbreviation),
@@ -833,6 +989,7 @@ function resolveTeam(value) {
     if (option) {
         keys.push(
             option.dataset.teamId,
+            option.dataset.databaseId,
             option.dataset.mlbTeamId,
             option.value,
             option.textContent
@@ -871,6 +1028,8 @@ function getPlayersForTeam(team) {
 
     const keys = [
         team.id,
+        team.team_id,
+        team.database_id,
         team.mlb_team_id,
         team.name,
         team.team_name,
@@ -982,15 +1141,19 @@ function renderTeamSelector() {
     }
 
     AISP2_PREDICTION_STATE.teams.forEach(function(team) {
+        const optionValue = team.id || team.team_id || team.mlb_team_id || team.name;
+
         addOption(
             teamSelector,
-            team.name,
+            optionValue,
             team.name,
             {
-                teamId: team.id,
-                mlbTeamId: team.mlb_team_id,
-                abbreviation: team.abbreviation,
-                source: team.source
+                teamId: team.id || team.team_id || "",
+                databaseId: team.database_id || team.id || "",
+                mlbTeamId: team.mlb_team_id || "",
+                teamName: team.name || "",
+                abbreviation: team.abbreviation || "",
+                source: team.source || ""
             }
         );
     });
@@ -999,8 +1162,12 @@ function renderTeamSelector() {
         AISP2_PREDICTION_STATE.selectedTeam ||
         AISP2_PREDICTION_STATE.teams[0];
 
-    if (selectedTeam && selectedTeam.name) {
-        teamSelector.value = selectedTeam.name;
+    if (selectedTeam) {
+        teamSelector.value =
+            selectedTeam.id ||
+            selectedTeam.team_id ||
+            selectedTeam.mlb_team_id ||
+            selectedTeam.name;
     }
 }
 
@@ -1029,16 +1196,26 @@ function renderPlayersForTeam(team) {
     }
 
     players.forEach(function(player) {
+        const optionValue =
+            player.id ||
+            player.player_id ||
+            player.database_id ||
+            player.mlb_player_id ||
+            player.full_name;
+
         addOption(
             playerSelector,
-            player.full_name || player.name,
+            optionValue,
             player.full_name || player.name,
             {
-                playerId: player.id,
-                mlbPlayerId: player.mlb_player_id,
-                position: player.position,
-                positionCode: player.position_code,
-                source: player.source
+                playerId: player.id || player.player_id || "",
+                databaseId: player.database_id || player.id || "",
+                mlbPlayerId: player.mlb_player_id || "",
+                playerName: player.full_name || player.name || "",
+                position: player.position || "",
+                positionCode: player.position_code || "",
+                teamId: player.team_id || team.id || "",
+                source: player.source || ""
             }
         );
     });
@@ -1048,7 +1225,9 @@ function renderPlayersForTeam(team) {
     AISP2_PREDICTION_STATE.selectedTeam = team;
     AISP2_PREDICTION_STATE.selectedPlayers = players;
 
-    setText("[data-player-selector-note]", "Selected player: " + playerSelector.value + ".");
+    const playerPayload = getSelectedPlayerPayload();
+
+    setText("[data-player-selector-note]", "Selected player: " + playerPayload.player_name + ".");
     updateSelectorDiagnostics();
 }
 
@@ -1062,6 +1241,8 @@ function updateSelectorDiagnostics() {
             ? AISP2_PREDICTION_STATE.fallbackChain.join(" -> ")
             : "selector_runtime";
 
+    const currentPayload = collectPredictionPayload();
+
     setText("[data-selector-health]", "Ready");
     setText("[data-selector-state]", "Ready");
     setText("[data-teams-loaded]", teamCount);
@@ -1069,7 +1250,7 @@ function updateSelectorDiagnostics() {
     setText("[data-bootstrap-source]", source);
     setText("[data-selector-source]", source);
     setText("[data-fallback-chain]", fallbackChain);
-    setText("[data-team-selector-note]", "Selected team: " + (getTeamSelector() ? getTeamSelector().value : "Pending") + ".");
+    setText("[data-team-selector-note]", "Selected team: " + (currentPayload.team_name || "Pending") + ".");
     setText("[data-selector-warning]", "Runtime selectors are populated and ready.");
 
     const diagnostics = AISP2_PREDICTION_STATE.diagnostics || {};
@@ -1086,41 +1267,124 @@ function updateSelectorDiagnostics() {
 
 
 /* ============================================================
-   SECTION 11 - PAYLOAD
+   SECTION 11 - CLEAN PAYLOAD BUILDER
    ============================================================ */
 
-function collectPredictionPayload() {
+function getSelectedTeamPayload() {
     const teamSelector = getTeamSelector();
-    const playerSelector = getPlayerSelector();
-    const outcomeSelector = getOutcomeSelector();
+    const option = selectedOption(teamSelector);
+    const resolvedTeam = resolveTeam(teamSelector ? teamSelector.value : "");
 
-    const teamOption = selectedOption(teamSelector);
-    const playerOption = selectedOption(playerSelector);
+    const teamName =
+        (option && option.dataset.teamName) ||
+        (resolvedTeam && resolvedTeam.name) ||
+        (option && option.textContent) ||
+        "";
 
     return {
-        team: teamSelector ? teamSelector.value : "",
-        team_id: teamOption ? teamOption.dataset.teamId || "" : "",
-        mlb_team_id: teamOption ? teamOption.dataset.mlbTeamId || "" : "",
-        player: playerSelector ? playerSelector.value : "",
-        player_id: playerOption ? playerOption.dataset.playerId || "" : "",
-        mlb_player_id: playerOption ? playerOption.dataset.mlbPlayerId || "" : "",
-        outcome: outcomeSelector ? outcomeSelector.value : "home_run"
+        team_id: scalarNumberOrText(
+            (option && (option.dataset.teamId || option.dataset.databaseId)) ||
+            (resolvedTeam && (resolvedTeam.id || resolvedTeam.team_id || resolvedTeam.database_id))
+        ),
+        mlb_team_id: scalarNumberOrText(
+            (option && option.dataset.mlbTeamId) ||
+            (resolvedTeam && resolvedTeam.mlb_team_id)
+        ),
+        team_name: safeDisplay(teamName, "")
     };
+}
+
+
+function getSelectedPlayerPayload() {
+    const playerSelector = getPlayerSelector();
+    const option = selectedOption(playerSelector);
+
+    const playerName =
+        (option && option.dataset.playerName) ||
+        (option && option.textContent) ||
+        "";
+
+    return {
+        player_id: scalarNumberOrText(
+            option && (option.dataset.playerId || option.dataset.databaseId || option.value)
+        ),
+        mlb_player_id: scalarNumberOrText(
+            option && option.dataset.mlbPlayerId
+        ),
+        player_name: safeDisplay(playerName, ""),
+        position: scalarId(option && option.dataset.position),
+        position_code: scalarId(option && option.dataset.positionCode)
+    };
+}
+
+
+function getSelectedOutcomePayload() {
+    const outcomeSelector = getOutcomeSelector();
+    const option = selectedOption(outcomeSelector);
+
+    const rawOutcome =
+        outcomeSelector && outcomeSelector.value
+            ? outcomeSelector.value
+            : "home_run";
+
+    const outcomeKey = normalizeOutcomeKey(rawOutcome);
+
+    return {
+        outcome_key: outcomeKey,
+        outcome: outcomeKey,
+        outcome_label: option ? safeDisplay(option.textContent, titleCase(outcomeKey)) : titleCase(outcomeKey)
+    };
+}
+
+
+function collectPredictionPayload() {
+    const team = getSelectedTeamPayload();
+    const player = getSelectedPlayerPayload();
+    const outcome = getSelectedOutcomePayload();
+
+    const payload = {
+        team_id: team.team_id,
+        mlb_team_id: team.mlb_team_id,
+        team_name: team.team_name,
+        team: team.team_name,
+
+        player_id: player.player_id,
+        mlb_player_id: player.mlb_player_id,
+        player_name: player.player_name,
+        player: player.player_name,
+
+        outcome_key: outcome.outcome_key,
+        outcome: outcome.outcome_key,
+        outcome_label: outcome.outcome_label,
+
+        season: new Date().getUTCFullYear(),
+
+        frontend_version: "phase_16_part_3c_prediction_payload_fix",
+        payload_contract: "clean_scalar_prediction_payload"
+    };
+
+    AISP2_PREDICTION_STATE.lastPayload = payload;
+
+    return payload;
 }
 
 
 function validatePredictionPayload(payload) {
     const errors = [];
 
-    if (!payload.team || isInvalidSelectorValue(payload.team)) {
+    if (!payload.team_name || isInvalidSelectorValue(payload.team_name)) {
         errors.push("Select a valid team before running a prediction.");
     }
 
-    if (!payload.player || isInvalidSelectorValue(payload.player)) {
+    if (!payload.player_name || isInvalidSelectorValue(payload.player_name)) {
         errors.push("Select a valid player before running a prediction.");
     }
 
-    if (!payload.outcome) {
+    if (!payload.player_id && !payload.mlb_player_id) {
+        errors.push("Selected player is missing player_id and mlb_player_id.");
+    }
+
+    if (!payload.outcome_key) {
         errors.push("Select an outcome before running a prediction.");
     }
 
@@ -1133,19 +1397,17 @@ function validatePredictionPayload(payload) {
 
 function updateSelectedContextPreview() {
     const payload = collectPredictionPayload();
-    const outcomeSelector = getOutcomeSelector();
-    const outcomeOption = selectedOption(outcomeSelector);
 
-    if (payload.player && !isInvalidSelectorValue(payload.player)) {
-        setText("[data-result-player]", payload.player);
-        setText("[data-intelligence-summary]", "Ready to generate prediction intelligence for " + payload.player + ".");
+    if (payload.player_name && !isInvalidSelectorValue(payload.player_name)) {
+        setText("[data-result-player]", payload.player_name);
+        setText("[data-intelligence-summary]", "Ready to generate prediction intelligence for " + payload.player_name + ".");
     } else {
         setText("[data-result-player]", "Choose Player");
         setText("[data-intelligence-summary]", "Select a team, player, and outcome to generate AISP2 prediction intelligence.");
     }
 
-    setText("[data-result-team]", payload.team || "Team Pending");
-    setText("[data-result-outcome]", outcomeOption ? outcomeOption.textContent : titleCase(payload.outcome));
+    setText("[data-result-team]", payload.team_name || "Team Pending");
+    setText("[data-result-outcome]", payload.outcome_label || titleCase(payload.outcome_key));
 }
 
 
@@ -1169,43 +1431,39 @@ async function runPrediction() {
     setPredictionLoading(true);
 
     try {
-        const response = await fetch(AISP2_PREDICTION_STATE.endpoints.prediction, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            },
-            body: JSON.stringify({
-                team: payload.team,
-                player: payload.player,
-                outcome: payload.outcome
-            })
-        });
-
-        let result = null;
-
-        try {
-            result = await response.json();
-        } catch (error) {
-            throw new Error("Prediction endpoint returned invalid JSON.");
-        }
-
-        if (!response.ok) {
-            throw new Error(
-                result.detail ||
-                result.message ||
-                result.error ||
-                "Prediction request failed."
-            );
-        }
+        const result = await postJson(
+            AISP2_PREDICTION_STATE.endpoints.prediction,
+            payload
+        );
 
         AISP2_PREDICTION_STATE.lastPrediction = result;
         AISP2_PREDICTION_STATE.lastError = null;
 
         renderPredictionResult(result);
-    } catch (error) {
-        AISP2_PREDICTION_STATE.lastError = error;
-        renderPredictionError(error.message || "Prediction failed.");
+    } catch (primaryError) {
+        /*
+           Legacy fallback remains available only as a rescue path.
+           It still receives the clean scalar payload.
+        */
+        try {
+            const legacyResult = await postJson(
+                AISP2_PREDICTION_STATE.endpoints.legacyPrediction,
+                payload
+            );
+
+            legacyResult.frontend_primary_error = primaryError.message;
+            AISP2_PREDICTION_STATE.lastPrediction = legacyResult;
+            AISP2_PREDICTION_STATE.lastError = null;
+
+            renderPredictionResult(legacyResult);
+        } catch (legacyError) {
+            AISP2_PREDICTION_STATE.lastError = legacyError;
+            renderPredictionError(
+                legacyError.message ||
+                primaryError.message ||
+                "Prediction failed."
+            );
+        }
     } finally {
         setPredictionLoading(false);
     }
@@ -1224,97 +1482,199 @@ function setPredictionLoading(isLoading) {
 
     if (isLoading) {
         setText("[data-intelligence-summary]", "Running prediction request...");
-        setText("[data-intelligence-reasoning]", "AISP2 is requesting Python model output from /predict/player.");
+        setText("[data-intelligence-reasoning]", "AISP2 is sending clean player/team IDs to the Workbench prediction endpoint.");
     }
 }
 
 
 /* ============================================================
-   SECTION 13 - RESULT RENDERING
+   SECTION 13 - RESULT NORMALIZATION
+   ============================================================ */
+
+function getPredictionProbability(result) {
+    const prediction = result.prediction || {};
+
+    return (
+        prediction.estimated_probability ??
+        prediction.probability ??
+        result.probability
+    );
+}
+
+
+function getPredictionConfidence(result) {
+    const prediction = result.prediction || {};
+
+    return (
+        prediction.confidence ??
+        result.confidence
+    );
+}
+
+
+function getResolvedPlayerName(result) {
+    const debug = result.debug || {};
+    const dataStatus = result.data_status || {};
+
+    return safeDisplay(
+        result.player_name ||
+        result.player ||
+        debug.resolved_player_name ||
+        dataStatus.resolved_player_name ||
+        collectPredictionPayload().player_name,
+        "Unknown Player"
+    );
+}
+
+
+function getResolvedTeamName(result) {
+    const team = result.team || {};
+    const teamName =
+        result.team_name ||
+        (typeof team === "object" ? team.name : team) ||
+        collectPredictionPayload().team_name;
+
+    return safeDisplay(teamName, "Unknown Team");
+}
+
+
+function getResultOutcome(result) {
+    const outcome = result.outcome || {};
+    const fallback = collectPredictionPayload();
+
+    return {
+        key: normalizeOutcomeKey(outcome.key || result.outcome_key || fallback.outcome_key),
+        label: safeDisplay(outcome.label || fallback.outcome_label, titleCase(fallback.outcome_key))
+    };
+}
+
+
+function getFeaturePacket(result) {
+    return result.feature_packet && typeof result.feature_packet === "object"
+        ? result.feature_packet
+        : {};
+}
+
+
+/* ============================================================
+   SECTION 14 - RESULT RENDERING
    ============================================================ */
 
 function renderPredictionResult(result) {
     const prediction = result.prediction || {};
     const intelligence = result.intelligence || {};
     const supporting = result.supporting_context || {};
-    const outcome = result.outcome || {};
     const dataStatus = result.data_status || {};
-    const team =
-        result.team && typeof result.team === "object"
-            ? result.team
-            : { name: result.team };
+    const featurePacket = getFeaturePacket(result);
+    const probabilityInputs = featurePacket.probability_inputs || {};
+    const technicalProfile =
+        intelligence.technical_profile ||
+        supporting.technical_profile ||
+        featurePacket.technical_profile ||
+        {};
 
-    const probability =
-        prediction.estimated_probability ??
-        prediction.probability ??
-        result.probability;
+    const outcome = getResultOutcome(result);
 
-    const confidence =
-        prediction.confidence ??
-        result.confidence;
+    const probability = getPredictionProbability(result);
+    const confidence = getPredictionConfidence(result);
+
+    const playerName = getResolvedPlayerName(result);
+    const teamName = getResolvedTeamName(result);
 
     const tier =
         intelligence.tier ||
         prediction.tier ||
-        "Identity-Aware Baseline";
+        prediction.prediction_tier ||
+        "Player-Specific Baseline";
 
     const risk =
         intelligence.risk_profile ||
         prediction.risk_profile ||
-        "Warehouse Pending";
+        technicalProfile.primary_risk ||
+        "Normal Baseball Variance";
 
     const outcomeProfile =
         intelligence.outcome_profile ||
-        supporting.player_style ||
-        "Outcome Runtime Profile";
+        technicalProfile.power_profile ||
+        technicalProfile.contact_profile ||
+        "Player-Specific Outcome Profile";
 
     const primaryMetric =
         intelligence.primary_metric ||
         supporting.primary_metric ||
-        "Primary Runtime Feature";
+        prediction.primary_metric ||
+        result.primary_metric ||
+        probabilityInputs.primary_metric ||
+        "Player Observed Rate";
 
     const model =
         prediction.model ||
         result.model ||
-        "AISP2 Identity-Aware Baseline";
+        "AISP2 Player-Specific Feature Baseline";
 
     const dataSource =
         intelligence.data_source ||
         prediction.prediction_source ||
+        result.source ||
+        result.source_status ||
+        featurePacket.source_status ||
         "Prediction Runtime";
 
     const coverage =
         intelligence.data_coverage ??
         prediction.data_coverage ??
+        dataStatus.coverage ??
         dataStatus.data_coverage ??
-        0;
+        (
+            probabilityInputs.coverage !== undefined
+                ? probabilityInputs.coverage * 100
+                : null
+        );
 
     const warehouse =
         intelligence.warehouse_status ||
         prediction.warehouse_status ||
+        dataStatus.warehouse_status ||
         (
-            safeNumber(coverage) && safeNumber(coverage) > 0
-                ? "Warehouse Partial"
-                : "Pending Ingestion"
+            safeNumber(result.sample_size) > 0
+                ? "Feature Builder Connected"
+                : "No Hitting Sample"
         );
 
     const sampleSize =
         intelligence.sample_size ??
         prediction.sample_size ??
-        prediction.plate_appearances ??
-        "Pending Ingestion";
+        result.sample_size ??
+        dataStatus.sample_size ??
+        featurePacket.sample_size ??
+        "Pending";
+
+    const observedRate =
+        prediction.observed_rate ??
+        supporting.observed_rate ??
+        probabilityInputs.observed_rate;
+
+    const leagueBaselineRate =
+        prediction.league_baseline_rate ??
+        supporting.league_baseline_rate ??
+        probabilityInputs.league_baseline_rate;
 
     const explanation =
         intelligence.ai_explanation ||
         supporting.ai_explanation ||
         result.explanation ||
-        (
-            "AISP2 generated this runtime prediction using the currently available selector identity, outcome, and backend prediction response. Advanced warehouse, matchup, weather, and Monte Carlo data remain pending until those datasets are connected."
+        buildMathExplanation(
+            playerName,
+            outcome.label,
+            primaryMetric,
+            observedRate,
+            leagueBaselineRate,
+            sampleSize
         );
 
-    setText("[data-result-player]", result.player || collectPredictionPayload().player || "Unknown Player");
-    setText("[data-result-team]", team.name || collectPredictionPayload().team || "Unknown Team");
-    setText("[data-result-outcome]", outcome.label || titleCase(outcome.key || collectPredictionPayload().outcome || "Prediction"));
+    setText("[data-result-player]", playerName);
+    setText("[data-result-team]", teamName);
+    setText("[data-result-outcome]", outcome.label);
     setText("[data-result-probability]", formatPercent(probability));
     setText("[data-result-confidence]", formatPercent(confidence, "Confidence Pending"));
     setText("[data-result-tier]", tier);
@@ -1323,8 +1683,8 @@ function renderPredictionResult(result) {
     setText("[data-result-supporting-metric]", primaryMetric);
     setText("[data-result-model]", model);
     setText("[data-result-model-secondary]", model);
-    setText("[data-result-style]", supporting.player_style || outcomeProfile);
-    setText("[data-result-form]", supporting.recent_form || "Pending Ingestion");
+    setText("[data-result-style]", supporting.player_style || technicalProfile.primary_strength || outcomeProfile);
+    setText("[data-result-form]", supporting.recent_form || "Season-stat feature packet active");
     setText("[data-result-metric]", primaryMetric);
     setText("[data-result-source]", formatSource(dataSource));
     setText("[data-result-data-coverage]", formatPercent(coverage));
@@ -1343,7 +1703,8 @@ function renderPredictionResult(result) {
     setText(
         "[data-intelligence-guidance]",
         intelligence.model_guidance ||
-        "Use this as a transparent model estimate while warehouse and matchup data continue to be connected."
+        technicalProfile.model_guidance ||
+        "Player-specific rate math active. Full calibration requires matchup, Statcast, and backtesting layers."
     );
     setText("[data-intelligence-reasoning]", explanation);
     setText("[data-warehouse-status]", warehouse);
@@ -1352,23 +1713,66 @@ function renderPredictionResult(result) {
         "[data-intelligence-warnings]",
         intelligence.warnings ||
         result.warnings ||
-        buildWarnings(warehouse, dataStatus)
+        buildWarnings(warehouse, dataStatus, sampleSize)
     );
 
     setList(
         "[data-intelligence-next-data]",
         intelligence.next_data_needed ||
         result.next_data_needed ||
-        buildNextDataNeeded(warehouse, dataStatus)
+        buildNextDataNeeded(warehouse, dataStatus, sampleSize)
     );
 
     renderOutcomeLibrary(result, probability, outcome.key);
-    renderTransparentPendingSections(model);
+    renderTransparentRuntimeSections(model);
+    exposeDebugPayload(result);
 }
 
 
-function buildWarnings(warehouse, dataStatus) {
+function buildMathExplanation(playerName, outcomeLabel, primaryMetric, observedRate, leagueBaselineRate, sampleSize) {
+    const sample = safeNumber(sampleSize);
+
+    if (sample === null || sample <= 0) {
+        return (
+            playerName +
+            " has no usable hitting sample for " +
+            outcomeLabel +
+            ". AISP2 is correctly blocking a fabricated player-specific projection."
+        );
+    }
+
+    const observed =
+        safeNumber(observedRate) !== null
+            ? formatPercent(safeNumber(observedRate) * 100)
+            : "available";
+
+    const baseline =
+        safeNumber(leagueBaselineRate) !== null
+            ? formatPercent(safeNumber(leagueBaselineRate) * 100)
+            : "available";
+
+    return (
+        "AISP2 calculated " +
+        playerName +
+        " using " +
+        primaryMetric +
+        ". The engine blends the player's observed rate (" +
+        observed +
+        ") with the league baseline (" +
+        baseline +
+        ") using sample-size shrinkage across " +
+        sample +
+        " opportunities."
+    );
+}
+
+
+function buildWarnings(warehouse, dataStatus, sampleSize) {
     const warnings = [];
+
+    if (safeNumber(sampleSize) === null || safeNumber(sampleSize) <= 0) {
+        warnings.push("No player-specific prediction was calculated because no usable hitting sample was found.");
+    }
 
     if (warehouse === "Pending Ingestion") {
         warnings.push("Advanced warehouse data is pending ingestion.");
@@ -1390,7 +1794,7 @@ function buildWarnings(warehouse, dataStatus) {
 }
 
 
-function buildNextDataNeeded(warehouse, dataStatus) {
+function buildNextDataNeeded(warehouse, dataStatus, sampleSize) {
     if (
         dataStatus &&
         Array.isArray(dataStatus.missing_sources) &&
@@ -1402,6 +1806,12 @@ function buildNextDataNeeded(warehouse, dataStatus) {
     }
 
     const items = [];
+
+    if (safeNumber(sampleSize) === null || safeNumber(sampleSize) <= 0) {
+        items.push("Verify Workbench payload contains player_id and mlb_player_id.");
+        items.push("Verify PlayerSeasonStat row exists for the resolved player.");
+        items.push("Verify MLB Stats API fallback returns a hitting stat split.");
+    }
 
     if (warehouse === "Pending Ingestion") {
         items.push("Connect Statcast warehouse tables.");
@@ -1416,32 +1826,49 @@ function buildNextDataNeeded(warehouse, dataStatus) {
 
 
 function renderOutcomeLibrary(result, probability, outcomeKey) {
-    const key = outcomeKey || (result.outcome || {}).key || collectPredictionPayload().outcome;
+    const propProbabilities =
+        result.prop_probabilities && typeof result.prop_probabilities === "object"
+            ? result.prop_probabilities
+            : {};
 
-    const selectorMap = {
+    const mapping = {
         home_run: "[data-prop-home-run]",
         hit: "[data-prop-hit]",
         rbi: "[data-prop-rbi]",
-        run: "[data-prop-run-scored]",
         run_scored: "[data-prop-run-scored]",
+        run: "[data-prop-run-scored]",
         total_bases: "[data-prop-total-bases]",
         strikeout: "[data-prop-strikeout]"
     };
 
-    if (selectorMap[key]) {
-        setText(selectorMap[key], formatPercent(probability));
+    Object.keys(mapping).forEach(function(key) {
+        if (propProbabilities[key] !== undefined) {
+            setText(mapping[key], formatPercent(propProbabilities[key]));
+        }
+    });
+
+    const selectedKey = normalizeOutcomeKey(outcomeKey);
+
+    if (mapping[selectedKey]) {
+        setText(mapping[selectedKey], formatPercent(probability));
     }
 }
 
 
-function renderTransparentPendingSections(model) {
-    setText("[data-runtime-mode]", "Transparent Runtime");
-    setText("[data-model-state]", model || "Baseline Runtime");
+function renderTransparentRuntimeSections(model) {
+    setText("[data-runtime-mode]", "Player-Specific Runtime");
+    setText("[data-model-state]", model || "Player-Specific Feature Baseline");
+}
+
+
+function exposeDebugPayload(result) {
+    window.AISP2_LAST_PREDICTION_RESPONSE = result;
+    window.AISP2_LAST_PREDICTION_PAYLOAD = AISP2_PREDICTION_STATE.lastPayload;
 }
 
 
 /* ============================================================
-   SECTION 14 - ERROR AND RESET
+   SECTION 15 - ERROR AND RESET
    ============================================================ */
 
 function renderPredictionError(message) {
@@ -1517,67 +1944,18 @@ function resetPredictionDisplay() {
 
 
 /* ============================================================
-   SECTION 15 - DEBUG EXPORTS
-   ============================================================ */
-
-window.AISP2PredictionWorkbench = {
-    state: AISP2_PREDICTION_STATE,
-    reloadSelectors: function() {
-        return loadPredictionSelectors({ force: true });
-    },
-    runPrediction: runPrediction,
-    collectPayload: collectPredictionPayload,
-    reset: resetPredictionDisplay,
-    renderPlayersForTeam: function(teamValue) {
-        return renderPlayersForTeam(resolveTeam(teamValue));
-    }
-};
-
-window.AISP2PredictionSelectors = {
-    state: AISP2_PREDICTION_STATE,
-    reload: function() {
-        return loadPredictionSelectors({ force: true });
-    },
-    renderPlayersForTeam: function(teamValue) {
-        return renderPlayersForTeam(resolveTeam(teamValue));
-    }
-};
-
-
-/* ============================================================
-   AISP2 BASEBALL
-   FILE: static/js/prediction.js
-   PHASE 14 PART 4.0 - PREDICTION ACCOUNT INTEGRATION
-
-   PURPOSE:
-   Connect Prediction Workbench to authenticated account APIs.
-
-   APIs:
-   - POST /api/account/searches
-   - POST /api/account/follow/player
-   - POST /api/account/follow/team
-   - GET  /api/auth/me
-   - POST /predict/player now persists prediction history when logged in
-
-   SECURITY:
-   - Does not read HttpOnly cookies.
-   - Uses same-origin credentials.
-   - If logged out, backend returns auth error and UI points to login.
+   SECTION 16 - ACCOUNT INTEGRATION
    ============================================================ */
 
 (function initializeAISP2PredictionAccountIntegration() {
     "use strict";
 
-    const VERSION = "phase_14_part_4_0_prediction_account_integration";
+    const VERSION = "phase_16_part_3c_prediction_account_integration";
 
     const state = {
         account: null,
         authenticated: false,
-        lastTeam: null,
-        lastPlayer: null,
-        lastOutcome: null,
         lastPrediction: null,
-        lastSavedSearchKey: null,
         initializedAt: new Date().toISOString()
     };
 
@@ -1587,15 +1965,6 @@ window.AISP2PredictionSelectors = {
 
     function all(selector) {
         return Array.from(document.querySelectorAll(selector));
-    }
-
-    function safeText(value, fallback) {
-        const text = String(value ?? "").trim();
-        return text || fallback || "";
-    }
-
-    function normalize(value) {
-        return safeText(value, "").toLowerCase().replace(/\s+/g, " ").trim();
     }
 
     function setStatus(message, kind) {
@@ -1608,80 +1977,11 @@ window.AISP2PredictionSelectors = {
         target.dataset.status = kind || "info";
     }
 
-    function getSelectedText(select) {
-        if (!select) {
-            return "";
-        }
-
-        const option = select.options && select.selectedIndex >= 0
-            ? select.options[select.selectedIndex]
-            : null;
-
-        return safeText(
-            option ? option.textContent : select.value,
-            safeText(select.value, "")
-        );
-    }
-
-    function findTeamControl() {
-        return (
-            $("[data-team-select]") ||
-            $("#teamSelect") ||
-            $("#team-select") ||
-            $("select[name='team']") ||
-            $("select[data-prediction-team]")
-        );
-    }
-
-    function findPlayerControl() {
-        return (
-            $("[data-player-select]") ||
-            $("#playerSelect") ||
-            $("#player-select") ||
-            $("select[name='player']") ||
-            $("input[name='player']") ||
-            $("select[data-prediction-player]")
-        );
-    }
-
-    function findOutcomeControl() {
-        return (
-            $("[data-outcome-select]") ||
-            $("#outcomeSelect") ||
-            $("#outcome-select") ||
-            $("select[name='outcome']") ||
-            $("select[data-prediction-outcome]")
-        );
-    }
-
-    function getCurrentSelection() {
-        const teamControl = findTeamControl();
-        const playerControl = findPlayerControl();
-        const outcomeControl = findOutcomeControl();
-
-        const teamValue = teamControl ? teamControl.value : "";
-        const playerValue = playerControl ? playerControl.value : "";
-        const outcomeValue = outcomeControl ? outcomeControl.value : "";
-
-        const teamName = getSelectedText(teamControl);
-        const playerName = getSelectedText(playerControl);
-        const outcomeLabel = getSelectedText(outcomeControl);
-
-        return {
-            team_id: /^\d+$/.test(String(teamValue || "")) ? Number(teamValue) : null,
-            team_name: safeText(teamName || teamValue, null),
-            player_id: /^\d+$/.test(String(playerValue || "")) ? Number(playerValue) : null,
-            player_name: safeText(playerName || playerValue, null),
-            outcome_key: safeText(outcomeValue, "home_run"),
-            outcome_label: safeText(outcomeLabel || outcomeValue, "Home Run")
-        };
-    }
-
-    async function fetchJson(url, options) {
+    async function fetchAccountJson(url, options) {
         const response = await fetch(url, {
             credentials: "same-origin",
             headers: {
-                "Accept": "application/json",
+                Accept: "application/json",
                 "Content-Type": "application/json",
                 ...(options && options.headers ? options.headers : {})
             },
@@ -1712,7 +2012,7 @@ window.AISP2PredictionSelectors = {
 
     async function loadAccount() {
         try {
-            const payload = await fetchJson("/api/auth/me", { method: "GET" });
+            const payload = await fetchAccountJson("/api/auth/me", { method: "GET" });
             state.account = payload.account || payload.user || payload;
             state.authenticated = Boolean(payload.authenticated || payload.success || state.account);
             setStatus("Account connected. Prediction memory is enabled.", "good");
@@ -1725,32 +2025,15 @@ window.AISP2PredictionSelectors = {
         }
     }
 
-    function loginHint() {
-        setStatus("Login required. Use the Login link or ask the chatbot: login", "warn");
-    }
-
     async function saveSearch(reason) {
-        const selection = getCurrentSelection();
+        const selection = collectPredictionPayload();
 
         if (!selection.player_name && !selection.team_name) {
             return null;
         }
 
-        const key = [
-            normalize(selection.team_name),
-            normalize(selection.player_name),
-            normalize(selection.outcome_key),
-            reason || "manual"
-        ].join("|");
-
-        if (reason !== "manual" && key === state.lastSavedSearchKey) {
-            return null;
-        }
-
-        state.lastSavedSearchKey = key;
-
         try {
-            const payload = await fetchJson("/api/account/searches", {
+            const payload = await fetchAccountJson("/api/account/searches", {
                 method: "POST",
                 body: JSON.stringify({
                     query: [
@@ -1772,7 +2055,7 @@ window.AISP2PredictionSelectors = {
                     result_count: 1,
                     is_saved: true,
                     metadata: {
-                        phase: "Phase 14 Part 4.0",
+                        phase: "Phase 16 Part 3C",
                         reason: reason || "manual",
                         frontend_version: VERSION
                     }
@@ -1783,7 +2066,7 @@ window.AISP2PredictionSelectors = {
             return payload;
         } catch (error) {
             if (error.status === 401 || error.status === 403) {
-                loginHint();
+                setStatus("Login required to save prediction search history.", "warn");
                 return null;
             }
 
@@ -1793,7 +2076,7 @@ window.AISP2PredictionSelectors = {
     }
 
     async function followPlayer() {
-        const selection = getCurrentSelection();
+        const selection = collectPredictionPayload();
 
         if (!selection.player_name && !selection.player_id) {
             setStatus("Choose a player before following.", "warn");
@@ -1801,7 +2084,7 @@ window.AISP2PredictionSelectors = {
         }
 
         try {
-            const payload = await fetchJson("/api/account/follow/player", {
+            const payload = await fetchAccountJson("/api/account/follow/player", {
                 method: "POST",
                 body: JSON.stringify({
                     player_id: selection.player_id,
@@ -1815,7 +2098,7 @@ window.AISP2PredictionSelectors = {
                         game_day_context: true
                     },
                     metadata: {
-                        phase: "Phase 14 Part 4.0",
+                        phase: "Phase 16 Part 3C",
                         frontend_version: VERSION
                     }
                 })
@@ -1825,7 +2108,7 @@ window.AISP2PredictionSelectors = {
             return payload;
         } catch (error) {
             if (error.status === 401 || error.status === 403) {
-                loginHint();
+                setStatus("Login required to follow players.", "warn");
                 return null;
             }
 
@@ -1835,7 +2118,7 @@ window.AISP2PredictionSelectors = {
     }
 
     async function followTeam() {
-        const selection = getCurrentSelection();
+        const selection = collectPredictionPayload();
 
         if (!selection.team_name && !selection.team_id) {
             setStatus("Choose a team before following.", "warn");
@@ -1843,7 +2126,7 @@ window.AISP2PredictionSelectors = {
         }
 
         try {
-            const payload = await fetchJson("/api/account/follow/team", {
+            const payload = await fetchAccountJson("/api/account/follow/team", {
                 method: "POST",
                 body: JSON.stringify({
                     team_id: selection.team_id,
@@ -1855,7 +2138,7 @@ window.AISP2PredictionSelectors = {
                         game_day_context: true
                     },
                     metadata: {
-                        phase: "Phase 14 Part 4.0",
+                        phase: "Phase 16 Part 3C",
                         frontend_version: VERSION
                     }
                 })
@@ -1865,7 +2148,7 @@ window.AISP2PredictionSelectors = {
             return payload;
         } catch (error) {
             if (error.status === 401 || error.status === 403) {
-                loginHint();
+                setStatus("Login required to follow teams.", "warn");
                 return null;
             }
 
@@ -1874,38 +2157,15 @@ window.AISP2PredictionSelectors = {
         }
     }
 
-    function attachSelectionListeners() {
-        const controls = [
-            findTeamControl(),
-            findPlayerControl(),
-            findOutcomeControl()
-        ].filter(Boolean);
-
-        controls.forEach((control) => {
-            if (control.dataset.accountMemoryListener === "true") {
-                return;
-            }
-
-            control.dataset.accountMemoryListener = "true";
-
-            control.addEventListener("change", function handleAccountMemorySelectionChange() {
-                window.clearTimeout(control.__aisp2AccountMemoryTimer);
-                control.__aisp2AccountMemoryTimer = window.setTimeout(function delayedSaveSearch() {
-                    saveSearch("selection_change");
-                }, 650);
-            });
-        });
-    }
-
     function attachButtonListeners() {
-        all("[data-account-action]").forEach((button) => {
+        all("[data-account-action]").forEach(function(button) {
             if (button.dataset.accountActionAttached === "true") {
                 return;
             }
 
             button.dataset.accountActionAttached = "true";
 
-            button.addEventListener("click", async function handlePredictionAccountAction() {
+            button.addEventListener("click", async function() {
                 const action = button.dataset.accountAction;
 
                 if (action === "save-search") {
@@ -1923,141 +2183,10 @@ window.AISP2PredictionSelectors = {
         });
     }
 
-    function patchFetchForPredictionHistory() {
-        if (window.__AISP2_PREDICTION_ACCOUNT_FETCH_PATCHED__) {
-            return;
-        }
-
-        if (typeof window.fetch !== "function") {
-            return;
-        }
-
-        window.__AISP2_PREDICTION_ACCOUNT_FETCH_PATCHED__ = true;
-
-        const originalFetch = window.fetch;
-
-        window.fetch = function patchedPredictionAccountFetch(resource, options) {
-            const responsePromise = originalFetch.apply(this, arguments);
-
-            try {
-                const url = String(
-                    typeof resource === "string"
-                        ? resource
-                        : resource && resource.url
-                            ? resource.url
-                            : ""
-                );
-
-                if (url.indexOf("/predict/player") >= 0) {
-                    responsePromise.then(function inspectPredictionResponse(response) {
-                        try {
-                            response.clone().json().then(function handlePredictionPayload(payload) {
-                                state.lastPrediction = payload;
-
-                                if (payload && payload.account_history && payload.account_history.saved) {
-                                    setStatus("Prediction saved to your account ledger.", "good");
-                                } else if (payload && payload.account_history && payload.account_history.reason === "not_authenticated") {
-                                    setStatus("Prediction ran. Log in to save it to your ledger.", "warn");
-                                } else {
-                                    setStatus("Prediction completed. Account history status checked.", "info");
-                                }
-                            }).catch(function noop() {});
-                        } catch (error) {
-                            return null;
-                        }
-                        return null;
-                    }).catch(function noop() {});
-                }
-            } catch (error) {
-                return responsePromise;
-            }
-
-            return responsePromise;
-        };
-    }
-
-    function injectStyles() {
-        if (document.querySelector("[data-aisp2-prediction-account-style]")) {
-            return;
-        }
-
-        const style = document.createElement("style");
-        style.dataset.aisp2PredictionAccountStyle = "true";
-        style.textContent = `
-            .prediction-account-action-bar {
-                margin: 18px 0;
-                padding: 18px;
-                border-radius: 24px;
-                border: 1px solid rgba(77, 216, 255, 0.22);
-                background:
-                    radial-gradient(circle at 0% 0%, rgba(77, 216, 255, 0.13), transparent 38%),
-                    rgba(5, 18, 38, 0.72);
-                box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
-            }
-            .prediction-account-action-copy strong {
-                display: block;
-                color: rgba(244, 251, 255, 0.96);
-                font-size: 1.02rem;
-            }
-            .prediction-account-action-copy p {
-                margin: 6px 0 0;
-                color: rgba(220, 238, 250, 0.68);
-                line-height: 1.45;
-            }
-            .prediction-account-eyebrow {
-                display: inline-flex;
-                margin-bottom: 8px;
-                color: #73e8ff;
-                font-size: 0.72rem;
-                font-weight: 950;
-                letter-spacing: 0.11em;
-                text-transform: uppercase;
-            }
-            .prediction-account-actions {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin-top: 14px;
-            }
-            .prediction-account-button {
-                min-height: 38px;
-                border: 1px solid rgba(77, 216, 255, 0.28);
-                border-radius: 999px;
-                padding: 0 14px;
-                background: rgba(255,255,255,0.055);
-                color: rgba(244,251,255,0.94);
-                font-weight: 900;
-                cursor: pointer;
-                text-decoration: none;
-            }
-            .prediction-account-button:hover {
-                border-color: rgba(115, 232, 255, 0.54);
-                color: #73e8ff;
-            }
-            .prediction-account-button.secondary {
-                color: #8df5bd;
-            }
-            .prediction-account-status {
-                margin-top: 12px;
-                color: rgba(220, 238, 250, 0.72);
-                font-size: 0.88rem;
-                font-weight: 800;
-            }
-            .prediction-account-status[data-status="good"] { color: #8df5bd; }
-            .prediction-account-status[data-status="warn"] { color: #ffe29e; }
-            .prediction-account-status[data-status="danger"] { color: #ff9f9f; }
-        `;
-        document.head.appendChild(style);
-    }
-
     function boot() {
-        injectStyles();
         attachButtonListeners();
-        attachSelectionListeners();
-        patchFetchForPredictionHistory();
         loadAccount();
 
-        window.setInterval(attachSelectionListeners, 1500);
         window.setInterval(attachButtonListeners, 1500);
     }
 
@@ -2073,10 +2202,41 @@ window.AISP2PredictionSelectors = {
         saveSearch,
         followPlayer,
         followTeam,
-        getCurrentSelection,
+        getCurrentSelection: collectPredictionPayload,
         reloadAccount: loadAccount
     };
-
-    window.AISP2_PREDICTION_ACCOUNT_INTEGRATION_PHASE_14_PART_4 = true;
 }());
 
+
+/* ============================================================
+   SECTION 17 - DEBUG EXPORTS
+   ============================================================ */
+
+window.AISP2PredictionWorkbench = {
+    state: AISP2_PREDICTION_STATE,
+    reloadSelectors: function() {
+        return loadPredictionSelectors({ force: true });
+    },
+    runPrediction: runPrediction,
+    collectPayload: collectPredictionPayload,
+    reset: resetPredictionDisplay,
+    renderPlayersForTeam: function(teamValue) {
+        return renderPlayersForTeam(resolveTeam(teamValue));
+    },
+    getLastPayload: function() {
+        return AISP2_PREDICTION_STATE.lastPayload;
+    },
+    getLastPrediction: function() {
+        return AISP2_PREDICTION_STATE.lastPrediction;
+    }
+};
+
+window.AISP2PredictionSelectors = {
+    state: AISP2_PREDICTION_STATE,
+    reload: function() {
+        return loadPredictionSelectors({ force: true });
+    },
+    renderPlayersForTeam: function(teamValue) {
+        return renderPlayersForTeam(resolveTeam(teamValue));
+    }
+};
