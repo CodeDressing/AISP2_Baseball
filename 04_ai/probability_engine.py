@@ -2569,3 +2569,970 @@ def validate_production_truth_probability_policy() -> dict:
         "sample_blocked_payload": sample,
     }
 
+
+# ============================================================
+# SECTION 100 - PHASE 16 PART 3E - WORKBENCH FEATURE PACKET PROBABILITY ADAPTER
+# FILE: 04_ai/probability_engine.py
+# PURPOSE:
+# Convert 04_ai/baseball/feature_builder.py feature packets into
+# real player-specific Workbench probability outputs.
+#
+# WHY THIS EXISTS:
+# The original probability engine is mathematically strong, but the
+# Prediction Workbench needs a stable adapter that consumes:
+#
+#   feature_packet["rates"]
+#   feature_packet["stat_line"]
+#   feature_packet["probability_inputs"]
+#   feature_packet["technical_profile"]
+#
+# and produces:
+#
+#   selected outcome probability
+#   all prop probabilities
+#   confidence
+#   explanation
+#   debug proof
+#
+# CORE MATH:
+#   player_specific_rate =
+#       observed_rate * sample_weight
+#       +
+#       league_baseline_rate * (1 - sample_weight)
+#
+# GAME-LEVEL CONVERSION:
+#   If requested, per-opportunity probability is converted to the
+#   probability of at least one event across expected opportunities:
+#
+#   1 - (1 - p) ** opportunities
+#
+# This section does not claim trained ML/DL calibration. It is the
+# correct source-backed statistical baseline layer that future ML/DL
+# calibration should consume.
+# ============================================================
+
+PHASE_16_PART_3E_PROBABILITY_ADAPTER_VERSION = (
+    "phase_16_part_3e_workbench_feature_packet_probability_adapter"
+)
+
+
+PHASE_16_OUTCOME_RATE_MAP = {
+    "home_run": {
+        "metric": "HR / PA",
+        "rate_key": "hr_per_pa",
+        "baseline": LEAGUE_PRIORS.get("home_run", 0.032),
+        "unit": "per_plate_appearance",
+        "minimum": 0.001,
+        "maximum": 0.220,
+    },
+    "hit": {
+        "metric": "H / AB",
+        "rate_key": "hit_per_ab",
+        "baseline": LEAGUE_PRIORS.get("hit", 0.245),
+        "unit": "per_at_bat",
+        "minimum": 0.040,
+        "maximum": 0.500,
+    },
+    "single": {
+        "metric": "1B / AB",
+        "rate_key": "single_per_ab",
+        "baseline": LEAGUE_PRIORS.get("single", 0.150),
+        "unit": "per_at_bat",
+        "minimum": 0.020,
+        "maximum": 0.360,
+    },
+    "double": {
+        "metric": "2B / AB",
+        "rate_key": "double_per_ab",
+        "baseline": LEAGUE_PRIORS.get("double", 0.045),
+        "unit": "per_at_bat",
+        "minimum": 0.002,
+        "maximum": 0.160,
+    },
+    "triple": {
+        "metric": "3B / AB",
+        "rate_key": "triple_per_ab",
+        "baseline": LEAGUE_PRIORS.get("triple", 0.004),
+        "unit": "per_at_bat",
+        "minimum": 0.0002,
+        "maximum": 0.050,
+    },
+    "walk": {
+        "metric": "BB / PA",
+        "rate_key": "bb_per_pa",
+        "baseline": LEAGUE_PRIORS.get("walk", 0.083),
+        "unit": "per_plate_appearance",
+        "minimum": 0.010,
+        "maximum": 0.300,
+    },
+    "strikeout": {
+        "metric": "K / PA",
+        "rate_key": "k_per_pa",
+        "baseline": LEAGUE_PRIORS.get("strikeout", 0.225),
+        "unit": "per_plate_appearance",
+        "minimum": 0.025,
+        "maximum": 0.550,
+    },
+    "rbi": {
+        "metric": "RBI / PA",
+        "rate_key": "rbi_per_pa",
+        "baseline": LEAGUE_PRIORS.get("rbi", 0.110),
+        "unit": "per_plate_appearance",
+        "minimum": 0.015,
+        "maximum": 0.400,
+    },
+    "run": {
+        "metric": "R / PA",
+        "rate_key": "run_per_pa",
+        "baseline": LEAGUE_PRIORS.get("run", 0.115),
+        "unit": "per_plate_appearance",
+        "minimum": 0.015,
+        "maximum": 0.400,
+    },
+    "run_scored": {
+        "metric": "R / PA",
+        "rate_key": "run_per_pa",
+        "baseline": LEAGUE_PRIORS.get("run", 0.115),
+        "unit": "per_plate_appearance",
+        "minimum": 0.015,
+        "maximum": 0.400,
+    },
+    "total_bases": {
+        "metric": "TB / AB",
+        "rate_key": "tb_per_ab",
+        "baseline": LEAGUE_PRIORS.get("total_bases", 0.325),
+        "unit": "per_at_bat",
+        "minimum": 0.030,
+        "maximum": 0.700,
+    },
+    "extra_base_hit": {
+        "metric": "XBH / PA",
+        "rate_key": "xbh_per_pa",
+        "baseline": LEAGUE_PRIORS.get("extra_base_hit", 0.081),
+        "unit": "per_plate_appearance",
+        "minimum": 0.005,
+        "maximum": 0.300,
+    },
+    "reach_base": {
+        "metric": "TOB / PA",
+        "rate_key": "times_on_base_per_pa",
+        "baseline": LEAGUE_PRIORS.get("reach_base", 0.325),
+        "unit": "per_plate_appearance",
+        "minimum": 0.080,
+        "maximum": 0.650,
+    },
+}
+
+
+def phase16_normalize_workbench_outcome(outcome: Any) -> str:
+    text = str(outcome or "home_run").strip().lower()
+    text = text.replace("-", "_").replace(" ", "_")
+
+    aliases = {
+        "hr": "home_run",
+        "homer": "home_run",
+        "homerun": "home_run",
+        "home_runs": "home_run",
+        "hits": "hit",
+        "singles": "single",
+        "doubles": "double",
+        "triples": "triple",
+        "walks": "walk",
+        "bb": "walk",
+        "so": "strikeout",
+        "k": "strikeout",
+        "ks": "strikeout",
+        "strikeouts": "strikeout",
+        "runs": "run_scored",
+        "run": "run_scored",
+        "runs_scored": "run_scored",
+        "tb": "total_bases",
+        "total_base": "total_bases",
+        "xbh": "extra_base_hit",
+        "on_base": "reach_base",
+    }
+
+    return aliases.get(text, text or "home_run")
+
+
+def phase16_safe_mapping(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+
+    if isinstance(value, Mapping):
+        return dict(value)
+
+    if is_dataclass(value):
+        return asdict(value)
+
+    if hasattr(value, "model_dump") and callable(value.model_dump):
+        return dict(value.model_dump())
+
+    if hasattr(value, "dict") and callable(value.dict):
+        return dict(value.dict())
+
+    if hasattr(value, "__dict__"):
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+
+    return {}
+
+
+def phase16_read_nested(
+    payload: Mapping[str, Any],
+    path: Sequence[str],
+    default: Any = None,
+) -> Any:
+    current: Any = payload
+
+    for key in path:
+        if not isinstance(current, Mapping):
+            return default
+
+        if key not in current:
+            return default
+
+        current = current.get(key)
+
+    return default if current in (None, "") else current
+
+
+def phase16_safe_float(value: Any, default: float = 0.0) -> float:
+    return to_float(value, default)
+
+
+def phase16_safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(round(phase16_safe_float(value, float(default))))
+    except Exception:
+        return int(default)
+
+
+def phase16_probability_percent(value: Any, digits: int = 1) -> float:
+    return round(clamp(phase16_safe_float(value), 0.0, 1.0) * 100.0, digits)
+
+
+def phase16_sample_weight(sample_size: int) -> float:
+    sample = phase16_safe_int(sample_size)
+
+    if sample >= 600:
+        return 0.90
+
+    if sample >= 500:
+        return 0.88
+
+    if sample >= 350:
+        return 0.82
+
+    if sample >= 150:
+        return 0.68
+
+    if sample >= 50:
+        return 0.45
+
+    if sample > 0:
+        return 0.25
+
+    return 0.0
+
+
+def phase16_confidence_from_feature_packet(
+    feature_packet: Mapping[str, Any],
+    *,
+    probability_decimal: float,
+) -> float:
+    sample_size = phase16_safe_int(
+        feature_packet.get("sample_size")
+        or phase16_read_nested(feature_packet, ("stat_line", "sample_size"))
+        or phase16_read_nested(feature_packet, ("probability_inputs", "sample_size"))
+    )
+
+    coverage = phase16_safe_float(
+        phase16_read_nested(feature_packet, ("probability_inputs", "coverage")),
+        0.0,
+    )
+
+    source_status = str(
+        feature_packet.get("source_status")
+        or phase16_read_nested(feature_packet, ("probability_inputs", "source_status"))
+        or ""
+    ).lower()
+
+    if sample_size <= 0:
+        return 12.0
+
+    sample_component = 1.0 - math.exp(-sample_size / 260.0)
+
+    if "database" in source_status:
+        source_component = 1.0
+    elif "live_mlb" in source_status:
+        source_component = 0.82
+    elif "request_supplied" in source_status:
+        source_component = 0.72
+    else:
+        source_component = 0.48
+
+    probability_component = 1.0 - binary_entropy(
+        clamp(probability_decimal, 0.0001, 0.9999)
+    )
+
+    score = (
+        28.0
+        + 42.0 * sample_component
+        + 18.0 * clamp(coverage, 0.0, 1.0)
+        + 8.0 * source_component
+        + 4.0 * probability_component
+    )
+
+    return round(clamp(score, 15.0, 94.0), 1)
+
+
+def phase16_extract_observed_rate(
+    feature_packet: Mapping[str, Any],
+    outcome_key: str,
+) -> tuple[str, str, float, float, str]:
+    rates = phase16_safe_mapping(feature_packet.get("rates"))
+    probability_inputs = phase16_safe_mapping(feature_packet.get("probability_inputs"))
+
+    normalized = phase16_normalize_workbench_outcome(outcome_key)
+    spec = PHASE_16_OUTCOME_RATE_MAP.get(
+        normalized,
+        PHASE_16_OUTCOME_RATE_MAP["home_run"],
+    )
+
+    metric = str(spec["metric"])
+    rate_key = str(spec["rate_key"])
+    baseline = phase16_safe_float(spec["baseline"])
+    unit = str(spec["unit"])
+
+    observed = phase16_safe_float(rates.get(rate_key), 0.0)
+
+    if observed <= 0.0:
+        input_outcome = phase16_normalize_workbench_outcome(
+            probability_inputs.get("outcome_key")
+        )
+
+        if input_outcome == normalized:
+            observed = phase16_safe_float(
+                probability_inputs.get("observed_rate"),
+                0.0,
+            )
+            metric = str(probability_inputs.get("primary_metric") or metric)
+
+    return metric, rate_key, observed, baseline, unit
+
+
+def phase16_player_specific_rate(
+    *,
+    observed_rate: float,
+    baseline_rate: float,
+    sample_size: int,
+    minimum: float,
+    maximum: float,
+) -> dict[str, Any]:
+    sample_weight = phase16_sample_weight(sample_size)
+
+    if sample_size > 0:
+        raw_probability = (
+            observed_rate * sample_weight
+            + baseline_rate * (1.0 - sample_weight)
+        )
+        used_no_sample_guard = False
+    else:
+        raw_probability = baseline_rate * 0.05
+        used_no_sample_guard = True
+
+    probability_decimal = clamp(raw_probability, minimum, maximum)
+
+    return {
+        "probability_decimal": probability_decimal,
+        "sample_weight": sample_weight,
+        "used_no_sample_guard": used_no_sample_guard,
+        "math_formula": "observed_rate * sample_weight + league_baseline_rate * (1 - sample_weight)",
+    }
+
+
+def phase16_expected_opportunities(
+    feature_packet: Mapping[str, Any],
+    outcome_key: str,
+) -> float:
+    stat_line = phase16_safe_mapping(feature_packet.get("stat_line"))
+    requested = phase16_safe_mapping(feature_packet.get("requested"))
+    raw_payload = phase16_safe_mapping(requested.get("raw_payload"))
+
+    for value in (
+        raw_payload.get("expected_plate_appearances"),
+        raw_payload.get("projected_plate_appearances"),
+        raw_payload.get("opportunities"),
+        feature_packet.get("expected_plate_appearances"),
+        phase16_read_nested(feature_packet, ("game_context", "expected_plate_appearances")),
+    ):
+        candidate = phase16_safe_float(value, 0.0)
+
+        if candidate > 0:
+            return clamp(candidate, 1.0, 7.0)
+
+    outcome = phase16_normalize_workbench_outcome(outcome_key)
+
+    if outcome in {"hit", "single", "double", "triple", "total_bases"}:
+        at_bats = phase16_safe_float(stat_line.get("at_bats"), 0.0)
+        plate_appearances = phase16_safe_float(stat_line.get("plate_appearances"), 0.0)
+
+        if plate_appearances > 0 and at_bats > 0:
+            at_bat_share = clamp(at_bats / plate_appearances, 0.55, 0.95)
+            return round(DEFAULT_EXPECTED_PLATE_APPEARANCES * at_bat_share, 2)
+
+    return DEFAULT_EXPECTED_PLATE_APPEARANCES
+
+
+def phase16_convert_to_game_probability(
+    per_opportunity_probability: float,
+    opportunities: float,
+) -> float:
+    return probability_at_least_one(
+        clamp(per_opportunity_probability, 0.0, 1.0),
+        clamp(opportunities, 0.0, 7.0),
+    )
+
+
+def build_player_profile_from_feature_packet(
+    feature_packet: Mapping[str, Any],
+) -> PlayerFeatureProfile:
+    packet = phase16_safe_mapping(feature_packet)
+    stat_line = phase16_safe_mapping(packet.get("stat_line"))
+    rates = phase16_safe_mapping(packet.get("rates"))
+
+    return PlayerFeatureProfile(
+        player_name=str(packet.get("player_name") or "Unknown Player"),
+        team_name=packet.get("team_name"),
+        player_id=packet.get("player_id") or packet.get("mlb_player_id"),
+        plate_appearances=phase16_safe_int(stat_line.get("plate_appearances")),
+        at_bats=phase16_safe_int(stat_line.get("at_bats")),
+        hits=phase16_safe_int(stat_line.get("hits")),
+        singles=phase16_safe_int(stat_line.get("singles")),
+        doubles=phase16_safe_int(stat_line.get("doubles")),
+        triples=phase16_safe_int(stat_line.get("triples")),
+        home_runs=phase16_safe_int(stat_line.get("home_runs")),
+        walks=phase16_safe_int(stat_line.get("walks")),
+        hit_by_pitch=phase16_safe_int(stat_line.get("hit_by_pitch")),
+        strikeouts=phase16_safe_int(stat_line.get("strikeouts")),
+        rbi=phase16_safe_int(stat_line.get("rbi")),
+        runs=phase16_safe_int(stat_line.get("runs")),
+        total_bases=phase16_safe_int(stat_line.get("total_bases")),
+        batting_average=phase16_safe_float(
+            stat_line.get("batting_average") or rates.get("avg"),
+            None,
+        ),
+        on_base_percentage=phase16_safe_float(
+            stat_line.get("on_base_percentage") or rates.get("obp"),
+            None,
+        ),
+        slugging_percentage=phase16_safe_float(
+            stat_line.get("slugging_percentage") or rates.get("slg"),
+            None,
+        ),
+        ops=phase16_safe_float(
+            stat_line.get("ops") or rates.get("ops"),
+            None,
+        ),
+        woba=phase16_safe_float(stat_line.get("woba") or rates.get("woba"), None),
+        iso=phase16_safe_float(stat_line.get("isolated_power") or rates.get("iso"), None),
+        babip=phase16_safe_float(stat_line.get("babip") or rates.get("babip"), None),
+        walk_rate=phase16_safe_float(rates.get("bb_per_pa"), None),
+        strikeout_rate=phase16_safe_float(rates.get("k_per_pa"), None),
+        projected_plate_appearances=DEFAULT_EXPECTED_PLATE_APPEARANCES,
+        bats=phase16_read_nested(packet, ("resolved_player", "bats")),
+        position=phase16_read_nested(packet, ("resolved_player", "position")),
+    )
+
+
+def calculate_workbench_probability_from_feature_packet(
+    feature_packet: Mapping[str, Any],
+    *,
+    outcome_key: str | None = None,
+    per_game: bool = True,
+    opportunities: float | None = None,
+) -> dict[str, Any]:
+    packet = phase16_safe_mapping(feature_packet)
+
+    selected_outcome = phase16_normalize_workbench_outcome(
+        outcome_key
+        or packet.get("outcome_key")
+        or phase16_read_nested(packet, ("probability_inputs", "outcome_key"))
+        or "home_run"
+    )
+
+    if selected_outcome == "run":
+        selected_outcome = "run_scored"
+
+    spec = PHASE_16_OUTCOME_RATE_MAP.get(
+        selected_outcome,
+        PHASE_16_OUTCOME_RATE_MAP["home_run"],
+    )
+
+    sample_size = phase16_safe_int(
+        packet.get("sample_size")
+        or phase16_read_nested(packet, ("stat_line", "sample_size"))
+        or phase16_read_nested(packet, ("probability_inputs", "sample_size"))
+    )
+
+    metric, rate_key, observed_rate, baseline_rate, unit = phase16_extract_observed_rate(
+        packet,
+        selected_outcome,
+    )
+
+    minimum = phase16_safe_float(spec["minimum"])
+    maximum = phase16_safe_float(spec["maximum"])
+
+    blended = phase16_player_specific_rate(
+        observed_rate=observed_rate,
+        baseline_rate=baseline_rate,
+        sample_size=sample_size,
+        minimum=minimum,
+        maximum=maximum,
+    )
+
+    per_opportunity_probability = blended["probability_decimal"]
+
+    resolved_opportunities = (
+        clamp(phase16_safe_float(opportunities), 1.0, 7.0)
+        if opportunities is not None
+        else phase16_expected_opportunities(packet, selected_outcome)
+    )
+
+    if per_game:
+        final_probability = phase16_convert_to_game_probability(
+            per_opportunity_probability,
+            resolved_opportunities,
+        )
+        final_unit = "per_game"
+    else:
+        final_probability = per_opportunity_probability
+        final_unit = unit
+
+    confidence = phase16_confidence_from_feature_packet(
+        packet,
+        probability_decimal=final_probability,
+    )
+
+    interval = probability_interval_from_effective_sample(
+        final_probability,
+        max(sample_size + DEFAULT_PRIOR_STRENGTH, 1.0),
+        DEFAULT_CONFIDENCE_LEVEL,
+    )
+
+    technical_profile = phase16_safe_mapping(packet.get("technical_profile"))
+
+    no_sample = sample_size <= 0
+
+    warnings: list[str] = []
+
+    if no_sample:
+        warnings.append(
+            "No usable player hitting sample was available; probability is a no-sample guard."
+        )
+
+    if observed_rate <= 0 and sample_size > 0 and selected_outcome != "triple":
+        warnings.append(
+            f"Observed {metric} was zero or unavailable for this player/outcome."
+        )
+
+    source_status = str(
+        packet.get("source_status")
+        or phase16_read_nested(packet, ("probability_inputs", "source_status"))
+        or "unknown"
+    )
+
+    player_name = str(packet.get("player_name") or "Unknown Player")
+    team_name = str(packet.get("team_name") or "Unknown Team")
+
+    explanation = (
+        f"AISP2 calculated {player_name} for {selected_outcome.replace('_', ' ')} "
+        f"using {metric}. Observed rate={round(observed_rate * 100.0, 2)}%, "
+        f"league baseline={round(baseline_rate * 100.0, 2)}%, "
+        f"sample size={sample_size}, sample weight={round(blended['sample_weight'], 3)}. "
+        f"The selected probability is player-specific and derived from the feature packet."
+    )
+
+    return {
+        "status": "ok" if not no_sample else "no_hitting_sample",
+        "adapter_version": PHASE_16_PART_3E_PROBABILITY_ADAPTER_VERSION,
+        "engine": ENGINE_NAME,
+        "engine_version": ENGINE_VERSION,
+        "phase": ENGINE_PHASE,
+        "player_name": player_name,
+        "team_name": team_name,
+        "player_id": packet.get("player_id"),
+        "mlb_player_id": packet.get("mlb_player_id"),
+        "outcome": selected_outcome,
+        "outcome_key": selected_outcome,
+        "primary_metric": metric,
+        "rate_key": rate_key,
+        "observed_rate": round(observed_rate, 8),
+        "league_baseline_rate": round(baseline_rate, 8),
+        "sample_size": sample_size,
+        "sample_weight": blended["sample_weight"],
+        "source_status": source_status,
+        "source_name": packet.get("source_name"),
+        "per_opportunity_probability_decimal": round(per_opportunity_probability, 8),
+        "per_opportunity_probability": phase16_probability_percent(
+            per_opportunity_probability,
+            2,
+        ),
+        "probability_decimal": round(final_probability, 8),
+        "probability": phase16_probability_percent(final_probability, 1),
+        "probability_percent": phase16_probability_percent(final_probability, 1),
+        "confidence": confidence,
+        "confidence_band": confidence_band(confidence).value,
+        "unit": final_unit,
+        "expected_opportunities": round(resolved_opportunities, 3),
+        "expected_value": round(per_opportunity_probability * resolved_opportunities, 6),
+        "interval": interval.to_dict(),
+        "technical_profile": technical_profile,
+        "model": "AISP2 Player-Specific Bayesian Shrinkage Adapter",
+        "model_status": "player_specific_math_active" if not no_sample else "no_sample_guard",
+        "math": {
+            "formula": blended["math_formula"],
+            "observed_component": round(observed_rate * blended["sample_weight"], 8),
+            "baseline_component": round(baseline_rate * (1.0 - blended["sample_weight"]), 8),
+            "per_opportunity_probability_decimal": round(per_opportunity_probability, 8),
+            "per_game_formula": "1 - (1 - p) ** opportunities" if per_game else None,
+            "used_no_sample_guard": blended["used_no_sample_guard"],
+        },
+        "components": {
+            "observed_rate": round(observed_rate, 8),
+            "league_baseline_rate": round(baseline_rate, 8),
+            "sample_weight": round(blended["sample_weight"], 8),
+            "coverage": phase16_read_nested(packet, ("probability_inputs", "coverage"), 0.0),
+        },
+        "diagnostics": {
+            "feature_packet_status": packet.get("status"),
+            "feature_packet_valid": packet.get("valid"),
+            "feature_packet_source_status": packet.get("source_status"),
+            "feature_packet_source_name": packet.get("source_name"),
+            "feature_packet_sample_size": packet.get("sample_size"),
+            "feature_packet_fingerprint": packet.get("feature_fingerprint"),
+            "feature_packet_debug": packet.get("debug", {}),
+            "adapter_outcome": selected_outcome,
+            "adapter_rate_key": rate_key,
+            "adapter_unit": final_unit,
+        },
+        "warnings": warnings,
+        "explanation": explanation,
+    }
+
+
+def build_workbench_prop_probability_library(
+    feature_packet: Mapping[str, Any],
+    *,
+    per_game: bool = True,
+) -> dict[str, float]:
+    outcomes = (
+        "home_run",
+        "hit",
+        "single",
+        "double",
+        "triple",
+        "walk",
+        "strikeout",
+        "rbi",
+        "run_scored",
+        "total_bases",
+        "extra_base_hit",
+        "reach_base",
+    )
+
+    output: dict[str, float] = {}
+
+    for outcome in outcomes:
+        estimate = calculate_workbench_probability_from_feature_packet(
+            feature_packet,
+            outcome_key=outcome,
+            per_game=per_game,
+        )
+        output[outcome] = estimate["probability"]
+
+    return output
+
+
+def predict_workbench_feature_packet(
+    feature_packet: Mapping[str, Any],
+    *,
+    outcome_key: str | None = None,
+    per_game: bool = True,
+) -> dict[str, Any]:
+    estimate = calculate_workbench_probability_from_feature_packet(
+        feature_packet,
+        outcome_key=outcome_key,
+        per_game=per_game,
+    )
+
+    prop_probabilities = build_workbench_prop_probability_library(
+        feature_packet,
+        per_game=per_game,
+    )
+
+    prediction = {
+        "estimated_probability": estimate["probability"],
+        "probability": estimate["probability"],
+        "probability_decimal": estimate["probability_decimal"],
+        "confidence": estimate["confidence"],
+        "confidence_band": estimate["confidence_band"],
+        "model": estimate["model"],
+        "model_version": PHASE_16_PART_3E_PROBABILITY_ADAPTER_VERSION,
+        "prediction_source": estimate["source_status"],
+        "sample_size": estimate["sample_size"],
+        "observed_rate": round(estimate["observed_rate"] * 100.0, 2),
+        "league_baseline_rate": round(estimate["league_baseline_rate"] * 100.0, 2),
+        "sample_weight": estimate["sample_weight"],
+        "primary_metric": estimate["primary_metric"],
+        "unit": estimate["unit"],
+        "expected_opportunities": estimate["expected_opportunities"],
+        "expected_value": estimate["expected_value"],
+        "tier": (
+            "High"
+            if estimate["probability"] >= 55
+            else "Medium"
+            if estimate["probability"] >= 25
+            else "Low-Medium"
+            if estimate["probability"] >= 8
+            else "Low"
+        ),
+        "risk_profile": (
+            "No Hitting Sample"
+            if estimate["sample_size"] <= 0
+            else estimate["technical_profile"].get("primary_risk", "Normal Baseball Variance")
+            if isinstance(estimate["technical_profile"], Mapping)
+            else "Normal Baseball Variance"
+        ),
+        "interval": estimate["interval"],
+        "math": estimate["math"],
+        "components": estimate["components"],
+        "missing_inputs": [],
+    }
+
+    return {
+        "status": estimate["status"],
+        "success": True,
+        "adapter_version": PHASE_16_PART_3E_PROBABILITY_ADAPTER_VERSION,
+        "engine": estimate["engine"],
+        "engine_version": estimate["engine_version"],
+        "player_name": estimate["player_name"],
+        "team_name": estimate["team_name"],
+        "player_id": estimate["player_id"],
+        "mlb_player_id": estimate["mlb_player_id"],
+        "outcome_key": estimate["outcome_key"],
+        "primary_metric": estimate["primary_metric"],
+        "probability": estimate["probability"],
+        "confidence": estimate["confidence"],
+        "sample_size": estimate["sample_size"],
+        "source_status": estimate["source_status"],
+        "source_name": estimate["source_name"],
+        "prediction": prediction,
+        "prop_probabilities": prop_probabilities,
+        "technical_profile": estimate["technical_profile"],
+        "explanation": estimate["explanation"],
+        "warnings": estimate["warnings"],
+        "diagnostics": estimate["diagnostics"],
+        "math": estimate["math"],
+    }
+
+
+def validate_phase_16_part_3e_probability_adapter() -> dict[str, Any]:
+    judge_packet = {
+        "status": "ok",
+        "valid": True,
+        "player_id": 592450,
+        "mlb_player_id": 592450,
+        "player_name": "Aaron Judge",
+        "team_name": "New York Yankees",
+        "outcome_key": "home_run",
+        "sample_size": 704,
+        "source_status": "synthetic_validation",
+        "source_name": "synthetic_validation_packet",
+        "stat_line": {
+            "plate_appearances": 704,
+            "at_bats": 559,
+            "hits": 180,
+            "singles": 91,
+            "doubles": 36,
+            "triples": 1,
+            "home_runs": 52,
+            "walks": 120,
+            "strikeouts": 171,
+            "rbi": 131,
+            "runs": 128,
+            "total_bases": 374,
+            "sample_size": 704,
+            "ops": 1.159,
+        },
+        "rates": {
+            "hr_per_pa": 52 / 704,
+            "hit_per_ab": 180 / 559,
+            "single_per_ab": 91 / 559,
+            "double_per_ab": 36 / 559,
+            "triple_per_ab": 1 / 559,
+            "bb_per_pa": 120 / 704,
+            "k_per_pa": 171 / 704,
+            "rbi_per_pa": 131 / 704,
+            "run_per_pa": 128 / 704,
+            "tb_per_ab": 374 / 559,
+            "xbh_per_pa": 89 / 704,
+            "times_on_base_per_pa": 300 / 704,
+            "avg": 0.322,
+            "obp": 0.458,
+            "slg": 0.701,
+            "ops": 1.159,
+            "iso": 0.379,
+        },
+        "probability_inputs": {
+            "outcome_key": "home_run",
+            "coverage": 1.0,
+            "sample_size": 704,
+            "source_status": "synthetic_validation",
+        },
+        "technical_profile": {
+            "sample_quality": "strong",
+            "primary_strength": "Power",
+            "primary_risk": "Strikeout Rate",
+        },
+        "feature_fingerprint": "synthetic_judge_packet",
+    }
+
+    contact_packet = {
+        **judge_packet,
+        "player_id": 123,
+        "mlb_player_id": 123,
+        "player_name": "Low Power Contact Validation Player",
+        "sample_size": 550,
+        "stat_line": {
+            **judge_packet["stat_line"],
+            "plate_appearances": 550,
+            "at_bats": 510,
+            "hits": 145,
+            "singles": 120,
+            "doubles": 20,
+            "triples": 3,
+            "home_runs": 2,
+            "walks": 30,
+            "strikeouts": 70,
+            "rbi": 45,
+            "runs": 62,
+            "total_bases": 177,
+            "sample_size": 550,
+            "ops": 0.700,
+        },
+        "rates": {
+            "hr_per_pa": 2 / 550,
+            "hit_per_ab": 145 / 510,
+            "single_per_ab": 120 / 510,
+            "double_per_ab": 20 / 510,
+            "triple_per_ab": 3 / 510,
+            "bb_per_pa": 30 / 550,
+            "k_per_pa": 70 / 550,
+            "rbi_per_pa": 45 / 550,
+            "run_per_pa": 62 / 550,
+            "tb_per_ab": 177 / 510,
+            "xbh_per_pa": 25 / 550,
+            "times_on_base_per_pa": 175 / 550,
+            "avg": 145 / 510,
+            "obp": 0.318,
+            "slg": 177 / 510,
+            "ops": 0.700,
+            "iso": 0.063,
+        },
+        "technical_profile": {
+            "sample_quality": "strong",
+            "primary_strength": "Contact",
+            "primary_risk": "Low Power",
+        },
+        "feature_fingerprint": "synthetic_contact_packet",
+    }
+
+    judge_hr = predict_workbench_feature_packet(
+        judge_packet,
+        outcome_key="home_run",
+        per_game=True,
+    )
+
+    contact_hr = predict_workbench_feature_packet(
+        contact_packet,
+        outcome_key="home_run",
+        per_game=True,
+    )
+
+    judge_hit = predict_workbench_feature_packet(
+        judge_packet,
+        outcome_key="hit",
+        per_game=True,
+    )
+
+    judge_walk = predict_workbench_feature_packet(
+        judge_packet,
+        outcome_key="walk",
+        per_game=True,
+    )
+
+    judge_strikeout = predict_workbench_feature_packet(
+        judge_packet,
+        outcome_key="strikeout",
+        per_game=True,
+    )
+
+    checks = {
+        "adapter_callable": callable(predict_workbench_feature_packet),
+        "judge_probability_present": judge_hr["probability"] is not None,
+        "contact_probability_present": contact_hr["probability"] is not None,
+        "judge_hr_greater_than_contact_hr": judge_hr["probability"] > contact_hr["probability"],
+        "judge_hit_differs_from_judge_hr": abs(judge_hit["probability"] - judge_hr["probability"]) > 5.0,
+        "walk_differs_from_strikeout": abs(judge_walk["probability"] - judge_strikeout["probability"]) > 5.0,
+        "prop_library_present": isinstance(judge_hr.get("prop_probabilities"), dict),
+        "math_formula_present": bool(judge_hr.get("math", {}).get("formula")),
+        "sample_weight_positive": judge_hr["prediction"]["sample_weight"] > 0,
+        "confidence_positive": judge_hr["confidence"] > 0,
+    }
+
+    passed = sum(1 for value in checks.values() if value)
+
+    return {
+        "status": "ok" if passed == len(checks) else "failed",
+        "phase": "Phase 16 Part 3E",
+        "adapter_version": PHASE_16_PART_3E_PROBABILITY_ADAPTER_VERSION,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "failed_checks": [
+            key
+            for key, value in checks.items()
+            if not value
+        ],
+        "sample_results": {
+            "judge_home_run_probability": judge_hr["probability"],
+            "contact_home_run_probability": contact_hr["probability"],
+            "judge_hit_probability": judge_hit["probability"],
+            "judge_walk_probability": judge_walk["probability"],
+            "judge_strikeout_probability": judge_strikeout["probability"],
+            "judge_home_run_math": judge_hr["math"],
+            "judge_home_run_prediction": judge_hr["prediction"],
+        },
+    }
+
+
+try:
+    __all__.extend(
+        [
+            "PHASE_16_PART_3E_PROBABILITY_ADAPTER_VERSION",
+            "PHASE_16_OUTCOME_RATE_MAP",
+            "phase16_normalize_workbench_outcome",
+            "build_player_profile_from_feature_packet",
+            "calculate_workbench_probability_from_feature_packet",
+            "build_workbench_prop_probability_library",
+            "predict_workbench_feature_packet",
+            "validate_phase_16_part_3e_probability_adapter",
+        ]
+    )
+except Exception:
+    pass
